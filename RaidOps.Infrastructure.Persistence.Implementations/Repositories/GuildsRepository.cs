@@ -42,4 +42,36 @@ public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Sets <see cref="Guild.IsRegistered"/> to <c>true</c> for the guild identified by <paramref name="guildId"/>.
+    /// Does nothing if the guild does not exist in the database.
+    /// </summary>
+    /// <param name="guildId">The Discord snowflake ID of the guild to register.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    /// <returns><c>true</c> if the guild was found and updated; <c>false</c> otherwise.</returns>
+    public async Task<bool> RegisterAsync(string guildId, CancellationToken cancellationToken = default)
+    {
+        var guild = await context.Guilds.FindAsync([guildId], cancellationToken);
+        if (guild == null) return false;
+
+        guild.IsRegistered = true;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets <see cref="Guild.IsRegistered"/> to <c>false</c> for the guild identified by <paramref name="guildId"/>.
+    /// Silently no-ops if the guild does not exist.
+    /// </summary>
+    /// <param name="guildId">The Discord snowflake ID of the guild to unregister.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    public async Task UnregisterAsync(string guildId, CancellationToken cancellationToken = default)
+    {
+        var guild = await context.Guilds.FindAsync([guildId], cancellationToken);
+        if (guild == null) return;
+
+        guild.IsRegistered = false;
+        await context.SaveChangesAsync(cancellationToken);
+    }
 }

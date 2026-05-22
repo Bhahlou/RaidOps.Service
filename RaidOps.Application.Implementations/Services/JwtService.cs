@@ -95,6 +95,64 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     }
 
     /// <summary>
+    /// Generates a short-lived CSRF state token for the Discord bot OAuth2 registration flow.
+    /// Embeds the target guild ID and the initiating user's Discord ID, expiring after 10 minutes.
+    /// </summary>
+    /// <param name="guildId">The Discord snowflake ID of the guild being registered.</param>
+    /// <param name="discordId">The Discord snowflake ID of the user initiating the registration.</param>
+    /// <returns>A signed JWT string to be passed as the OAuth2 <c>state</c> parameter.</returns>
+    public string GenerateStateToken(string guildId, string discordId)
+    {
+        var expiry = DateTime.UtcNow.AddMinutes(10);
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, discordId),
+            new Claim("gld", guildId),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+        return BuildToken(claims, expiry);
+    }
+
+    /// <summary>
+    /// Validates a state token and extracts the embedded guild and user identifiers.
+    /// Returns <c>null</c> if the token is invalid, expired, or tampered with.
+    /// </summary>
+    /// <param name="token">The JWT state token to validate.</param>
+    /// <returns>
+    /// A tuple of <c>(GuildId, DiscordId)</c> on success, or <c>null</c> on failure.
+    /// </returns>
+    public (string GuildId, string DiscordId)? ValidateStateToken(string token)
+    {
+        var tokenHandler = new JwtSecurityTokenHandler();
+        tokenHandler.InboundClaimTypeMap.Clear();
+        var key = Encoding.UTF8.GetBytes(_settings.Key);
+        var parameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = _settings.Issuer,
+            ValidAudience = _settings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+
+        try
+        {
+            var principal = tokenHandler.ValidateToken(token, parameters, out _);
+            var discordId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            var guildId = principal.FindFirst("gld")?.Value;
+            if (discordId == null || guildId == null) return null;
+            return (guildId, discordId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Builds and signs a JWT with the given claims and expiry using HMAC-SHA256.
     /// </summary>
     /// <param name="claims">The claims to embed in the token payload.</param>
