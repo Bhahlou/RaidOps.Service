@@ -2,20 +2,29 @@ using Asp.Versioning;
 using AspNet.Security.OAuth.Discord;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RaidOps.API;
 using RaidOps.Application.Contracts.Configuration;
+using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Registry;
 using System.Text;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var frontendUrl = builder.Configuration["FrontendUrl"] ?? string.Empty;
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngularDev", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:4200", "https://localhost:4200", "https://localhost:7174")
+        policy
+            .WithOrigins(
+                "http://localhost:4200",
+                "https://localhost:4200",
+                "https://localhost:7174",
+                frontendUrl)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -98,6 +107,12 @@ builder.Services.AddRaidOps(builder.Configuration);
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 var apiVersions = app.DescribeApiVersions();
 
 app.UseSwagger();
@@ -112,7 +127,7 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseHttpsRedirection();
-app.UseCors("AllowAngularDev");
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
