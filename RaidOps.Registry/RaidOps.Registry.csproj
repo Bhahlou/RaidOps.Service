@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Scrutor" Version="7.0.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\RaidOps.Application.Contracts\RaidOps.Application.Contracts.csproj" />
+    <ProjectReference Include="..\RaidOps.Application.Implementations\RaidOps.Application.Implementations.csproj" />
+    <ProjectReference Include="..\RaidOps.ExternalApplication.Contracts\RaidOps.ExternalApplication.Contracts.csproj" />
+    <ProjectReference Include="..\RaidOps.ExternalApplication.Implementations\RaidOps.ExternalApplication.Implementations.csproj" />
+    <ProjectReference Include="..\RaidOps.Infrastructure.Persistence.Implementations\RaidOps.Infrastructure.Persistence.Implementations.csproj" />
+  </ItemGroup>
+
+</Project>

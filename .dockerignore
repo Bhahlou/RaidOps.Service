@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.git/
+.env
+**/appsettings.Development.json
+**/appsettings.Production.json
+*.md
+.idea/
+.vs/

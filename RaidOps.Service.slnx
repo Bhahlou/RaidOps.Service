@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/Application/">
+    <Project Path="RaidOps.Application.Contracts/RaidOps.Application.Contracts.csproj" />
+    <Project Path="RaidOps.Application.Implementations/RaidOps.Application.Implementations.csproj" />
+    <Project Path="RaidOps.ExternalApplication.Contracts/RaidOps.ExternalApplication.Contracts.csproj" />
+    <Project Path="RaidOps.ExternalApplication.Implementations/RaidOps.ExternalApplication.Implementations.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="RaidOps.Domain/RaidOps.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="RaidOps.Infrastructure.Persistence.Contracts/RaidOps.Infrastructure.Persistence.Contracts.csproj" />
+    <Project Path="RaidOps.Infrastructure.Persistence.Implementations/RaidOps.Infrastructure.Persistence.Implementations.csproj" />
+  </Folder>
+  <Folder Name="/Interaction/">
+    <Project Path="RaidOps.API/RaidOps.API.csproj" />
+  </Folder>
+  <Folder Name="/Registry/">
+    <Project Path="RaidOps.Registry/RaidOps.Registry.csproj" />
+  </Folder>
+</Solution>

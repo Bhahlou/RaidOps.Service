@@ -1,0 +1,21 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+
+## Secrets / local config
+.env
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+## JetBrains
+.idea/
+*.sln.iml
+
+## OS
+.DS_Store
+Thumbs.db
