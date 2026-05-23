@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="NetCord" Version="1.0.0-alpha.489" />
+    <PackageReference Include="NetCord.Hosting" Version="1.0.0-alpha.489" />
+  </ItemGroup>
+
 </Project>
