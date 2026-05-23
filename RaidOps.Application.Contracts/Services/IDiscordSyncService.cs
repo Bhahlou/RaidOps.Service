@@ -1,4 +1,4 @@
-using RaidOps.Domain.Models;
+using RaidOps.Domain.Models.Discord;
 
 namespace RaidOps.Application.Contracts.Services;
 

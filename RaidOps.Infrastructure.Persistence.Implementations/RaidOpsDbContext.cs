@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using RaidOps.Domain.Models;
+using RaidOps.Domain.Models.Discord;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
 

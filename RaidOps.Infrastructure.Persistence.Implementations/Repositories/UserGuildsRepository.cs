@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using RaidOps.Domain.Models;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
