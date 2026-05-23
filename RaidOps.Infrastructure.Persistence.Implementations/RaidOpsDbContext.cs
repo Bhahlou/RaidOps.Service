@@ -203,8 +203,8 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         modelBuilder.Entity<Branch>().HasData(
             new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11 },
             new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1  },
-            new Branch { Id = 3, Name = "MoP Classic",         BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5  },
-            new Branch { Id = 4, Name = "BC Classic (Anniv.)", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2  }
+            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5  },
+            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2  }
         );
     }
 

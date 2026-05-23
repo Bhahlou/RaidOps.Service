@@ -35,4 +35,18 @@ public interface IBnetApiService
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
     /// <returns>The user's BNet profile.</returns>
     Task<BnetUserInfoResponse> GetUserInfoAsync(string accessToken, string region, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches all WoW characters linked to the authenticated BNet account
+    /// for the given branch namespace.
+    /// </summary>
+    /// <param name="accessToken">A valid BNet OAuth2 access token with <c>wow.profile</c> scope.</param>
+    /// <param name="region">BNet region code: "us", "eu", "kr", or "tw".</param>
+    /// <param name="profileNamespace">
+    /// The fully-qualified profile namespace for the target branch
+    /// (e.g. <c>"profile-eu"</c>, <c>"profile-classic1x-eu"</c>).
+    /// </param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    /// <returns>All WoW accounts and their characters for the given namespace.</returns>
+    Task<BnetWowAccountsResponse> GetWowCharactersAsync(string accessToken, string region, string profileNamespace, CancellationToken cancellationToken = default);
 }

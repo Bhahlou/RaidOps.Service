@@ -15,7 +15,8 @@ namespace RaidOps.ExternalApplication.Implementations.BNet;
 /// </summary>
 public class BnetApiService(HttpClient httpClient, IConfiguration configuration) : IBnetApiService
 {
-    private static string BnetBase(string region) => $"https://{region}.battle.net";
+    private static string BnetBase(string region)    => $"https://{region}.battle.net";
+    private static string BnetApiBase(string region) => $"https://{region}.api.blizzard.com";
 
     /// <summary>
     /// Builds the Battle.net OAuth2 authorization URL for the given region.
@@ -83,5 +84,30 @@ public class BnetApiService(HttpClient httpClient, IConfiguration configuration)
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonSerializer.Deserialize<BnetUserInfoResponse>(content)
             ?? throw new InvalidOperationException("Failed to deserialize BNet user info response.");
+    }
+
+    /// <summary>
+    /// Fetches all WoW characters for the authenticated account from
+    /// <c>GET https://{region}.api.blizzard.com/profile/user/wow</c>.
+    /// The <paramref name="profileNamespace"/> determines which branch is queried
+    /// (e.g. <c>"profile-eu"</c> for Retail, <c>"profile-classic1x-eu"</c> for Classic Era).
+    /// </summary>
+    public async Task<BnetWowAccountsResponse> GetWowCharactersAsync(
+        string accessToken,
+        string region,
+        string profileNamespace,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{BnetApiBase(region)}/profile/user/wow?namespace={profileNamespace}&locale=en_US";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        return JsonSerializer.Deserialize<BnetWowAccountsResponse>(content)
+            ?? throw new InvalidOperationException("Failed to deserialize BNet WoW accounts response.");
     }
 }
