@@ -1,0 +1,62 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
+using RaidOps.Domain.Models.Reference;
+
+namespace RaidOps.Domain.Models.Character;
+
+/// <summary>
+/// A WoW character imported from a user's Battle.net account.
+/// One user can own many characters spread across different realms and branches.
+/// </summary>
+[Table("Characters")]
+public class Character
+{
+    /// <summary>Internal auto-incremented identifier.</summary>
+    [Key]
+    public int Id { get; set; }
+
+    /// <summary>Character name as returned by the BNet API (e.g. "Arthas").</summary>
+    [Required, MaxLength(32)]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Character faction as resolved from the BNet API.
+    /// Stored explicitly because some races (Pandaren, Dracthyr, Earthen) can be either faction.
+    /// </summary>
+    public Faction Faction { get; set; }
+
+    /// <summary>Blizzard's internal character ID, unique within a realm.</summary>
+    public long BnetCharacterId { get; set; }
+
+    /// <summary>Discord ID of the RaidOps user who owns this character.</summary>
+    [Required]
+    public string UserDiscordId { get; set; } = string.Empty;
+
+    /// <summary>FK to the realm this character lives on.</summary>
+    public int RealmId { get; set; }
+
+    /// <summary>FK to the character's race.</summary>
+    public int RaceId { get; set; }
+
+    /// <summary>FK to the character's class.</summary>
+    public int ClassId { get; set; }
+
+    // ── Navigation ────────────────────────────────────────────────────────
+
+    /// <summary>The RaidOps user who owns this character.</summary>
+    public virtual User User { get; set; } = null!;
+
+    /// <summary>The realm this character lives on.</summary>
+    public virtual Realm Realm { get; set; } = null!;
+
+    /// <summary>The character's race.</summary>
+    public virtual Race Race { get; set; } = null!;
+
+    /// <summary>The character's class.</summary>
+    public virtual WowClass Class { get; set; } = null!;
+
+    /// <summary>Per-expansion progress snapshots (level, item level, active specs).</summary>
+    public virtual ICollection<CharacterExpansionState> ExpansionStates { get; set; } = [];
+}
