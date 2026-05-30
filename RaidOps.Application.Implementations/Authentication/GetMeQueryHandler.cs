@@ -26,7 +26,7 @@ public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandler
     {
         var user = await usersRepository.GetByDiscordIdWithGuildsAsync(query.DiscordId, cancellationToken);
         if (user == null)
-            return Result<UserResponse>.Fail("User not found");
+            return Result<UserResponse>.Fail(ResponseDetail.UserNotFound);
 
         return Result<UserResponse>.Ok(new UserResponse
         {

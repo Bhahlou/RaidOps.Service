@@ -34,13 +34,13 @@ public class ImportCharactersCommandHandler(
         // Resolve the user's BNet region — stored on the linked account
         var account = await bnetAccountRepository.GetByDiscordIdAsync(command.UserDiscordId, cancellationToken);
         if (account is null)
-            return Result<CommandResponse>.Fail("BNET_NOT_LINKED");
+            return Result<CommandResponse>.Fail(ResponseDetail.BnetNotLinked);
 
         var region = account.Region;
 
         var branch = await branchRepository.GetByIdAsync(command.BranchId, cancellationToken);
         if (branch is null)
-            return Result<CommandResponse>.Fail("BRANCH_NOT_FOUND");
+            return Result<CommandResponse>.Fail(ResponseDetail.BranchNotFound);
 
         var imported = 0;
 

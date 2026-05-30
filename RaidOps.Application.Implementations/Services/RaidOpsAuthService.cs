@@ -56,11 +56,11 @@ public class RaidOpsAuthService(
     {
         var principal = jwtService.ValidateRefreshToken(command.RefreshToken);
         if (principal == null)
-            return Result<AuthenticationResponse>.Fail("Invalid refresh token");
+            return Result<AuthenticationResponse>.Fail(ResponseDetail.InvalidRefreshToken);
 
         var discordId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
-            return Result<AuthenticationResponse>.Fail("Invalid token claims");
+            return Result<AuthenticationResponse>.Fail(ResponseDetail.InvalidTokenClaims);
 
         try
         {

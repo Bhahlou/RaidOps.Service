@@ -35,7 +35,7 @@ public class RegisterGuildCommandHandler(
         var membership = userGuilds.FirstOrDefault(g => g.GuildId == command.GuildId);
 
         if (membership == null || !membership.IsAdmin)
-            return Result<CommandResponse>.Fail("Forbidden", "User is not an admin of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
 
         // 2. Confirm the bot is live in the guild (present in the Gateway cache).
         //    The bot joins the guild as soon as the OAuth2 invite is authorized;
@@ -46,13 +46,13 @@ public class RegisterGuildCommandHandler(
         }
         catch (InvalidOperationException)
         {
-            return Result<CommandResponse>.Fail("BotNotPresent", "The RaidOps bot is not present in this guild. Please complete the bot invite before registering.");
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild. Please complete the bot invite before registering.");
         }
 
         // 3. Persist the registration.
         var registered = await guildsRepository.RegisterAsync(command.GuildId, cancellationToken);
         if (!registered)
-            return Result<CommandResponse>.Fail("NotFound", $"Guild '{command.GuildId}' does not exist.");
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildNotFound, $"Guild '{command.GuildId}' does not exist.");
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild registered successfully."));
     }

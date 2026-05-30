@@ -24,7 +24,7 @@ public class GetBnetAccountQueryHandler(IBnetAccountRepository bnetAccountReposi
         var account = await bnetAccountRepository.GetByDiscordIdAsync(query.UserDiscordId, cancellationToken);
 
         if (account is null)
-            return Result<BnetAccountResponse>.Fail("NOT_FOUND");
+            return Result<BnetAccountResponse>.Fail(ResponseDetail.NotFound);
 
         return Result<BnetAccountResponse>.Ok(new BnetAccountResponse
         {

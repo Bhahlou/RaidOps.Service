@@ -34,12 +34,12 @@ public class GetAvailableCharactersQueryHandler(
         // 1. Load the user's BNet account
         var account = await bnetAccountRepository.GetByDiscordIdAsync(query.UserDiscordId, cancellationToken);
         if (account is null)
-            return Result<IEnumerable<AvailableCharacterDto>>.Fail("BNET_NOT_LINKED");
+            return Result<IEnumerable<AvailableCharacterDto>>.Fail(ResponseDetail.BnetNotLinked);
 
         // 2. Resolve the branch and derive the profile namespace
         var branch = await branchRepository.GetByIdAsync(query.BranchId, cancellationToken);
         if (branch is null)
-            return Result<IEnumerable<AvailableCharacterDto>>.Fail("BRANCH_NOT_FOUND");
+            return Result<IEnumerable<AvailableCharacterDto>>.Fail(ResponseDetail.BranchNotFound);
 
         // "dynamic-classic1x" + "-eu"  →  "profile-classic1x-eu"
         var profileNamespace = branch.BnetNamespacePrefix.Replace("dynamic", "profile") + "-" + account.Region;
