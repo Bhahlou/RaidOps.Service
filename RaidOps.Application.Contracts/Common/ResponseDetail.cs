@@ -9,6 +9,8 @@ public static class ResponseDetail
     // ── Generic ───────────────────────────────────────────────────────────
     public const string NotFound = nameof(NotFound);
     public const string Forbidden = nameof(Forbidden);
+    public const string Unauthorized = nameof(Unauthorized);
+    public const string InvalidRequest = nameof(InvalidRequest);
 
     // ── Auth ──────────────────────────────────────────────────────────────
     public const string UserNotFound = nameof(UserNotFound);
@@ -18,6 +20,9 @@ public static class ResponseDetail
     // ── Battle.net ────────────────────────────────────────────────────────
     public const string BnetNotLinked = nameof(BnetNotLinked);
     public const string BnetTokenExpired = nameof(BnetTokenExpired);
+    public const string BnetApiError = nameof(BnetApiError);
+    public const string InvalidState = nameof(InvalidState);
+    public const string StateMismatch = nameof(StateMismatch);
 
     // ── Guild ─────────────────────────────────────────────────────────────
     public const string GuildNotFound = nameof(GuildNotFound);

@@ -14,7 +14,7 @@ namespace RaidOps.API.Controllers.v1;
 /// </summary>
 [ApiVersion("1.0")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class BranchesController(
+public class WowBranchesController(
     ICommandDispatcher commandDispatcher,
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {

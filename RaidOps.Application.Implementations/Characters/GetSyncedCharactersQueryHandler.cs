@@ -7,27 +7,26 @@ using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 namespace RaidOps.Application.Implementations.Characters;
 
 /// <summary>
-/// Returns the list of WoW characters imported by the requesting user,
-/// including their class, race, realm, and current level.
+/// Handles <see cref="GetSyncedCharactersQuery"/> by returning all characters synced from BNet
+/// for the requesting user, annotated with their <c>IsActiveInRaidOps</c> status.
 /// </summary>
-public class GetCharactersQueryHandler(ICharacterRepository characterRepository)
-    : IQueryHandlerAsync<GetCharactersQuery, IEnumerable<CharacterDto>>
+public class GetSyncedCharactersQueryHandler(ICharacterRepository characterRepository)
+    : IQueryHandlerAsync<GetSyncedCharactersQuery, IEnumerable<SyncedCharacterDto>>
 {
-    /// <inheritdoc />
-    public async Task<Result<IEnumerable<CharacterDto>>> HandleAsync(
-        GetCharactersQuery query,
+    /// <inheritdoc/>
+    public async Task<Result<IEnumerable<SyncedCharacterDto>>> HandleAsync(
+        GetSyncedCharactersQuery query,
         CancellationToken cancellationToken = default)
     {
         var characters = await characterRepository.GetByUserWithDetailsAsync(
-            query.UserDiscordId, activeOnly: true, cancellationToken);
+            query.UserDiscordId, activeOnly: false, cancellationToken);
 
         var dtos = characters.Select(c =>
         {
-            // Prefer the active expansion state; fall back to the one with the highest level.
             var activeState = c.ExpansionStates.FirstOrDefault(s => s.IsActive)
                            ?? c.ExpansionStates.OrderByDescending(s => s.Level).FirstOrDefault();
 
-            return new CharacterDto
+            return new SyncedCharacterDto
             {
                 Id         = c.Id,
                 Name       = c.Name,
@@ -37,13 +36,13 @@ public class GetCharactersQueryHandler(ICharacterRepository characterRepository)
                 RaceId     = c.RaceId,
                 RaceName   = c.Race.Name,
                 Faction    = c.Faction.ToString().ToUpperInvariant(),
+                BranchName = c.Branch.Name,
                 RealmName  = c.Realm.Name,
-                RealmSlug  = c.Realm.Slug,
                 Level      = activeState?.Level ?? 0,
-                ItemLevel  = activeState?.ItemLevel,
+                IsActive   = c.IsActiveInRaidOps
             };
         });
 
-        return Result<IEnumerable<CharacterDto>>.Ok(dtos);
+        return Result<IEnumerable<SyncedCharacterDto>>.Ok(dtos);
     }
 }

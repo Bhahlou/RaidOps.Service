@@ -27,12 +27,18 @@ public class Character
     /// </summary>
     public Faction Faction { get; set; }
 
+    /// <summary>Character gender as returned by the BNet API.</summary>
+    public Gender Gender { get; set; }
+
     /// <summary>Blizzard's internal character ID, unique within a realm.</summary>
     public long BnetCharacterId { get; set; }
 
     /// <summary>Discord ID of the RaidOps user who owns this character.</summary>
     [Required]
     public string UserDiscordId { get; set; } = string.Empty;
+
+    /// <summary>FK to the branch this character belongs to.</summary>
+    public int BranchId { get; set; }
 
     /// <summary>FK to the realm this character lives on.</summary>
     public int RealmId { get; set; }
@@ -43,10 +49,19 @@ public class Character
     /// <summary>FK to the character's class.</summary>
     public int ClassId { get; set; }
 
+    /// <summary>
+    /// Whether this character has been explicitly selected by the user for use in RaidOps
+    /// (roster, loot, calendar). Synced characters start as <c>false</c> until the user imports them.
+    /// </summary>
+    public bool IsActiveInRaidOps { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The RaidOps user who owns this character.</summary>
     public virtual User User { get; set; } = null!;
+
+    /// <summary>The branch this character was synced from.</summary>
+    public virtual Branch Branch { get; set; } = null!;
 
     /// <summary>The realm this character lives on.</summary>
     public virtual Realm Realm { get; set; } = null!;

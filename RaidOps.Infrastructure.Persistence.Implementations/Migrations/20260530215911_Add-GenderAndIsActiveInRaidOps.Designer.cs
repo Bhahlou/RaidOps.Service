@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -11,9 +12,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260530215911_Add-GenderAndIsActiveInRaidOps")]
+    partial class AddGenderAndIsActiveInRaidOps
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -68,9 +71,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<long>("BnetCharacterId")
                         .HasColumnType("bigint");
 
-                    b.Property<int>("BranchId")
-                        .HasColumnType("integer");
-
                     b.Property<int>("ClassId")
                         .HasColumnType("integer");
 
@@ -99,8 +99,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
 
                     b.HasIndex("ClassId");
 
@@ -531,20 +529,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         {
                             Id = 24,
                             Faction = 3,
-                            FirstExpansionId = 5,
-                            Name = "Pandaren"
-                        },
-                        new
-                        {
-                            Id = 25,
-                            Faction = 1,
-                            FirstExpansionId = 5,
-                            Name = "Pandaren"
-                        },
-                        new
-                        {
-                            Id = 26,
-                            Faction = 2,
                             FirstExpansionId = 5,
                             Name = "Pandaren"
                         },
@@ -1117,12 +1101,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
             modelBuilder.Entity("RaidOps.Domain.Models.Character.Character", b =>
                 {
-                    b.HasOne("RaidOps.Domain.Models.Reference.Branch", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("RaidOps.Domain.Models.Reference.WowClass", "Class")
                         .WithMany()
                         .HasForeignKey("ClassId")
@@ -1146,8 +1124,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasForeignKey("UserDiscordId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Branch");
 
                     b.Navigation("Class");
 

@@ -1,0 +1,64 @@
+using RaidOps.Application.Contracts.Characters.Commands;
+using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Services;
+using RaidOps.Domain.Models.Character;
+using RaidOps.ExternalApplication.Contracts.Services.BNet;
+using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
+
+namespace RaidOps.Application.Implementations.Characters;
+
+/// <summary>
+/// Handles <see cref="HandleBnetCallbackCommand"/> by validating the CSRF state token,
+/// exchanging the authorization code for a BNet token, fetching the user's BattleTag,
+/// and persisting the linked account.
+/// </summary>
+public class HandleBnetCallbackCommandHandler(
+    IJwtService jwtService,
+    IBnetApiService bnetApiService,
+    IBnetAccountRepository bnetAccountRepository)
+    : ICommandHandlerAsync<HandleBnetCallbackCommand>
+{
+    /// <inheritdoc/>
+    public async Task<Result<CommandResponse>> HandleAsync(
+        HandleBnetCallbackCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        // 1. Validate the CSRF state token
+        var stateData = jwtService.ValidateBnetStateToken(command.State);
+        if (stateData is null)
+            return Result<CommandResponse>.Fail(ResponseDetail.InvalidState);
+
+        if (stateData.Value.DiscordId != command.DiscordId)
+            return Result<CommandResponse>.Fail(ResponseDetail.StateMismatch);
+
+        var region = stateData.Value.Region;
+
+        // 2. Exchange code and link account
+        try
+        {
+            var tokenResponse = await bnetApiService.ExchangeCodeAsync(
+                command.Code, command.CallbackUrl, region, cancellationToken);
+
+            var userInfo = await bnetApiService.GetUserInfoAsync(
+                tokenResponse.AccessToken, region, cancellationToken);
+
+            await bnetAccountRepository.UpsertAsync(new BattleNetAccount
+            {
+                UserDiscordId = command.DiscordId,
+                BnetId = userInfo.Id.ToString(),
+                BattleTag = userInfo.BattleTag,
+                AccessToken = tokenResponse.AccessToken,
+                RefreshToken = tokenResponse.RefreshToken,
+                TokenExpiry = DateTimeOffset.UtcNow.AddSeconds(tokenResponse.ExpiresIn),
+                Region = region
+            }, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
+        }
+
+        return Result<CommandResponse>.Ok(new CommandResponse("BNet account linked successfully."));
+    }
+}

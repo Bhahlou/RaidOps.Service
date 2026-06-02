@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RaidOps.API.Requests;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Characters.Queries;
 using RaidOps.Application.Contracts.Characters.Responses;
@@ -11,8 +12,7 @@ using System.IdentityModel.Tokens.Jwt;
 namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
-/// Exposes character management endpoints:
-/// listing characters available for import from BNet, and triggering the import.
+/// Exposes character management endpoints.
 /// All routes require a valid JWT Bearer token.
 /// </summary>
 [ApiVersion("1.0")]
@@ -22,10 +22,8 @@ public class CharactersController(
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
     /// <summary>
-    /// Returns all WoW characters imported by the authenticated user.
+    /// Returns all WoW characters the user has activated in RaidOps.
     /// </summary>
-    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns>200 with a list of <see cref="CharacterDto"/>, or 401 if the JWT is invalid.</returns>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
@@ -33,89 +31,68 @@ public class CharactersController(
         if (discordId == null) return Unauthorized();
 
         var result = await QueryDispatcher.DispatchAsync<GetCharactersQuery, IEnumerable<CharacterDto>>(
-            new GetCharactersQuery { UserDiscordId = discordId },
-            cancellationToken);
+            new GetCharactersQuery { UserDiscordId = discordId }, cancellationToken);
 
         return ToActionResult(result);
     }
 
     /// <summary>
-    /// Returns the list of WoW characters available for import from the user's BNet account
-    /// for the specified branch.
-    /// Each entry includes an <c>alreadyImported</c> flag indicating whether the character
-    /// has already been imported into RaidOps.
+    /// Returns all WoW characters synced from BNet for the user,
+    /// including those not yet activated in RaidOps.
+    /// Used to populate the character selection dialog.
     /// </summary>
-    /// <param name="branchId">ID of the branch to query characters for.</param>
-    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns>
-    /// 200 with a list of <see cref="AvailableCharacterDto"/>,
-    /// 400 if the branch is not found or the BNet account is not linked,
-    /// or 401 if the JWT is invalid.
-    /// </returns>
-    [HttpGet("available")]
-    public async Task<IActionResult> GetAvailable(
-        [FromQuery] int branchId,
-        CancellationToken cancellationToken)
+    [HttpGet("synced")]
+    public async Task<IActionResult> GetSynced(CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null) return Unauthorized();
 
-        var result = await QueryDispatcher.DispatchAsync<GetAvailableCharactersQuery, IEnumerable<AvailableCharacterDto>>(
-            new GetAvailableCharactersQuery
-            {
-                UserDiscordId = discordId,
-                BranchId = branchId
-            }, cancellationToken);
+        var result = await QueryDispatcher.DispatchAsync<GetSyncedCharactersQuery, IEnumerable<SyncedCharacterDto>>(
+            new GetSyncedCharactersQuery { UserDiscordId = discordId }, cancellationToken);
 
-        if (result.IsFailed)
-        {
-            return result.Error switch
-            {
-                "BNET_NOT_LINKED" => BadRequest(new { error = "BNET_NOT_LINKED" }),
-                "BRANCH_NOT_FOUND" => NotFound(new { error = "BRANCH_NOT_FOUND" }),
-                _ => BadRequest(new { error = result.Error })
-            };
-        }
-
-        return Ok(result.Value);
+        return ToActionResult(result);
     }
 
     /// <summary>
-    /// Imports the selected WoW characters from the user's BNet account into RaidOps.
-    /// Upserts characters and their expansion states; realms are cached on-demand.
+    /// Fetches all WoW characters from the user's BNet account for the given branch
+    /// and upserts them into the database. Requires a fresh BNet token (handled by the client
+    /// via the OAuth iframe flow before calling this endpoint).
     /// </summary>
-    /// <param name="request">The list of characters to import along with the target branch.</param>
-    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns>
-    /// 200 with a success message, 400 if validation fails, or 401 if the JWT is invalid.
-    /// </returns>
-    [HttpPost("import")]
-    public async Task<IActionResult> Import(
-        [FromBody] ImportCharactersRequest request,
+    [HttpPost("sync")]
+    public async Task<IActionResult> Sync(
+        [FromBody] SyncBnetCharactersRequest request,
         CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null) return Unauthorized();
 
-        var result = await CommandDispatcher.DispatchAsync(new ImportCharactersCommand
+        var result = await CommandDispatcher.DispatchAsync(new SyncBnetCharactersCommand
         {
             UserDiscordId = discordId,
-            BranchId = request.BranchId,
-            Characters = request.Characters
+            BranchId = request.BranchId
         }, cancellationToken);
 
         return ToActionResult(result);
     }
-}
 
-/// <summary>
-/// Request body for <c>POST /api/v1/characters/import</c>.
-/// </summary>
-public class ImportCharactersRequest
-{
-    /// <summary>ID of the branch the characters are imported from.</summary>
-    public required int BranchId { get; set; }
+    /// <summary>
+    /// Marks the given characters as active in RaidOps.
+    /// Characters must already be synced and belong to the authenticated user.
+    /// </summary>
+    [HttpPost("activate")]
+    public async Task<IActionResult> Activate(
+        [FromBody] ActivateCharactersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
 
-    /// <summary>Characters to import.</summary>
-    public required IEnumerable<CharacterToImportDto> Characters { get; set; }
+        var result = await CommandDispatcher.DispatchAsync(new ActivateCharactersCommand
+        {
+            UserDiscordId = discordId,
+            CharacterIds = request.CharacterIds
+        }, cancellationToken);
+
+        return ToActionResult(result);
+    }
 }

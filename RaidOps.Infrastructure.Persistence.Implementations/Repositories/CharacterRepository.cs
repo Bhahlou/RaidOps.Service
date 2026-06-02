@@ -9,15 +9,21 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 /// </summary>
 public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepository
 {
-    /// <summary>
-    /// Returns all characters owned by the given user with their realm, class, race,
-    /// and expansion states included. Ordered alphabetically by name.
-    /// </summary>
-    public async Task<IEnumerable<Character>> GetByUserWithDetailsAsync(string userDiscordId, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public async Task<IEnumerable<Character>> GetByUserWithDetailsAsync(
+        string userDiscordId,
+        bool activeOnly = false,
+        CancellationToken cancellationToken = default)
     {
-        return await context.Characters
+        var query = context.Characters
             .AsNoTracking()
-            .Where(c => c.UserDiscordId == userDiscordId)
+            .Where(c => c.UserDiscordId == userDiscordId);
+
+        if (activeOnly)
+            query = query.Where(c => c.IsActiveInRaidOps);
+
+        return await query
+            .Include(c => c.Branch)
             .Include(c => c.Realm)
             .Include(c => c.Class)
             .Include(c => c.Race)
@@ -26,10 +32,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
             .ToListAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Returns the set of BNet character IDs already imported by the given user.
-    /// Used during the import flow to mark characters already present in RaidOps.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<HashSet<long>> GetBnetIdsByUserAsync(string userDiscordId, CancellationToken cancellationToken = default)
     {
         var ids = await context.Characters
@@ -41,15 +44,12 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         return [.. ids];
     }
 
-    /// <summary>
-    /// Inserts or updates the character identified by its (BnetCharacterId, RealmId) unique key.
-    /// Returns the persisted entity with its DB-generated <c>Id</c>.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<Character> UpsertAsync(Character character, CancellationToken cancellationToken = default)
     {
         var existing = await context.Characters
             .FirstOrDefaultAsync(
-                c => c.BnetCharacterId == character.BnetCharacterId && c.RealmId == character.RealmId,
+                c => c.BnetCharacterId == character.BnetCharacterId && c.BranchId == character.BranchId,
                 cancellationToken);
 
         if (existing is null)
@@ -60,8 +60,11 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         {
             existing.Name = character.Name;
             existing.Faction = character.Faction;
+            existing.Gender = character.Gender;
+            existing.RealmId = character.RealmId;
             existing.RaceId = character.RaceId;
             existing.ClassId = character.ClassId;
+            // IsActiveInRaidOps is intentionally not updated here — use ActivateAsync.
             character = existing;
         }
 
@@ -69,9 +72,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         return character;
     }
 
-    /// <summary>
-    /// Inserts or updates the expansion state for a (character × expansion) pair.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task UpsertExpansionStateAsync(CharacterExpansionState state, CancellationToken cancellationToken = default)
     {
         var existing = await context.CharacterExpansionStates
@@ -89,6 +90,21 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
             existing.ItemLevel = state.ItemLevel;
             existing.IsActive = state.IsActive;
         }
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task ActivateAsync(IEnumerable<int> characterIds, string userDiscordId, CancellationToken cancellationToken = default)
+    {
+        var ids = characterIds.ToList();
+
+        var characters = await context.Characters
+            .Where(c => ids.Contains(c.Id) && c.UserDiscordId == userDiscordId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var character in characters)
+            character.IsActiveInRaidOps = true;
 
         await context.SaveChangesAsync(cancellationToken);
     }

@@ -162,12 +162,12 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     public string GenerateBnetStateToken(string discordId, string region)
     {
         var expiry = DateTime.UtcNow.AddMinutes(10);
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, discordId),
-            new Claim("rgn", region),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
+        Claim[] claims =
+        [
+            new(JwtRegisteredClaimNames.Sub, discordId),
+            new("rgn", region),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        ];
         return BuildToken(claims, expiry);
     }
 

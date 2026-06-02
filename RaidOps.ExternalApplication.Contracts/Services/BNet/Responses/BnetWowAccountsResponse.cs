@@ -37,6 +37,9 @@ public class BnetWowCharacterDto
     [JsonPropertyName("playable_race")]
     public BnetIdRefDto PlayableRace { get; set; } = null!;
 
+    [JsonPropertyName("gender")]
+    public BnetTypeRefDto Gender { get; set; } = null!;
+
     [JsonPropertyName("faction")]
     public BnetTypeRefDto Faction { get; set; } = null!;
 

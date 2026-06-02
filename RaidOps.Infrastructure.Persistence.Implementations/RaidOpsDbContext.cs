@@ -182,7 +182,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     private static void SeedExpansions(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Expansion>().HasData(
-            new Expansion { Id = 1,  Name = "Classic",               ShortCode = "Classic", ReleaseOrder = 1  },
+            new Expansion { Id = 1,  Name = "Classic",                ShortCode = "Classic", ReleaseOrder = 1  },
             new Expansion { Id = 2,  Name = "The Burning Crusade",    ShortCode = "TBC",     ReleaseOrder = 2  },
             new Expansion { Id = 3,  Name = "Wrath of the Lich King", ShortCode = "WotLK",   ReleaseOrder = 3  },
             new Expansion { Id = 4,  Name = "Cataclysm",              ShortCode = "Cata",    ReleaseOrder = 4  },
@@ -229,7 +229,11 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new Race { Id = 9,  Name = "Goblin",              Faction = Faction.Horde,    FirstExpansionId = 4  },
             new Race { Id = 22, Name = "Worgen",              Faction = Faction.Alliance, FirstExpansionId = 4  },
             // ── Mists of Pandaria ─────────────────────────────────────────
+            // Blizzard uses three IDs for Pandaren: 24 = neutral (faction not yet chosen),
+            // 25 = Alliance, 26 = Horde.
             new Race { Id = 24, Name = "Pandaren",            Faction = Faction.Neutral,  FirstExpansionId = 5  },
+            new Race { Id = 25, Name = "Pandaren",            Faction = Faction.Alliance, FirstExpansionId = 5  },
+            new Race { Id = 26, Name = "Pandaren",            Faction = Faction.Horde,    FirstExpansionId = 5  },
             // ── BfA allied races ──────────────────────────────────────────
             new Race { Id = 27, Name = "Nightborne",          Faction = Faction.Horde,    FirstExpansionId = 8  },
             new Race { Id = 28, Name = "Highmountain Tauren", Faction = Faction.Horde,    FirstExpansionId = 8  },

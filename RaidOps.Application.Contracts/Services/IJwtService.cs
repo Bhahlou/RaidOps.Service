@@ -58,7 +58,7 @@ public interface IJwtService
 
     /// <summary>
     /// Generates a short-lived CSRF state token for the Battle.net OAuth2 link flow.
-    /// Embeds the user's Discord ID and their BNet region, and expires after 10 minutes.
+    /// Embeds the user's Discord ID and their BNet region, expiring after 10 minutes.
     /// </summary>
     /// <param name="discordId">The Discord snowflake ID of the user linking their BNet account.</param>
     /// <param name="region">BNet region code ("us", "eu", "kr", "tw") chosen by the user.</param>
@@ -70,8 +70,7 @@ public interface IJwtService
     /// </summary>
     /// <param name="token">The JWT state token to validate.</param>
     /// <returns>
-    /// A tuple of <c>(DiscordId, Region)</c> if the token is valid and not expired;
-    /// <c>null</c> otherwise.
+    /// A tuple of <c>(DiscordId, Region)</c> if the token is valid and not expired; <c>null</c> otherwise.
     /// </returns>
     (string DiscordId, string Region)? ValidateBnetStateToken(string token);
 }
