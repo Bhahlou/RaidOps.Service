@@ -37,10 +37,23 @@ public class GetCharactersQueryHandler(ICharacterRepository characterRepository)
                 RaceId     = c.RaceId,
                 RaceName   = c.Race.Name,
                 Faction    = c.Faction.ToString().ToUpperInvariant(),
+                BranchName = c.Branch.Name,
                 RealmName  = c.Realm.Name,
                 RealmSlug  = c.Realm.Slug,
                 Level      = activeState?.Level ?? 0,
                 ItemLevel  = activeState?.ItemLevel,
+                AvatarUrl  = c.AvatarUrl,
+                GuildName  = activeState?.GuildName,
+                Specs      = (activeState?.Specs ?? [])
+                    .OrderByDescending(s => s.IsMain)
+                    .Select(s => new CharacterSpecDto
+                    {
+                        SpecId  = s.SpecId,
+                        Name    = s.Spec.Name,
+                        IconUrl = s.Spec.IconUrl,
+                        IsMain  = s.IsMain,
+                    })
+                    .ToList(),
             };
         });
 

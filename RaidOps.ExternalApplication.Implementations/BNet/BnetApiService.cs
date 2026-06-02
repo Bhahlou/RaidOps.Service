@@ -110,4 +110,47 @@ public class BnetApiService(HttpClient httpClient, IConfiguration configuration)
         return JsonSerializer.Deserialize<BnetWowAccountsResponse>(content)
             ?? throw new InvalidOperationException("Failed to deserialize BNet WoW accounts response.");
     }
+
+    /// <inheritdoc/>
+    public async Task<BnetCharacterDetailResponse> GetCharacterAsync(
+        string accessToken, string region, string profileNamespace,
+        string realmSlug, string characterName,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{BnetApiBase(region)}/profile/wow/character/{realmSlug}/{characterName.ToLowerInvariant()}?namespace={profileNamespace}&locale=en_US";
+        return await GetProfileAsync<BnetCharacterDetailResponse>(accessToken, url, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<BnetCharacterMediaResponse> GetCharacterMediaAsync(
+        string accessToken, string region, string profileNamespace,
+        string realmSlug, string characterName,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{BnetApiBase(region)}/profile/wow/character/{realmSlug}/{characterName.ToLowerInvariant()}/character-media?namespace={profileNamespace}&locale=en_US";
+        return await GetProfileAsync<BnetCharacterMediaResponse>(accessToken, url, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<BnetCharacterSpecializationsResponse> GetCharacterSpecializationsAsync(
+        string accessToken, string region, string profileNamespace,
+        string realmSlug, string characterName,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{BnetApiBase(region)}/profile/wow/character/{realmSlug}/{characterName.ToLowerInvariant()}/specializations?namespace={profileNamespace}&locale=en_US";
+        return await GetProfileAsync<BnetCharacterSpecializationsResponse>(accessToken, url, cancellationToken);
+    }
+
+    private async Task<T> GetProfileAsync<T>(string accessToken, string url, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        return JsonSerializer.Deserialize<T>(content)
+            ?? throw new InvalidOperationException($"Failed to deserialize BNet response for {url}.");
+    }
 }

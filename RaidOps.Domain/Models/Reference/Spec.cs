@@ -34,6 +34,13 @@ public class Spec
     /// <summary>The expansion in which this spec first became available as a distinct specialisation.</summary>
     public int FirstExpansionId { get; set; }
 
+    /// <summary>
+    /// Icon URL from the Blizzard game data API.
+    /// Populated by the spec icon sync job; <c>null</c> until synced.
+    /// </summary>
+    [MaxLength(512)]
+    public string? IconUrl { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The class this spec belongs to.</summary>

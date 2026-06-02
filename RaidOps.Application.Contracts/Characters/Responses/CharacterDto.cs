@@ -29,6 +29,9 @@ public class CharacterDto
     /// <summary>Faction string in uppercase: "ALLIANCE", "HORDE", or "NEUTRAL".</summary>
     public string Faction { get; set; } = string.Empty;
 
+    /// <summary>Display name of the game branch (e.g. "Classic Anniversary", "Retail").</summary>
+    public string BranchName { get; set; } = string.Empty;
+
     /// <summary>Localised realm name (e.g. "Kazzak").</summary>
     public string RealmName { get; set; } = string.Empty;
 
@@ -47,4 +50,13 @@ public class CharacterDto
     /// <c>null</c> if not available (e.g. Classic branches).
     /// </summary>
     public int? ItemLevel { get; set; }
+
+    /// <summary>Avatar image URL from the BNet character-media endpoint. <c>null</c> if not yet fetched.</summary>
+    public string? AvatarUrl { get; set; }
+
+    /// <summary>In-game guild name from the active expansion state. <c>null</c> if unguilded or not yet fetched.</summary>
+    public string? GuildName { get; set; }
+
+    /// <summary>Active specialisations for this character (main spec + optional offspec).</summary>
+    public List<CharacterSpecDto> Specs { get; set; } = [];
 }

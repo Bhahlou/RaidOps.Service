@@ -1,4 +1,5 @@
 using RaidOps.Domain.Models.Character;
+using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -13,6 +14,22 @@ public interface ICharacterRepository
     Task<IEnumerable<Character>> GetByUserWithDetailsAsync(string userDiscordId, bool activeOnly = false, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the characters matching the given IDs that belong to the specified user,
+    /// including realm, branch, and expansion states with their specs.
+    /// </summary>
+    Task<IEnumerable<Character>> GetByIdsWithDetailsAsync(IEnumerable<int> ids, string userDiscordId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the spec matching the given name and class, or <c>null</c> if not found.
+    /// </summary>
+    Task<Spec?> GetSpecByNameAndClassAsync(string name, int classId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the spec with the given Blizzard spec ID, or <c>null</c> if not found.
+    /// </summary>
+    Task<Spec?> GetSpecByIdAsync(int specId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns the set of BNet character IDs already synced for the given user.
     /// </summary>
     Task<HashSet<long>> GetBnetIdsByUserAsync(string userDiscordId, CancellationToken cancellationToken = default);
@@ -25,7 +42,9 @@ public interface ICharacterRepository
     Task<Character> UpsertAsync(Character character, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Inserts or updates the expansion state for a (character × expansion) pair.
+    /// Inserts or updates the expansion state for a (character × expansion) pair,
+    /// including guild name. If <paramref name="state"/> has specs, they fully replace
+    /// any existing specs for that expansion state.
     /// </summary>
     Task UpsertExpansionStateAsync(CharacterExpansionState state, CancellationToken cancellationToken = default);
 

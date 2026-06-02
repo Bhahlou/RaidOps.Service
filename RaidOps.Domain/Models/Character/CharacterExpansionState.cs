@@ -40,6 +40,13 @@ public class CharacterExpansionState
     /// </summary>
     public bool IsActive { get; set; }
 
+    /// <summary>
+    /// In-game guild name at the time of last activation or sync.
+    /// <c>null</c> if the character has no guild or the API call failed.
+    /// </summary>
+    [MaxLength(64)]
+    public string? GuildName { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The character this state belongs to.</summary>

@@ -49,4 +49,22 @@ public interface IBnetApiService
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
     /// <returns>All WoW accounts and their characters for the given namespace.</returns>
     Task<BnetWowAccountsResponse> GetWowCharactersAsync(string accessToken, string region, string profileNamespace, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches the character profile (level, item level, guild) from
+    /// <c>GET /profile/wow/character/{realmSlug}/{characterName}</c>.
+    /// </summary>
+    Task<BnetCharacterDetailResponse> GetCharacterAsync(string accessToken, string region, string profileNamespace, string realmSlug, string characterName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches the character's media assets (avatar URL) from
+    /// <c>GET /profile/wow/character/{realmSlug}/{characterName}/character-media</c>.
+    /// </summary>
+    Task<BnetCharacterMediaResponse> GetCharacterMediaAsync(string accessToken, string region, string profileNamespace, string realmSlug, string characterName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches the character's talent specializations from
+    /// <c>GET /profile/wow/character/{realmSlug}/{characterName}/specializations</c>.
+    /// </summary>
+    Task<BnetCharacterSpecializationsResponse> GetCharacterSpecializationsAsync(string accessToken, string region, string profileNamespace, string realmSlug, string characterName, CancellationToken cancellationToken = default);
 }

@@ -55,6 +55,13 @@ public class Character
     /// </summary>
     public bool IsActiveInRaidOps { get; set; }
 
+    /// <summary>
+    /// Avatar image URL from the BNet character-media endpoint.
+    /// Populated on activation; <c>null</c> if the API call failed or has not run yet.
+    /// </summary>
+    [MaxLength(512)]
+    public string? AvatarUrl { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The RaidOps user who owns this character.</summary>

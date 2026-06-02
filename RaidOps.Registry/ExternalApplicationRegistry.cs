@@ -23,6 +23,7 @@ internal static class ExternalApplicationsRegistry
         // Battle.net API (OAuth2 + character data)
         services.AddHttpClient<IBnetApiService, BnetApiService>();
 
+
         // Discord Gateway bot
         services
             .AddDiscordGateway(options =>
