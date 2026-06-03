@@ -24,9 +24,10 @@ public class BnetController(
 {
     private static readonly HashSet<string> ValidRegions = ["us", "eu", "kr", "tw"];
     private readonly string _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:4200";
+    private readonly string _callbackUrl = configuration["BattleNet:CallbackUrl"]
+        ?? "http://localhost:4200/api/v1.0/bnet/link/callback";
 
-    private string CallbackUrl =>
-        $"{Request.Scheme}://{Request.Host}/api/v1.0/bnet/link/callback";
+    private string CallbackUrl => _callbackUrl;
 
     /// <summary>
     /// Returns the Battle.net account linked to the authenticated user, or 404 if not linked.
