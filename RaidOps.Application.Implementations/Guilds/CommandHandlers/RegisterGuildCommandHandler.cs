@@ -4,7 +4,7 @@ using RaidOps.Application.Contracts.Guilds.Commands;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Guilds;
+namespace RaidOps.Application.Implementations.Guilds.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="RegisterGuildCommand"/> by verifying admin rights,

@@ -18,4 +18,8 @@
     <ProjectReference Include="..\RaidOps.Infrastructure.Persistence.Contracts\RaidOps.Infrastructure.Persistence.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Guilds\QueryHandlers\" />
+  </ItemGroup>
+
 </Project>

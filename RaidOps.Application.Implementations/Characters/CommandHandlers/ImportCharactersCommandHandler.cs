@@ -5,7 +5,7 @@ using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="ImportCharactersCommand"/> by:

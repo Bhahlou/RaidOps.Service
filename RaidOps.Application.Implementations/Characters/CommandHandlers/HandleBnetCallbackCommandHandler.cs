@@ -6,7 +6,7 @@ using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="HandleBnetCallbackCommand"/> by validating the CSRF state token,

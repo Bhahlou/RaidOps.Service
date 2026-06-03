@@ -3,7 +3,7 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Commands;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Guilds;
+namespace RaidOps.Application.Implementations.Guilds.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="UnregisterGuildCommand"/> by setting <c>IsRegistered = false</c>

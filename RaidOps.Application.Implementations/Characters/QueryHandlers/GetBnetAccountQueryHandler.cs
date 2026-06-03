@@ -4,7 +4,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetBnetAccountQuery"/> by fetching the linked Battle.net account

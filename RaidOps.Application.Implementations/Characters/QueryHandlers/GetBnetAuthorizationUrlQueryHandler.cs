@@ -4,7 +4,7 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetBnetAuthorizationUrlQuery"/> by generating a signed CSRF state token

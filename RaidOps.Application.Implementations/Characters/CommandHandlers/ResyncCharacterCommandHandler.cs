@@ -7,7 +7,7 @@ using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="ResyncCharacterCommand"/> by re-fetching the character's data

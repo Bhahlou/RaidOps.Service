@@ -4,7 +4,7 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="LinkBnetAccountCommand"/> by inserting or updating the

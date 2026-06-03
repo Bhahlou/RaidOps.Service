@@ -4,7 +4,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Branches;
+namespace RaidOps.Application.Implementations.Branches.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetBranchesQuery"/> by reading the seeded branch reference table.

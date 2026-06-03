@@ -5,7 +5,7 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetAvailableCharactersQuery"/> by:

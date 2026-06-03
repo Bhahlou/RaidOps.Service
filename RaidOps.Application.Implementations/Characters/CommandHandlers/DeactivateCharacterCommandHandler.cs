@@ -3,7 +3,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="DeactivateCharacterCommand"/> by setting

@@ -6,7 +6,7 @@ using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Characters;
+namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="ActivateCharactersCommand"/> by marking the given characters as active
