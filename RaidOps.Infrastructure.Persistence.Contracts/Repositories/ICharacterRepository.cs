@@ -53,4 +53,10 @@ public interface ICharacterRepository
     /// Ignores IDs that do not belong to the user.
     /// </summary>
     Task ActivateAsync(IEnumerable<int> characterIds, string userDiscordId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets <c>IsActiveInRaidOps = false</c> for the character matching the given ID and owner.
+    /// Returns <c>true</c> if the character was found and deactivated; <c>false</c> if not found.
+    /// </summary>
+    Task<bool> DeactivateAsync(int characterId, string userDiscordId, CancellationToken cancellationToken = default);
 }

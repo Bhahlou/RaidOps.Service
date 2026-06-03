@@ -163,4 +163,17 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    /// <inheritdoc/>
+    public async Task<bool> DeactivateAsync(int characterId, string userDiscordId, CancellationToken cancellationToken = default)
+    {
+        var character = await context.Characters
+            .FirstOrDefaultAsync(c => c.Id == characterId && c.UserDiscordId == userDiscordId, cancellationToken);
+
+        if (character is null) return false;
+
+        character.IsActiveInRaidOps = false;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
 }

@@ -95,4 +95,45 @@ public class CharactersController(
 
         return ToActionResult(result);
     }
+
+    /// <summary>
+    /// Re-fetches the character's data from Battle.net and returns the updated character.
+    /// The character must be active and belong to the authenticated user.
+    /// </summary>
+    [HttpPost("{id:int}/resync")]
+    public async Task<IActionResult> Resync(int id, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
+
+        var result = await CommandDispatcher.DispatchAsync(new ResyncCharacterCommand
+        {
+            UserDiscordId = discordId,
+            CharacterId = id
+        }, cancellationToken);
+
+        if (!result.IsSuccess)
+            return BadRequest(new { error = result.Error, detail = result.Detail });
+
+        return Ok(result.Value!.Body);
+    }
+
+    /// <summary>
+    /// Sets <c>IsActiveInRaidOps = false</c> for the given character.
+    /// The character must belong to the authenticated user.
+    /// </summary>
+    [HttpPost("{id:int}/deactivate")]
+    public async Task<IActionResult> Deactivate(int id, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
+
+        var result = await CommandDispatcher.DispatchAsync(new DeactivateCharacterCommand
+        {
+            UserDiscordId = discordId,
+            CharacterId = id
+        }, cancellationToken);
+
+        return ToActionResult(result);
+    }
 }
