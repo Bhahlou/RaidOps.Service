@@ -1,5 +1,5 @@
 using RaidOps.Application.Contracts.Services;
-using RaidOps.Domain.Models;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.Discord.Responses;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;

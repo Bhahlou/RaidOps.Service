@@ -3,7 +3,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Services;
 
-namespace RaidOps.Application.Implementations.Authentication;
+namespace RaidOps.Application.Implementations.Authentication.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="SignupCommand"/> by delegating to <see cref="IRaidOpsAuthService"/>
@@ -13,7 +13,7 @@ public class SignupCommandHandler(IRaidOpsAuthService authService) : ICommandHan
 {
     /// <summary>
     /// Executes the sign-up flow and returns a command response that embeds the
-    /// <see cref="RaidOps.Application.Contracts.Authentication.Responses.AuthenticationResponse"/> in its body on success.
+    /// <see cref="Contracts.Authentication.Responses.AuthenticationResponse"/> in its body on success.
     /// </summary>
     /// <param name="command">The sign-up command to process.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>

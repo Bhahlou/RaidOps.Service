@@ -1,4 +1,4 @@
-using RaidOps.Domain.Models;
+using RaidOps.Domain.Models.Discord;
 using System.Linq.Expressions;
 
 namespace RaidOps.Infrastructure.Persistence.Contracts.Repositories;

@@ -3,7 +3,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Services;
 
-namespace RaidOps.Application.Implementations.Authentication;
+namespace RaidOps.Application.Implementations.Authentication.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="RefreshTokenCommand"/> by delegating to <see cref="IRaidOpsAuthService"/>
@@ -13,7 +13,7 @@ public class RefreshTokenCommandHandler(IRaidOpsAuthService authService) : IComm
 {
     /// <summary>
     /// Executes the token-refresh flow and returns a command response that embeds
-    /// the new <see cref="RaidOps.Application.Contracts.Authentication.Responses.AuthenticationResponse"/> on success.
+    /// the new <see cref="Contracts.Authentication.Responses.AuthenticationResponse"/> on success.
     /// </summary>
     /// <param name="command">The refresh-token command containing the existing refresh JWT.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>

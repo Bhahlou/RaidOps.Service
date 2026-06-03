@@ -2,8 +2,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
+using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
+using RaidOps.ExternalApplication.Implementations.BNet;
 using RaidOps.ExternalApplication.Implementations.Bot;
 using RaidOps.ExternalApplication.Implementations.Services;
 
@@ -17,6 +19,10 @@ internal static class ExternalApplicationsRegistry
     {
         // Discord REST API (OAuth2 user flow)
         services.AddHttpClient<IDiscordApiService, DiscordApiService>();
+
+        // Battle.net API (OAuth2 + character data)
+        services.AddHttpClient<IBnetApiService, BnetApiService>();
+
 
         // Discord Gateway bot
         services

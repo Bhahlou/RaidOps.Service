@@ -4,7 +4,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Authentication;
+namespace RaidOps.Application.Implementations.Authentication.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetMeQuery"/> by looking up the authenticated user in the
@@ -26,7 +26,7 @@ public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandler
     {
         var user = await usersRepository.GetByDiscordIdWithGuildsAsync(query.DiscordId, cancellationToken);
         if (user == null)
-            return Result<UserResponse>.Fail("User not found");
+            return Result<UserResponse>.Fail(ResponseDetail.UserNotFound);
 
         return Result<UserResponse>.Ok(new UserResponse
         {
