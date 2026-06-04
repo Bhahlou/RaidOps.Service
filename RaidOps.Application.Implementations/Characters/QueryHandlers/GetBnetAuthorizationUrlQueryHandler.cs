@@ -20,7 +20,7 @@ public class GetBnetAuthorizationUrlQueryHandler(
     /// </summary>
     public Task<Result<string>> HandleAsync(
         GetBnetAuthorizationUrlQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var state = jwtService.GenerateBnetStateToken(query.DiscordId, query.Region);
         var url = bnetApiService.BuildAuthorizationUrl(query.Region, query.CallbackUrl, state);

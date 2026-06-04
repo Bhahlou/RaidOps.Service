@@ -17,7 +17,7 @@ public class GetBranchesQueryHandler(IBranchRepository branchRepository)
     /// </summary>
     public async Task<Result<IEnumerable<BranchDto>>> HandleAsync(
         GetBranchesQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var branches = await branchRepository.GetAllAsync(cancellationToken);
 

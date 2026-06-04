@@ -16,7 +16,7 @@ public class GetCharactersQueryHandler(ICharacterRepository characterRepository)
     /// <inheritdoc />
     public async Task<Result<IEnumerable<CharacterDto>>> HandleAsync(
         GetCharactersQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var characters = await characterRepository.GetByUserWithDetailsAsync(
             query.UserDiscordId, activeOnly: true, cancellationToken);

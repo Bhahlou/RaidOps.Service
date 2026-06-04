@@ -38,39 +38,42 @@ public class ResyncCharacterCommandHandler(
 
         if (bnetAccount is not null)
         {
+            var profileNamespace = "profile" + character.Branch.BnetNamespacePrefix["dynamic".Length..] + "-" + bnetAccount.Region;
+            var realmSlug = character.Realm.Slug;
+            var name = character.Name;
+
+            var detailTask = bnetApiService.GetCharacterAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            var mediaTask  = bnetApiService.GetCharacterMediaAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            var specsTask  = bnetApiService.GetCharacterSpecializationsAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+
             try
             {
-                var profileNamespace = "profile" + character.Branch.BnetNamespacePrefix["dynamic".Length..] + "-" + bnetAccount.Region;
-                var realmSlug = character.Realm.Slug;
-                var name = character.Name;
-
-                var detailTask = bnetApiService.GetCharacterAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-                var mediaTask  = bnetApiService.GetCharacterMediaAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-                var specsTask  = bnetApiService.GetCharacterSpecializationsAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-
                 await Task.WhenAll(detailTask, mediaTask, specsTask);
-
-                character.AvatarUrl = mediaTask.Result.Assets.FirstOrDefault(a => a.Key == "avatar")?.Value;
-                await characterRepository.UpsertAsync(character, cancellationToken);
-
-                var expansionId   = character.Branch.CurrentExpansionId;
-                var existingState = character.ExpansionStates.FirstOrDefault(s => s.ExpansionId == expansionId);
-
-                var state = existingState ?? new CharacterExpansionState
-                {
-                    CharacterId = character.Id,
-                    ExpansionId = expansionId,
-                };
-
-                state.Level     = detailTask.Result.Level;
-                state.ItemLevel = detailTask.Result.EquippedItemLevel > 0 ? detailTask.Result.EquippedItemLevel : null;
-                state.IsActive  = true;
-                state.GuildName = detailTask.Result.Guild?.Name;
-                state.Specs     = await specResolver.ResolveAsync(specsTask.Result, character.ClassId, state, cancellationToken);
-
-                await characterRepository.UpsertExpansionStateAsync(state, cancellationToken);
             }
-            catch (HttpRequestException) { }
+            catch (HttpRequestException)
+            {
+                return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
+            }
+
+            character.AvatarUrl = mediaTask.Result.Assets.FirstOrDefault(a => a.Key == "avatar")?.Value;
+            await characterRepository.UpsertAsync(character, cancellationToken);
+
+            var expansionId   = character.Branch.CurrentExpansionId;
+            var existingState = character.ExpansionStates.FirstOrDefault(s => s.ExpansionId == expansionId);
+
+            var state = existingState ?? new CharacterExpansionState
+            {
+                CharacterId = character.Id,
+                ExpansionId = expansionId,
+            };
+
+            state.Level     = detailTask.Result.Level;
+            state.ItemLevel = detailTask.Result.EquippedItemLevel > 0 ? detailTask.Result.EquippedItemLevel : null;
+            state.IsActive  = true;
+            state.GuildName = detailTask.Result.Guild?.Name;
+            state.Specs     = await specResolver.ResolveAsync(specsTask.Result, character.ClassId, state, cancellationToken);
+
+            await characterRepository.UpsertExpansionStateAsync(state, cancellationToken);
         }
 
         // Reload to get fresh navigations (specs with icons, updated fields) for DTO mapping.

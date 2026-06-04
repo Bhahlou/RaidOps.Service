@@ -23,9 +23,10 @@ public class BnetController(
     IConfiguration configuration) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
     private static readonly HashSet<string> ValidRegions = ["us", "eu", "kr", "tw"];
-    private readonly string _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:4200";
+    private readonly string _frontendUrl = configuration["FrontendUrl"] 
+        ?? throw new InvalidOperationException("FrontendUrl is not configured");
     private readonly string _callbackUrl = configuration["BattleNet:CallbackUrl"]
-        ?? "http://localhost:4200/api/v1.0/bnet/link/callback";
+        ?? throw new InvalidOperationException("BattleNet:CallbackUrl is not configured.");
 
     private string CallbackUrl => _callbackUrl;
 

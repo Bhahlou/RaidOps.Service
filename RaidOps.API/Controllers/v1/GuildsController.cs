@@ -22,9 +22,13 @@ public class GuildsController(
     IJwtService jwtService,
     IConfiguration configuration) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
-    private readonly string _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:4200";
-    private readonly string _discordClientId = configuration["Discord:ClientId"] ?? string.Empty;
-    private readonly long _botPermissions = long.TryParse(configuration["Discord:BotPermissions"], out var p) ? p : 0;
+    private readonly string _frontendUrl = configuration["FrontendUrl"]
+        ?? throw new InvalidOperationException("FrontendUrl is not configured");
+    private readonly string _discordClientId = configuration["Discord:ClientId"]
+        ?? throw new InvalidOperationException("Discord:ClientId is not configured");
+    private readonly long _botPermissions = long.TryParse(configuration["Discord:BotPermissions"], out var p) 
+        ? p 
+        : throw new InvalidOperationException("Discord:BotPermissions is not configured");
 
     /// <summary>
     /// Initiates the Discord bot OAuth2 flow for guild registration.
