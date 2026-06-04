@@ -30,6 +30,9 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
+RUN addgroup -S raidops && adduser -S raidops -G raidops
+USER raidops
+
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "RaidOps.API.dll"]

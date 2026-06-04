@@ -129,16 +129,19 @@ public class DiscordAuthController(
     /// <param name="authResp">The authentication response containing tokens and their expiry times.</param>
     private void AppendAuthCookies(AuthenticationResponse authResp)
     {
-        var baseOptions = new CookieOptions
+        Response.Cookies.Append(ACCESS_TOKEN, authResp.AccessToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None
-        };
-
-        Response.Cookies.Append(ACCESS_TOKEN, authResp.AccessToken,
-            new CookieOptions(baseOptions) { Expires = authResp.AccessTokenExpiration });
-        Response.Cookies.Append(REFRESH_TOKEN, authResp.RefreshToken,
-            new CookieOptions(baseOptions) { Expires = authResp.RefreshTokenExpiration });
+            Secure   = true,
+            SameSite = SameSiteMode.None,
+            Expires  = authResp.AccessTokenExpiration,
+        });
+        Response.Cookies.Append(REFRESH_TOKEN, authResp.RefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure   = true,
+            SameSite = SameSiteMode.None,
+            Expires  = authResp.RefreshTokenExpiration,
+        });
     }
 }
