@@ -1,0 +1,21 @@
+using RaidOps.Domain.Models.Character;
+using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
+
+namespace RaidOps.Application.Implementations.Characters.Services;
+
+/// <summary>
+/// Resolves a character's main and offspec from a Battle.net specialization response.
+/// Handles Classic (talent trees) and Modern (MoP+) spec formats.
+/// </summary>
+public interface ISpecResolverService
+{
+    /// <summary>
+    /// Returns the resolved <see cref="CharacterSpec"/> collection (main + offspec)
+    /// to persist on the given <paramref name="state"/>.
+    /// </summary>
+    Task<ICollection<CharacterSpec>> ResolveAsync(
+        BnetCharacterSpecializationsResponse specsResponse,
+        int classId,
+        CharacterExpansionState state,
+        CancellationToken cancellationToken = default);
+}

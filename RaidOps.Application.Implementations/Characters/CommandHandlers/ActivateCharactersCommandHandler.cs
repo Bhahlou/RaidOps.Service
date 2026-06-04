@@ -1,6 +1,7 @@
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
@@ -20,7 +21,8 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 public class ActivateCharactersCommandHandler(
     ICharacterRepository characterRepository,
     IBnetAccountRepository bnetAccountRepository,
-    IBnetApiService bnetApiService)
+    IBnetApiService bnetApiService,
+    ISpecResolverService specResolver)
     : ICommandHandlerAsync<ActivateCharactersCommand>
 {
     /// <inheritdoc/>
@@ -96,78 +98,9 @@ public class ActivateCharactersCommandHandler(
         state.ItemLevel = enrichment.Detail.EquippedItemLevel > 0 ? enrichment.Detail.EquippedItemLevel : null;
         state.IsActive  = true;
         state.GuildName = enrichment.Detail.Guild?.Name;
-        state.Specs     = await ResolveSpecsAsync(enrichment.Specs, character.ClassId, state, cancellationToken);
+        state.Specs     = await specResolver.ResolveAsync(enrichment.Specs, character.ClassId, state, cancellationToken);
 
         await characterRepository.UpsertExpansionStateAsync(state, cancellationToken);
-    }
-
-    private Task<ICollection<CharacterSpec>> ResolveSpecsAsync(
-        BnetCharacterSpecializationsResponse specsResponse,
-        int classId,
-        CharacterExpansionState state,
-        CancellationToken cancellationToken)
-    {
-        return specsResponse.ActiveSpecialization is not null
-            ? ResolveMopSpecsAsync(specsResponse, state, cancellationToken)
-            : ResolveClassicSpecsAsync(specsResponse, classId, state, cancellationToken);
-    }
-
-    /// <summary>
-    /// MoP / Retail: active spec from <c>active_specialization.id</c>,
-    /// offspec from the first other entry in <c>specializations</c>.
-    /// </summary>
-    private async Task<ICollection<CharacterSpec>> ResolveMopSpecsAsync(
-        BnetCharacterSpecializationsResponse specsResponse,
-        CharacterExpansionState state,
-        CancellationToken cancellationToken)
-    {
-        var activeId = specsResponse.ActiveSpecialization!.Id;
-        var result = new List<CharacterSpec>();
-
-        var mainSpec = await characterRepository.GetSpecByIdAsync(activeId, cancellationToken);
-        if (mainSpec is not null)
-            result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = mainSpec.Id, IsMain = true });
-
-        var offspecEntry = specsResponse.Specializations
-            .FirstOrDefault(s => s.Specialization.Id != activeId);
-        if (offspecEntry is not null)
-        {
-            var offSpec = await characterRepository.GetSpecByIdAsync(offspecEntry.Specialization.Id, cancellationToken);
-            if (offSpec is not null)
-                result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Classic / TBC: top 2 talent trees by spent points from the active loadout.
-    /// </summary>
-    private async Task<ICollection<CharacterSpec>> ResolveClassicSpecsAsync(
-        BnetCharacterSpecializationsResponse specsResponse,
-        int classId,
-        CharacterExpansionState state,
-        CancellationToken cancellationToken)
-    {
-        var activeGroup = specsResponse.SpecializationGroups.FirstOrDefault(g => g.IsActive);
-        if (activeGroup is null) return [];
-
-        var topTrees = activeGroup.Specializations
-            .Where(t => t.SpentPoints > 0)
-            .OrderByDescending(t => t.SpentPoints)
-            .Take(2)
-            .ToList();
-
-        var result = new List<CharacterSpec>();
-        for (var i = 0; i < topTrees.Count; i++)
-        {
-            var spec = await characterRepository.GetSpecByNameAndClassAsync(topTrees[i].SpecializationName, classId, cancellationToken);
-            if (spec is null) continue;
-
-            result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = spec.Id, IsMain = i == 0 });
-        }
-
-        return result;
     }
 
     private sealed record CharacterEnrichment(

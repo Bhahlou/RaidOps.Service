@@ -10,4 +10,7 @@ public class BnetSpecializationTreeDto
 
     [JsonPropertyName("spent_points")]
     public int SpentPoints { get; set; }
+
+    [JsonPropertyName("talents")]
+    public List<BnetTreeTalentEntryDto> Talents { get; set; } = [];
 }
