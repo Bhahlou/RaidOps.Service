@@ -2,9 +2,9 @@ using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Characters.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
-using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
@@ -18,7 +18,8 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 public class ResyncCharacterCommandHandler(
     ICharacterRepository characterRepository,
     IBnetAccountRepository bnetAccountRepository,
-    IBnetApiService bnetApiService)
+    IBnetApiService bnetApiService,
+    ISpecResolverService specResolver)
     : ICommandHandlerAsync<ResyncCharacterCommand>
 {
     /// <inheritdoc/>
@@ -65,7 +66,7 @@ public class ResyncCharacterCommandHandler(
                 state.ItemLevel = detailTask.Result.EquippedItemLevel > 0 ? detailTask.Result.EquippedItemLevel : null;
                 state.IsActive  = true;
                 state.GuildName = detailTask.Result.Guild?.Name;
-                state.Specs     = await ResolveSpecsAsync(specsTask.Result, character.ClassId, state, cancellationToken);
+                state.Specs     = await specResolver.ResolveAsync(specsTask.Result, character.ClassId, state, cancellationToken);
 
                 await characterRepository.UpsertExpansionStateAsync(state, cancellationToken);
             }
@@ -78,66 +79,6 @@ public class ResyncCharacterCommandHandler(
             .First(c => c.Id == command.CharacterId);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character resynced successfully.", MapToDto(refreshed)));
-    }
-
-    private Task<ICollection<CharacterSpec>> ResolveSpecsAsync(
-        BnetCharacterSpecializationsResponse specsResponse,
-        int classId,
-        CharacterExpansionState state,
-        CancellationToken cancellationToken)
-    {
-        return specsResponse.ActiveSpecialization is not null
-            ? ResolveMopSpecsAsync(specsResponse, state, cancellationToken)
-            : ResolveClassicSpecsAsync(specsResponse, classId, state, cancellationToken);
-    }
-
-    private async Task<ICollection<CharacterSpec>> ResolveMopSpecsAsync(
-        BnetCharacterSpecializationsResponse specsResponse,
-        CharacterExpansionState state,
-        CancellationToken cancellationToken)
-    {
-        var activeId = specsResponse.ActiveSpecialization!.Id;
-        var result   = new List<CharacterSpec>();
-
-        var mainSpec = await characterRepository.GetSpecByIdAsync(activeId, cancellationToken);
-        if (mainSpec is not null)
-            result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = mainSpec.Id, IsMain = true });
-
-        var offspecEntry = specsResponse.Specializations.FirstOrDefault(s => s.Specialization.Id != activeId);
-        if (offspecEntry is not null)
-        {
-            var offSpec = await characterRepository.GetSpecByIdAsync(offspecEntry.Specialization.Id, cancellationToken);
-            if (offSpec is not null)
-                result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
-        }
-
-        return result;
-    }
-
-    private async Task<ICollection<CharacterSpec>> ResolveClassicSpecsAsync(
-        BnetCharacterSpecializationsResponse specsResponse,
-        int classId,
-        CharacterExpansionState state,
-        CancellationToken cancellationToken)
-    {
-        var activeGroup = specsResponse.SpecializationGroups.FirstOrDefault(g => g.IsActive);
-        if (activeGroup is null) return [];
-
-        var topTrees = activeGroup.Specializations
-            .Where(t => t.SpentPoints > 0)
-            .OrderByDescending(t => t.SpentPoints)
-            .Take(2)
-            .ToList();
-
-        var result = new List<CharacterSpec>();
-        for (var i = 0; i < topTrees.Count; i++)
-        {
-            var spec = await characterRepository.GetSpecByNameAndClassAsync(topTrees[i].SpecializationName, classId, cancellationToken);
-            if (spec is null) continue;
-            result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = spec.Id, IsMain = i == 0 });
-        }
-
-        return result;
     }
 
     private static CharacterDto MapToDto(Character c)
