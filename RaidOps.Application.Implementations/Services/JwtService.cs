@@ -64,35 +64,7 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// The <see cref="ClaimsPrincipal"/> if validation succeeds, or <c>null</c> if the token
     /// is invalid, expired, or tampered with.
     /// </returns>
-    public ClaimsPrincipal? ValidateRefreshToken(string token)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        // Preserve short JWT claim names (e.g. "sub") instead of mapping to long XML URIs.
-        // Without this, JwtSecurityTokenHandler maps "sub" → ClaimTypes.NameIdentifier
-        // and FindFirst("sub") returns null.
-        tokenHandler.InboundClaimTypeMap.Clear();
-        var key = Encoding.UTF8.GetBytes(_settings.Key);
-        var parameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = _settings.Issuer,
-            ValidAudience = _settings.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-
-        try
-        {
-            return tokenHandler.ValidateToken(token, parameters, out _);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    public ClaimsPrincipal? ValidateRefreshToken(string token) => TryValidate(token);
 
     /// <summary>
     /// Generates a short-lived CSRF state token for the Discord bot OAuth2 registration flow.
@@ -123,33 +95,10 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// </returns>
     public (string GuildId, string DiscordId)? ValidateStateToken(string token)
     {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        tokenHandler.InboundClaimTypeMap.Clear();
-        var key = Encoding.UTF8.GetBytes(_settings.Key);
-        var parameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = _settings.Issuer,
-            ValidAudience = _settings.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-
-        try
-        {
-            var principal = tokenHandler.ValidateToken(token, parameters, out _);
-            var discordId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            var guildId = principal.FindFirst("gld")?.Value;
-            if (discordId == null || guildId == null) return null;
-            return (guildId, discordId);
-        }
-        catch
-        {
-            return null;
-        }
+        var principal = TryValidate(token);
+        var discordId = principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        var guildId   = principal?.FindFirst("gld")?.Value;
+        return discordId is null || guildId is null ? null : (guildId, discordId);
     }
 
     /// <summary>
@@ -181,33 +130,34 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// </returns>
     public (string DiscordId, string Region)? ValidateBnetStateToken(string token)
     {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        tokenHandler.InboundClaimTypeMap.Clear();
-        var key = Encoding.UTF8.GetBytes(_settings.Key);
+        var principal = TryValidate(token);
+        var discordId = principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        var region    = principal?.FindFirst("rgn")?.Value;
+        return discordId is null || region is null ? null : (discordId, region);
+    }
+
+    /// <summary>
+    /// Validates a JWT against the configured key, issuer, audience, and lifetime.
+    /// Preserves short claim names (e.g. "sub") by clearing the inbound claim type map.
+    /// Returns <c>null</c> if validation fails for any reason.
+    /// </summary>
+    private ClaimsPrincipal? TryValidate(string token)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        handler.InboundClaimTypeMap.Clear();
         var parameters = new TokenValidationParameters
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = _settings.Issuer,
-            ValidAudience = _settings.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ClockSkew = TimeSpan.FromSeconds(30)
+            ValidIssuer              = _settings.Issuer,
+            ValidAudience            = _settings.Audience,
+            IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key)),
+            ClockSkew                = TimeSpan.FromSeconds(30)
         };
-
-        try
-        {
-            var principal = tokenHandler.ValidateToken(token, parameters, out _);
-            var discordId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            var region = principal.FindFirst("rgn")?.Value;
-            if (discordId == null || region == null) return null;
-            return (discordId, region);
-        }
-        catch
-        {
-            return null;
-        }
+        try { return handler.ValidateToken(token, parameters, out _); }
+        catch { return null; }
     }
 
     /// <summary>
