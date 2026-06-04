@@ -20,7 +20,10 @@ public class DiscordAuthController(
     IQueryDispatcher queryDispatcher,
     IConfiguration configuration) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
-    private readonly string _frontendUrl = configuration["FrontendUrl"] ?? "http://localhost:4200";
+    private readonly string _frontendUrl = configuration["FrontendUrl"]
+        ?? throw new InvalidOperationException("FrontendUrl is not configured");
+    private const string ACCESS_TOKEN = "access_token";
+    private const string REFRESH_TOKEN = "refresh_token";
 
     /// <summary>
     /// Initiates the Discord OAuth2 sign-up flow by issuing a challenge that redirects
@@ -58,8 +61,8 @@ public class DiscordAuthController(
 
         var claims = authenticateResult.Principal.Claims.ToList();
         var discordId = claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
-        var discordAccessToken = await HttpContext.GetTokenAsync("access_token");
-        var discordRefreshToken = await HttpContext.GetTokenAsync("refresh_token");
+        var discordAccessToken = await HttpContext.GetTokenAsync(ACCESS_TOKEN);
+        var discordRefreshToken = await HttpContext.GetTokenAsync(REFRESH_TOKEN);
 
         if (string.IsNullOrEmpty(discordAccessToken) || string.IsNullOrEmpty(discordRefreshToken))
             return Unauthorized("Discord tokens are missing.");
@@ -91,7 +94,7 @@ public class DiscordAuthController(
     [HttpPost("refresh")]
     public async Task<IActionResult> RefreshToken(CancellationToken cancellationToken)
     {
-        var refreshJwt = Request.Cookies["refresh_token"];
+        var refreshJwt = Request.Cookies[REFRESH_TOKEN];
         if (refreshJwt == null)
             return Unauthorized();
 
@@ -114,8 +117,8 @@ public class DiscordAuthController(
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        Response.Cookies.Delete("access_token");
-        Response.Cookies.Delete("refresh_token");
+        Response.Cookies.Delete(ACCESS_TOKEN);
+        Response.Cookies.Delete(REFRESH_TOKEN);
         return Ok();
     }
 
@@ -126,16 +129,19 @@ public class DiscordAuthController(
     /// <param name="authResp">The authentication response containing tokens and their expiry times.</param>
     private void AppendAuthCookies(AuthenticationResponse authResp)
     {
-        var baseOptions = new CookieOptions
+        Response.Cookies.Append(ACCESS_TOKEN, authResp.AccessToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None
-        };
-
-        Response.Cookies.Append("access_token", authResp.AccessToken,
-            new CookieOptions(baseOptions) { Expires = authResp.AccessTokenExpiration });
-        Response.Cookies.Append("refresh_token", authResp.RefreshToken,
-            new CookieOptions(baseOptions) { Expires = authResp.RefreshTokenExpiration });
+            Secure   = true,
+            SameSite = SameSiteMode.None,
+            Expires  = authResp.AccessTokenExpiration,
+        });
+        Response.Cookies.Append(REFRESH_TOKEN, authResp.RefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure   = true,
+            SameSite = SameSiteMode.None,
+            Expires  = authResp.RefreshTokenExpiration,
+        });
     }
 }

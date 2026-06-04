@@ -10,13 +10,10 @@ public class ConfigureSwaggerOptions(IApiVersionDescriptionProvider provider)
 {
     public void Configure(SwaggerGenOptions options)
     {
-        foreach (var description in provider.ApiVersionDescriptions)
-        {
-            options.SwaggerDoc(description.GroupName, new OpenApiInfo
-            {
-                Title = "RaidOps API",
-                Version = description.GroupName
+        foreach (var groupName in provider.ApiVersionDescriptions.Select(d => d.GroupName))
+            options.SwaggerDoc(groupName, new OpenApiInfo { 
+                Title = "RaidOps API", 
+                Version = groupName 
             });
-        }
     }
 }

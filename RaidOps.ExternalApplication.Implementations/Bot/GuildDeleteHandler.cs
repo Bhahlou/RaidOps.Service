@@ -27,16 +27,16 @@ public class GuildDeleteHandler(
     /// dispatches <see cref="UnregisterGuildCommand"/> otherwise.
     /// </summary>
     /// <param name="args">The event arguments provided by the Discord Gateway.</param>
-    public async ValueTask HandleAsync(GuildDeleteEventArgs args)
+    public async ValueTask HandleAsync(GuildDeleteEventArgs arg)
     {
         // IsUnavailable = true means a Discord outage, not a bot removal — ignore.
-        if (args.IsUnavailable)
+        if (arg.IsUnavailable)
         {
-            logger.LogDebug("Guild {GuildId} became unavailable (outage), skipping unregister.", args.GuildId);
+            logger.LogDebug("Guild {GuildId} became unavailable (outage), skipping unregister.", arg.GuildId);
             return;
         }
 
-        logger.LogWarning("Bot removed from guild {GuildId}. Dispatching unregister…", args.GuildId);
+        logger.LogWarning("Bot removed from guild {GuildId}. Dispatching unregister…", arg.GuildId);
 
         try
         {
@@ -45,17 +45,17 @@ public class GuildDeleteHandler(
 
             var result = await dispatcher.DispatchAsync(new UnregisterGuildCommand
             {
-                GuildId = args.GuildId.ToString()
+                GuildId = arg.GuildId.ToString()
             });
 
             if (result.IsFailed)
-                logger.LogError("Failed to unregister guild {GuildId}: {Error}", args.GuildId, result.Error);
+                logger.LogError("Failed to unregister guild {GuildId}: {Error}", arg.GuildId, result.Error);
             else
-                logger.LogInformation("Guild {GuildId} successfully unregistered.", args.GuildId);
+                logger.LogInformation("Guild {GuildId} successfully unregistered.", arg.GuildId);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unexpected error while unregistering guild {GuildId}.", args.GuildId);
+            logger.LogError(ex, "Unexpected error while unregistering guild {GuildId}.", arg.GuildId);
         }
     }
 }

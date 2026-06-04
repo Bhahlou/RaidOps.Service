@@ -6,6 +6,7 @@ using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
+using RaidOps.Application.Implementations.Characters;
 
 namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 
@@ -38,39 +39,42 @@ public class ResyncCharacterCommandHandler(
 
         if (bnetAccount is not null)
         {
+            var profileNamespace = "profile" + character.Branch.BnetNamespacePrefix["dynamic".Length..] + "-" + bnetAccount.Region;
+            var realmSlug = character.Realm.Slug;
+            var name = character.Name;
+
+            var detailTask = bnetApiService.GetCharacterAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            var mediaTask  = bnetApiService.GetCharacterMediaAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            var specsTask  = bnetApiService.GetCharacterSpecializationsAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+
             try
             {
-                var profileNamespace = "profile" + character.Branch.BnetNamespacePrefix["dynamic".Length..] + "-" + bnetAccount.Region;
-                var realmSlug = character.Realm.Slug;
-                var name = character.Name;
-
-                var detailTask = bnetApiService.GetCharacterAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-                var mediaTask  = bnetApiService.GetCharacterMediaAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-                var specsTask  = bnetApiService.GetCharacterSpecializationsAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-
                 await Task.WhenAll(detailTask, mediaTask, specsTask);
-
-                character.AvatarUrl = mediaTask.Result.Assets.FirstOrDefault(a => a.Key == "avatar")?.Value;
-                await characterRepository.UpsertAsync(character, cancellationToken);
-
-                var expansionId   = character.Branch.CurrentExpansionId;
-                var existingState = character.ExpansionStates.FirstOrDefault(s => s.ExpansionId == expansionId);
-
-                var state = existingState ?? new CharacterExpansionState
-                {
-                    CharacterId = character.Id,
-                    ExpansionId = expansionId,
-                };
-
-                state.Level     = detailTask.Result.Level;
-                state.ItemLevel = detailTask.Result.EquippedItemLevel > 0 ? detailTask.Result.EquippedItemLevel : null;
-                state.IsActive  = true;
-                state.GuildName = detailTask.Result.Guild?.Name;
-                state.Specs     = await specResolver.ResolveAsync(specsTask.Result, character.ClassId, state, cancellationToken);
-
-                await characterRepository.UpsertExpansionStateAsync(state, cancellationToken);
             }
-            catch (HttpRequestException) { }
+            catch (HttpRequestException)
+            {
+                return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
+            }
+
+            character.AvatarUrl = mediaTask.Result.Assets.FirstOrDefault(a => a.Key == "avatar")?.Value;
+            await characterRepository.UpsertAsync(character, cancellationToken);
+
+            var expansionId   = character.Branch.CurrentExpansionId;
+            var existingState = character.ExpansionStates.FirstOrDefault(s => s.ExpansionId == expansionId);
+
+            var state = existingState ?? new CharacterExpansionState
+            {
+                CharacterId = character.Id,
+                ExpansionId = expansionId,
+            };
+
+            state.Level     = detailTask.Result.Level;
+            state.ItemLevel = detailTask.Result.EquippedItemLevel > 0 ? detailTask.Result.EquippedItemLevel : null;
+            state.IsActive  = true;
+            state.GuildName = detailTask.Result.Guild?.Name;
+            state.Specs     = await specResolver.ResolveAsync(specsTask.Result, character.ClassId, state, cancellationToken);
+
+            await characterRepository.UpsertExpansionStateAsync(state, cancellationToken);
         }
 
         // Reload to get fresh navigations (specs with icons, updated fields) for DTO mapping.
@@ -78,41 +82,8 @@ public class ResyncCharacterCommandHandler(
             command.UserDiscordId, activeOnly: true, cancellationToken))
             .First(c => c.Id == command.CharacterId);
 
-        return Result<CommandResponse>.Ok(new CommandResponse("Character resynced successfully.", MapToDto(refreshed)));
-    }
+        var dto = CharacterMapper.ToDto(refreshed);
 
-    private static CharacterDto MapToDto(Character c)
-    {
-        var activeState = c.ExpansionStates.FirstOrDefault(s => s.IsActive)
-                       ?? c.ExpansionStates.OrderByDescending(s => s.Level).FirstOrDefault();
-
-        return new CharacterDto
-        {
-            Id         = c.Id,
-            Name       = c.Name,
-            ClassId    = c.ClassId,
-            ClassName  = c.Class.Name,
-            ClassColor = "#" + c.Class.Color,
-            RaceId     = c.RaceId,
-            RaceName   = c.Race.Name,
-            Faction    = c.Faction.ToString().ToUpperInvariant(),
-            BranchName = c.Branch.Name,
-            RealmName  = c.Realm.Name,
-            RealmSlug  = c.Realm.Slug,
-            Level      = activeState?.Level ?? 0,
-            ItemLevel  = activeState?.ItemLevel,
-            AvatarUrl  = c.AvatarUrl,
-            GuildName  = activeState?.GuildName,
-            Specs      = (activeState?.Specs ?? [])
-                .OrderByDescending(s => s.IsMain)
-                .Select(s => new CharacterSpecDto
-                {
-                    SpecId  = s.SpecId,
-                    Name    = s.Spec.Name,
-                    IconUrl = s.Spec.IconUrl,
-                    IsMain  = s.IsMain,
-                })
-                .ToList(),
-        };
+        return Result<CommandResponse>.Ok(new CommandResponse("Character resynced successfully.", dto));
     }
 }

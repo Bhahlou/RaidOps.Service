@@ -29,7 +29,7 @@ public class GetAvailableCharactersQueryHandler(
     /// </summary>
     public async Task<Result<IEnumerable<AvailableCharacterDto>>> HandleAsync(
         GetAvailableCharactersQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         // 1. Load the user's BNet account
         var account = await bnetAccountRepository.GetByDiscordIdAsync(query.UserDiscordId, cancellationToken);

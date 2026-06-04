@@ -19,7 +19,7 @@ public class GetBnetAccountQueryHandler(IBnetAccountRepository bnetAccountReposi
     /// </summary>
     public async Task<Result<BnetAccountResponse>> HandleAsync(
         GetBnetAccountQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var account = await bnetAccountRepository.GetByDiscordIdAsync(query.UserDiscordId, cancellationToken);
 

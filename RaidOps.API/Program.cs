@@ -124,11 +124,11 @@ var apiVersions = app.DescribeApiVersions();
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
-    foreach (var version in apiVersions)
+    foreach (var groupName in apiVersions.Select(d => d.GroupName))
     {
         options.SwaggerEndpoint(
-            $"/swagger/{version.GroupName}/swagger.json",
-            $"RaidOps API {version.GroupName}");
+            $"/swagger/{groupName}/swagger.json",
+            $"RaidOps API {groupName}");
     }
 });
 
@@ -142,4 +142,4 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();
