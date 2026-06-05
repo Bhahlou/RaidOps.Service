@@ -2,11 +2,10 @@ using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Characters.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
-using RaidOps.Application.Implementations.Characters;
+using RaidOps.Application.Contracts.Services;
 
 namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 

@@ -6,6 +6,14 @@ obj/
 .vs/
 *.userprefs
 
+## Tests / couverture
+TestResults/
+*.coverage
+*.cobertura.xml
+coverage.opencover.xml
+coverage.xml
+.sonarqube/
+
 ## Secrets / local config
 .env
 appsettings.Development.json

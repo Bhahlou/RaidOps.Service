@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Log in to GHCR
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -30,68 +30,3 @@ jobs:
         run: |
           IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}
           docker push $IMAGE_NAME:latest
-
-  notify:
-    needs: [build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Get merged PR info
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Find the PR associated with this merge commit
-          PR=$(gh api /repos/${{ github.repository }}/commits/${{ github.sha }}/pulls \
-            -H "Accept: application/vnd.github+json" | jq '.[0]')
-
-          if [ "$PR" = "null" ] || [ -z "$PR" ]; then
-            echo "No PR found for this commit, skipping notification."
-            echo "skip=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "skip=false" >> $GITHUB_OUTPUT
-          echo "title=$(echo $PR | jq -r '.title')" >> $GITHUB_OUTPUT
-          echo "url=$(echo $PR | jq -r '.html_url')" >> $GITHUB_OUTPUT
-          echo "author=$(echo $PR | jq -r '.merged_by.login')" >> $GITHUB_OUTPUT
-          # Multiline body needs special handling
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo $PR | jq -r '.body' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Post changelog to Discord
-        if: steps.pr.outputs.skip != 'true'
-        env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL }}
-          AVATAR_URL: ${{ secrets.DISCORD_CHANGELOG_AVATAR_URL }}
-          REPO: ${{ github.repository }}
-        run: |
-          BODY=$(echo "${{ steps.pr.outputs.body }}" \
-            | sed 's/<!--.*-->//g' \
-            | sed 's/<[^>]*>//g' \
-            | sed '/^[[:space:]]*$/d' \
-            | head -c 4000)
-
-          curl -s -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg username "RaidOps Changelog" \
-              --arg avatar "$AVATAR_URL" \
-              --arg title "[$REPO] ${{ steps.pr.outputs.title }}" \
-              --arg desc "$BODY" \
-              --arg url "${{ steps.pr.outputs.url }}" \
-              --arg author "${{ steps.pr.outputs.author }}" \
-              '{
-                username: $username,
-                avatar_url: $avatar,
-                embeds: [{
-                  title: $title,
-                  description: $desc,
-                  url: $url,
-                  color: 16750848,
-                  footer: { text: ("Merged by " + $author) }
-                }]
-              }')"

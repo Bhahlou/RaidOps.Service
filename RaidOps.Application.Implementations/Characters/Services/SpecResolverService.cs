@@ -1,3 +1,4 @@
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;

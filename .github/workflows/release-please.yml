@@ -1,0 +1,57 @@
+name: Release Please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Following steps run ONLY when a release has just been published
+      # (= release PR has been merged), not at each feature merge.
+      - name: Post changelog to Discord
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK_URL }}
+          AVATAR_URL: ${{ secrets.DISCORD_CHANGELOG_AVATAR_URL }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          RELEASE_URL: ${{ steps.release.outputs.html_url }}
+        run: |
+          # release-please already generates a markdown changelog with clickable links
+          BODY=$(gh release view "$TAG" --repo "$REPO" --json body --jq .body)
+
+          # Discord limitates embed description to 4096 chars.
+          BODY=$(echo "$BODY" | head -c 4000)
+
+          curl -s -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg username "RaidOps Releases" \
+              --arg avatar "$AVATAR_URL" \
+              --arg title "🚀 $REPO — $TAG" \
+              --arg desc "$BODY" \
+              --arg url "$RELEASE_URL" \
+              '{
+                username: $username,
+                avatar_url: $avatar,
+                embeds: [{
+                  title: $title,
+                  description: $desc,
+                  url: $url,
+                  color: 16750848,
+                  footer: { text: "Déployé en production" }
+                }]
+              }')"

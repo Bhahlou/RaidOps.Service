@@ -1,0 +1,156 @@
+using FluentAssertions;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using RaidOps.API.Controllers.v1;
+using RaidOps.API.Requests;
+using RaidOps.Application.Contracts.Characters.Commands;
+using RaidOps.Application.Contracts.Characters.Queries;
+using RaidOps.Application.Contracts.Characters.Responses;
+using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.CQRS;
+
+namespace RaidOps.UnitTests.Controllers;
+
+public class CharactersControllerTests
+{
+    private readonly Mock<ICommandDispatcher> _commands = new();
+    private readonly Mock<IQueryDispatcher>   _queries  = new();
+    private readonly CharactersController     _sut;
+
+    private const string DiscordId = "user-1";
+
+    public CharactersControllerTests()
+    {
+        _sut = new CharactersController(_commands.Object, _queries.Object)
+        {
+            ControllerContext = ControllerTestHelpers.MakeContext(DiscordId)
+        };
+    }
+
+    // ── GetAll ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAll_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.GetAll(default)).Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetAll_QuerySucceeds_ReturnsOk()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetCharactersQuery, IEnumerable<CharacterDto>>(
+                It.Is<GetCharactersQuery>(x => x.UserDiscordId == DiscordId), default))
+            .ReturnsAsync(Result<IEnumerable<CharacterDto>>.Ok([]));
+
+        (await _sut.GetAll(default)).Should().BeOfType<OkObjectResult>();
+    }
+
+    // ── GetSynced ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetSynced_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.GetSynced(default)).Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetSynced_QuerySucceeds_ReturnsOk()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetSyncedCharactersQuery, IEnumerable<SyncedCharacterDto>>(
+                It.IsAny<GetSyncedCharactersQuery>(), default))
+            .ReturnsAsync(Result<IEnumerable<SyncedCharacterDto>>.Ok([]));
+
+        (await _sut.GetSynced(default)).Should().BeOfType<OkObjectResult>();
+    }
+
+    // ── Sync ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Sync_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.Sync(new SyncBnetCharactersRequest { BranchId = 1 }, default))
+            .Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task Sync_CommandSucceeds_ReturnsOk()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<SyncBnetCharactersCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        (await _sut.Sync(new SyncBnetCharactersRequest { BranchId = 1 }, default))
+            .Should().BeOfType<OkObjectResult>();
+    }
+
+    // ── Activate ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Activate_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.Activate(new ActivateCharactersRequest { CharacterIds = [] }, default))
+            .Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task Activate_CommandSucceeds_ReturnsOk()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<ActivateCharactersCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        (await _sut.Activate(new ActivateCharactersRequest { CharacterIds = [1, 2] }, default))
+            .Should().BeOfType<OkObjectResult>();
+    }
+
+    // ── Resync ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Resync_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.Resync(10, default)).Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task Resync_CommandSucceeds_ReturnsOkWithBody()
+    {
+        var dto = new CharacterDto { Id = 10, Name = "Arthas" };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<ResyncCharacterCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("resynced", dto)));
+
+        var result = await _sut.Resync(10, default);
+
+        result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().Be(dto);
+    }
+
+    [Fact]
+    public async Task Resync_CommandFails_ReturnsBadRequest()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<ResyncCharacterCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.NotFound));
+
+        (await _sut.Resync(10, default)).Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    // ── Deactivate ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Deactivate_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.Deactivate(10, default)).Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task Deactivate_CommandSucceeds_ReturnsOk()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<DeactivateCharacterCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        (await _sut.Deactivate(10, default)).Should().BeOfType<OkObjectResult>();
+    }
+}

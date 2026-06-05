@@ -31,10 +31,4 @@ public class Result<TSuccess>
 
     public static Result<TSuccess> Fail(string error, string? detail = null) =>
         new(error, detail);
-
-    public Result<TOut> Map<TOut>(Func<TSuccess, TOut> mapper) =>
-        IsSuccess ? Result<TOut>.Ok(mapper(_successValue!)) : Result<TOut>.Fail(_errorValue!, _detailValue);
-
-    public async Task<Result<TOut>> MapAsync<TOut>(Func<TSuccess, Task<TOut>> mapper) =>
-        IsSuccess ? Result<TOut>.Ok(await mapper(_successValue!)) : Result<TOut>.Fail(_errorValue!, _detailValue);
 }
