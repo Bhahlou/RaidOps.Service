@@ -1,7 +1,7 @@
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
 
-namespace RaidOps.Application.Implementations.Characters.Services;
+namespace RaidOps.Application.Contracts.Services;
 
 /// <summary>
 /// Resolves a character's main and offspec from a Battle.net specialization response.

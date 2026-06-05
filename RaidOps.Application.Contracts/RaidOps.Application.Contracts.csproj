@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RaidOps.Domain\RaidOps.Domain.csproj" />
+    <ProjectReference Include="..\RaidOps.ExternalApplication.Contracts\RaidOps.ExternalApplication.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

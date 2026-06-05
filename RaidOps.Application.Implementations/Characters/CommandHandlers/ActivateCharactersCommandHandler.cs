@@ -1,7 +1,7 @@
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Implementations.Characters.Services;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Models.Character;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
