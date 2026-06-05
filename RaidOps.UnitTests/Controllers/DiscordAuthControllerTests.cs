@@ -134,7 +134,7 @@ public class DiscordAuthControllerTests
 
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().Be($"{FrontendUrl}/authcallback");
-        ctx.Response.Headers["Set-Cookie"].Should().NotBeEmpty();
+        ctx.Response.Headers.SetCookie.Should().NotBeEmpty();
     }
 
     // ── RefreshToken ─────────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ public class DiscordAuthControllerTests
     public async Task RefreshToken_CommandFails_ReturnsUnauthorized()
     {
         var ctx = new DefaultHttpContext();
-        ctx.Request.Headers["Cookie"] = "refresh_token=old-jwt";
+        ctx.Request.Headers.Cookie = "refresh_token=old-jwt";
         _sut.ControllerContext = new ControllerContext { HttpContext = ctx };
 
         _commands.Setup(c => c.DispatchAsync(It.IsAny<RefreshTokenCommand>(), default))
@@ -165,7 +165,7 @@ public class DiscordAuthControllerTests
     public async Task RefreshToken_SuccessButNullBody_ReturnsUnauthorized()
     {
         var ctx = new DefaultHttpContext();
-        ctx.Request.Headers["Cookie"] = "refresh_token=old-jwt";
+        ctx.Request.Headers.Cookie = "refresh_token=old-jwt";
         _sut.ControllerContext = new ControllerContext { HttpContext = ctx };
 
         // Command succeeds but body is not an AuthenticationResponse
@@ -180,7 +180,7 @@ public class DiscordAuthControllerTests
     public async Task RefreshToken_Success_SetsCookiesAndReturnsOk()
     {
         var ctx = new DefaultHttpContext();
-        ctx.Request.Headers["Cookie"] = "refresh_token=old-jwt";
+        ctx.Request.Headers.Cookie = "refresh_token=old-jwt";
         _sut.ControllerContext = new ControllerContext { HttpContext = ctx };
 
         var authResp = new AuthenticationResponse
@@ -196,7 +196,7 @@ public class DiscordAuthControllerTests
         var result = await _sut.RefreshToken(default);
 
         result.Should().BeOfType<OkResult>();
-        ctx.Response.Headers["Set-Cookie"].Should().NotBeEmpty();
+        ctx.Response.Headers.SetCookie.Should().NotBeEmpty();
     }
 
     // ── Logout ────────────────────────────────────────────────────────────────

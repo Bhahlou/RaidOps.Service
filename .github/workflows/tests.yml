@@ -42,7 +42,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
 
           dotnet build RaidOps.Service.slnx --configuration Release
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -51,7 +51,7 @@ jobs:
           $testExit = $LASTEXITCODE
 
           # end doit tourner même si les tests échouent, pour publier l'analyse sur la PR
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          ${{ runner.temp }}\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
           # ...mais le job doit échouer si un test a échoué
           if ($testExit -ne 0) { exit $testExit }
