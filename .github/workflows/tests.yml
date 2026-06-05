@@ -1,4 +1,4 @@
-name: SonarQube
+name: Tests & SonarCloud
 on:
   push:
     branches:
@@ -6,8 +6,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
-  build:
-    name: Build and analyze
+  test-and-analyze:
+    name: Run tests and Sonar Quality Gate
     runs-on: windows-latest
     steps:
       - name: Set up JDK 17
