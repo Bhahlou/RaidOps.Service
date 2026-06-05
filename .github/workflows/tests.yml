@@ -44,12 +44,15 @@ jobs:
       - name: Build, test and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # Passed via env (not inline ${{ }}) to avoid script injection: the branch
+          # name is attacker-controllable. See Sonar S7630.
+          HEAD_REF: ${{ github.head_ref }}
         shell: powershell
         run: |
           # The release-please PR only changes CHANGELOG + version (0 code).
           # We still run the Sonar scan (so the required checks report green) but skip
           # the tests: no point re-testing code already validated on master.
-          $isReleasePr = "${{ github.head_ref }}" -eq "release-please--branches--master"
+          $isReleasePr = "$env:HEAD_REF" -eq "release-please--branches--master"
 
           ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.exclusions="**/Migrations/**"
 
