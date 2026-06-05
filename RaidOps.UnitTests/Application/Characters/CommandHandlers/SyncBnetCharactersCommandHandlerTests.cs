@@ -1,0 +1,242 @@
+using FluentAssertions;
+using Moq;
+using RaidOps.Application.Contracts.Characters.Commands;
+using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Implementations.Characters.CommandHandlers;
+using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Character;
+using RaidOps.Domain.Models.Reference;
+using RaidOps.ExternalApplication.Contracts.Services.BNet;
+using RaidOps.ExternalApplication.Contracts.Services.BNet.Responses;
+using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
+
+namespace RaidOps.UnitTests.Application.Characters.CommandHandlers;
+
+public class SyncBnetCharactersCommandHandlerTests
+{
+    private readonly Mock<IBnetAccountRepository> _bnetAccounts = new();
+    private readonly Mock<IBranchRepository>      _branches     = new();
+    private readonly Mock<IRealmRepository>       _realms       = new();
+    private readonly Mock<ICharacterRepository>   _characters   = new();
+    private readonly Mock<IBnetApiService>        _bnetApi      = new();
+    private readonly SyncBnetCharactersCommandHandler _sut;
+
+    private const string DiscordId = "user-1";
+    private const int    BranchId  = 1;
+
+    private static readonly BattleNetAccount Account = new()
+    {
+        UserDiscordId = DiscordId,
+        BnetId        = "bnet-1",
+        BattleTag     = "Player#1234",
+        AccessToken   = "tok",
+        Region        = "eu",
+    };
+
+    private static readonly Branch Branch = new()
+    {
+        Id                  = BranchId,
+        Name                = "Retail",
+        BnetNamespacePrefix = "dynamic",
+        CurrentExpansionId  = 10,
+    };
+
+    private static readonly Realm ExistingRealm = new()
+    {
+        Id       = 7,
+        Slug     = "kazzak",
+        Name     = "Kazzak",
+        Region   = "eu",
+        BranchId = BranchId,
+    };
+
+    private static readonly SyncBnetCharactersCommand Command = new()
+    {
+        UserDiscordId = DiscordId,
+        BranchId      = BranchId,
+    };
+
+    public SyncBnetCharactersCommandHandlerTests()
+    {
+        _sut = new SyncBnetCharactersCommandHandler(
+            _bnetAccounts.Object,
+            _branches.Object,
+            _realms.Object,
+            _characters.Object,
+            _bnetApi.Object);
+
+        _characters.Setup(r => r.UpsertAsync(It.IsAny<Character>(), default))
+            .ReturnsAsync((Character c, CancellationToken _) => c);
+    }
+
+    // ── Guard clauses ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_NoBnetAccount_ReturnsBnetNotLinked()
+    {
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default))
+            .ReturnsAsync((BattleNetAccount?)null);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.BnetNotLinked);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchNotFound_ReturnsBranchNotFound()
+    {
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync((Branch?)null);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.BranchNotFound);
+    }
+
+    // ── Realm resolution ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_ExistingRealm_SkipsRealmCreation()
+    {
+        ArrangeHappyPath([BnetChar("kazzak")]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
+            .ReturnsAsync(ExistingRealm);
+
+        await _sut.HandleAsync(Command);
+
+        _realms.Verify(r => r.AddAsync(It.IsAny<Realm>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NewRealm_CreatesRealm()
+    {
+        ArrangeHappyPath([BnetChar("kazzak")]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
+            .ReturnsAsync((Realm?)null);
+        _realms.Setup(r => r.AddAsync(It.IsAny<Realm>(), default))
+            .ReturnsAsync((Realm realm, CancellationToken _) => realm);
+
+        await _sut.HandleAsync(Command);
+
+        _realms.Verify(r => r.AddAsync(
+            It.Is<Realm>(realm => realm.Slug == "kazzak" && realm.Region == "eu"),
+            default), Times.Once);
+    }
+
+    // ── Sync count & namespace ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_MultipleCharactersAcrossWowAccounts_ReturnsCorrectCount()
+    {
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync(It.IsAny<string>(), BranchId, default))
+            .ReturnsAsync(ExistingRealm);
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse
+            {
+                WowAccounts =
+                [
+                    new BnetWowAccountDto { Id = 1, Characters = [BnetChar("kazzak", id: 1), BnetChar("kazzak", id: 2)] },
+                    new BnetWowAccountDto { Id = 2, Characters = [BnetChar("silvermoon", id: 3)] },
+                ],
+            });
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Message.Should().StartWith("3");
+        _characters.Verify(r => r.UpsertExpansionStateAsync(It.IsAny<CharacterExpansionState>(), default), Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task HandleAsync_BuildsCorrectProfileNamespace()
+    {
+        ArrangeHappyPath([]);
+
+        await _sut.HandleAsync(Command);
+
+        // "dynamic" → "profile-eu"
+        _bnetApi.Verify(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, "profile-eu", default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ClassicBranch_BuildsCorrectProfileNamespace()
+    {
+        var classicBranch = new Branch { Id = BranchId, Name = "Classic Era", BnetNamespacePrefix = "dynamic-classic1x", CurrentExpansionId = 2 };
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(classicBranch);
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse { WowAccounts = [] });
+
+        await _sut.HandleAsync(Command);
+
+        // "dynamic-classic1x" → "profile-classic1x-eu"
+        _bnetApi.Verify(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, "profile-classic1x-eu", default), Times.Once);
+    }
+
+    // ── Faction & gender mapping ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("ALLIANCE", Faction.Alliance)]
+    [InlineData("HORDE",    Faction.Horde)]
+    [InlineData("PANDAREN", Faction.Neutral)]
+    public async Task HandleAsync_FactionString_MapsCorrectly(string factionString, Faction expected)
+    {
+        ArrangeHappyPath([BnetChar("kazzak", faction: factionString)]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
+            .ReturnsAsync(ExistingRealm);
+
+        await _sut.HandleAsync(Command);
+
+        _characters.Verify(r => r.UpsertAsync(
+            It.Is<Character>(c => c.Faction == expected), default), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("FEMALE", Gender.Female)]
+    [InlineData("MALE",   Gender.Male)]
+    [InlineData("UNKNOWN", Gender.Male)]
+    public async Task HandleAsync_GenderString_MapsCorrectly(string genderString, Gender expected)
+    {
+        ArrangeHappyPath([BnetChar("kazzak", gender: genderString)]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
+            .ReturnsAsync(ExistingRealm);
+
+        await _sut.HandleAsync(Command);
+
+        _characters.Verify(r => r.UpsertAsync(
+            It.Is<Character>(c => c.Gender == expected), default), Times.Once);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private void ArrangeHappyPath(IEnumerable<BnetWowCharacterDto> characters)
+    {
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse
+            {
+                WowAccounts = [new BnetWowAccountDto { Id = 1, Characters = [.. characters] }],
+            });
+    }
+
+    private static BnetWowCharacterDto BnetChar(
+        string realmSlug,
+        long   id      = 1001,
+        string faction = "ALLIANCE",
+        string gender  = "MALE") => new()
+    {
+        Id    = id,
+        Name  = "Arthas",
+        Level = 80,
+        Realm         = new BnetRealmRefDto { Slug = realmSlug, Name = realmSlug },
+        PlayableClass = new BnetIdRefDto    { Id = 1, Name = "Warrior" },
+        PlayableRace  = new BnetIdRefDto    { Id = 1, Name = "Human" },
+        Gender        = new BnetTypeRefDto  { Type = gender },
+        Faction       = new BnetTypeRefDto  { Type = faction },
+    };
+}
