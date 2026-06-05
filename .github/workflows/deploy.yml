@@ -37,25 +37,33 @@ jobs:
       - name: Notify Discord (acceptance)
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_ACCEPTANCE_WEBHOOK_URL }}
-          AVATAR_URL: ${{ secrets.DISCORD_CHANGELOG_AVATAR_URL }}
-          REPO: ${{ github.repository }}
+          REPO: ${{ github.repository.name }}
+          AUTHOR: ${{ github.actor }}
           MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
         run: |
           # First line of the squash commit = the conventional PR title
           DESC=$(echo "$MESSAGE" | head -n 1)
+          # Extract the PR number from the squash title "(#NN)" → link to the PR
+          # (fall back to the commit URL for a direct push without a PR)
+          PR_NUMBER=$(echo "$DESC" | grep -oE '#[0-9]+' | tail -1 | tr -d '#')
+          if [ -n "$PR_NUMBER" ]; then
+            LINK="https://github.com/$REPO/pull/$PR_NUMBER"
+          else
+            LINK="$COMMIT_URL"
+          fi
+          # Name + avatar come from the webhook's own config in Discord
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg username "RaidOps Acceptance" \
-              --arg avatar "$AVATAR_URL" \
-              --arg title "🟦 $REPO — acceptance updated" \
+              --arg title "$REPO — $AUTHOR pushed an acceptance update" \
               --arg desc "$DESC" \
+              --arg url "$LINK" \
               '{
-                username: $username,
-                avatar_url: $avatar,
                 embeds: [{
                   title: $title,
                   description: $desc,
+                  url: $url,
                   color: 3447003
                 }]
               }')"
@@ -90,8 +98,7 @@ jobs:
       - name: Notify Discord (production)
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_PROD_WEBHOOK_URL }}
-          AVATAR_URL: ${{ secrets.DISCORD_CHANGELOG_AVATAR_URL }}
-          REPO: ${{ github.repository }}
+          REPO: ${{ github.repository.name }}
           TAG: ${{ github.event.release.tag_name }}
           BODY: ${{ github.event.release.body }}
           URL: ${{ github.event.release.html_url }}
@@ -101,14 +108,10 @@ jobs:
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg username "RaidOps Releases" \
-              --arg avatar "$AVATAR_URL" \
               --arg title "🚀 $REPO — $TAG" \
               --arg desc "$DESC" \
               --arg url "$URL" \
               '{
-                username: $username,
-                avatar_url: $avatar,
                 embeds: [{
                   title: $title,
                   description: $desc,
