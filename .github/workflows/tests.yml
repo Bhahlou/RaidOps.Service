@@ -3,6 +3,10 @@ on:
   push:
     branches:
       - master
+    # A PR release merge changes only those files (0 code) → no re-run on master
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - '.release-please-manifest.json'
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
@@ -42,16 +46,24 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
+          # The release-please PR only changes CHANGELOG + version (0 code).
+          # We still run the Sonar scan (so the required checks report green) but skip
+          # the tests: no point re-testing code already validated on master.
+          $isReleasePr = "${{ github.head_ref }}" -eq "release-please--branches--master"
+
           ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.exclusions="**/Migrations/**"
 
           dotnet build RaidOps.Service.slnx --configuration Release
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-          dotnet test RaidOps.Service.slnx --configuration Release --no-build --collect:"XPlat Code Coverage;Format=opencover"
-          $testExit = $LASTEXITCODE
+          $testExit = 0
+          if (-not $isReleasePr) {
+            dotnet test RaidOps.Service.slnx --configuration Release --no-build --collect:"XPlat Code Coverage;Format=opencover"
+            $testExit = $LASTEXITCODE
+          }
 
-          # end doit tourner même si les tests échouent, pour publier l'analyse sur la PR
+          # end must run even if tests failed, to publish the analysis on the PR
           ${{ runner.temp }}\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
-          # ...mais le job doit échouer si un test a échoué
+          # ...but the job must fail if a test failed
           if ($testExit -ne 0) { exit $testExit }
