@@ -32,7 +32,8 @@ public class GuildDeleteHandler(
         // IsUnavailable = true means a Discord outage, not a bot removal — ignore.
         if (arg.IsUnavailable)
         {
-            logger.LogDebug("Guild {GuildId} became unavailable (outage), skipping unregister.", arg.GuildId);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("Guild {GuildId} became unavailable (outage), skipping unregister.", arg.GuildId);
             return;
         }
 
@@ -50,7 +51,7 @@ public class GuildDeleteHandler(
 
             if (result.IsFailed)
                 logger.LogError("Failed to unregister guild {GuildId}: {Error}", arg.GuildId, result.Error);
-            else
+            else if (logger.IsEnabled(LogLevel.Information))
                 logger.LogInformation("Guild {GuildId} successfully unregistered.", arg.GuildId);
         }
         catch (Exception ex)

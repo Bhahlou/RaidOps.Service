@@ -35,9 +35,13 @@ public class GuildDeleteHandlerTests
 
     // ── Unavailable (outage) ──────────────────────────────────────────────────
 
-    [Fact]
-    public async Task HandleAsync_IsUnavailable_SkipsDispatch()
+    // loggerEnabled paramètre les deux branches des guards IsEnabled (CA1873).
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HandleAsync_IsUnavailable_SkipsDispatch(bool loggerEnabled)
     {
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(loggerEnabled);
         var args = MakeEventArgs(GuildId, isUnavailable: true);
 
         await _sut.HandleAsync(args);
@@ -47,9 +51,12 @@ public class GuildDeleteHandlerTests
 
     // ── Bot removed ───────────────────────────────────────────────────────────
 
-    [Fact]
-    public async Task HandleAsync_BotRemoved_DispatchesUnregisterCommand()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HandleAsync_BotRemoved_DispatchesUnregisterCommand(bool loggerEnabled)
     {
+        _logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(loggerEnabled);
         var args = MakeEventArgs(GuildId, isUnavailable: false);
         _dispatcher.Setup(d => d.DispatchAsync(It.IsAny<UnregisterGuildCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
