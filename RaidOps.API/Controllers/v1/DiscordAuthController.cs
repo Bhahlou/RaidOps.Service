@@ -76,7 +76,7 @@ public class DiscordAuthController(
 
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
 
-        if (result.IsFailed || result.Value?.Body is not AuthenticationResponse authResp)
+        if (result.IsFailed || result.Value!.Body is not AuthenticationResponse authResp)
             return BadRequest(result.Error);
 
         AppendAuthCookies(authResp);
@@ -102,7 +102,7 @@ public class DiscordAuthController(
             new RefreshTokenCommand { RefreshToken = refreshJwt },
             cancellationToken);
 
-        if (result.IsFailed || result.Value?.Body is not AuthenticationResponse authResp)
+        if (result.IsFailed || result.Value!.Body is not AuthenticationResponse authResp)
             return Unauthorized();
 
         AppendAuthCookies(authResp);
