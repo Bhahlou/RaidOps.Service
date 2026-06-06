@@ -54,7 +54,7 @@ jobs:
           # the tests: no point re-testing code already validated on master.
           $isReleasePr = "$env:HEAD_REF" -eq "release-please--branches--master"
 
-          "${{ runner.temp }}/scanner/dotnet-sonarscanner" begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.exclusions="**/Migrations/**"
+          & "${{ runner.temp }}/scanner/dotnet-sonarscanner" begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.exclusions="**/Migrations/**"
 
           dotnet build RaidOps.Service.slnx --configuration Release
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -66,7 +66,7 @@ jobs:
           }
 
           # end must run even if tests failed, to publish the analysis on the PR
-          "${{ runner.temp }}/scanner/dotnet-sonarscanner" end /d:sonar.token="$env:SONAR_TOKEN"
+          & "${{ runner.temp }}/scanner/dotnet-sonarscanner" end /d:sonar.token="$env:SONAR_TOKEN"
 
           # ...but the job must fail if a test failed
           if ($testExit -ne 0) { exit $testExit }
