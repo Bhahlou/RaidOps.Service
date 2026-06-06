@@ -65,7 +65,8 @@ jobs:
                   title: $title,
                   description: $desc,
                   url: $url,
-                  color: 3447003
+                  color: 3447003,
+                  footer: { text: "Rolling out to acceptance…" }
                 }]
               }')"
 
@@ -119,6 +120,6 @@ jobs:
                   description: $desc,
                   url: $url,
                   color: 16750848,
-                  footer: { text: "Deployed to production" }
+                  footer: { text: "Rolling out to production…" }
                 }]
               }')"
