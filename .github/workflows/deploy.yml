@@ -49,7 +49,7 @@ jobs:
           # (fall back to the commit URL for a direct push without a PR)
           PR_NUMBER=$(echo "$DESC" | grep -oE '#[0-9]+' | tail -1 | tr -d '#')
           if [ -n "$PR_NUMBER" ]; then
-            LINK="https://github.com/FULL_REPO/pull/$PR_NUMBER"
+            LINK="https://github.com/$FULL_REPO/pull/$PR_NUMBER"
           else
             LINK="$COMMIT_URL"
           fi
@@ -57,7 +57,7 @@ jobs:
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg title "SHORT_REPO — $AUTHOR pushed an acceptance update" \
+              --arg title "$SHORT_REPO — $AUTHOR pushed an acceptance update" \
               --arg desc "$DESC" \
               --arg url "$LINK" \
               '{
@@ -110,7 +110,7 @@ jobs:
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg title "🚀 SHORT_REPO — $AUTHOR pushed release $TAG" \
+              --arg title "🚀 $SHORT_REPO — $AUTHOR pushed release $TAG" \
               --arg desc "$DESC" \
               --arg url "$URL" \
               '{
