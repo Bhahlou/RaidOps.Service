@@ -37,7 +37,8 @@ jobs:
       - name: Notify Discord (acceptance)
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_ACCEPTANCE_WEBHOOK_URL }}
-          REPO: ${{ github.event.repository.name }}
+          FULL_REPO: ${{ github.repository }}
+          SHORT_REPO: ${{ github.event.repository.name }}
           AUTHOR: ${{ github.actor }}
           MESSAGE: ${{ github.event.head_commit.message }}
           COMMIT_URL: ${{ github.event.head_commit.url }}
@@ -48,7 +49,7 @@ jobs:
           # (fall back to the commit URL for a direct push without a PR)
           PR_NUMBER=$(echo "$DESC" | grep -oE '#[0-9]+' | tail -1 | tr -d '#')
           if [ -n "$PR_NUMBER" ]; then
-            LINK="https://github.com/$REPO/pull/$PR_NUMBER"
+            LINK="https://github.com/FULL_REPO/pull/$PR_NUMBER"
           else
             LINK="$COMMIT_URL"
           fi
@@ -56,7 +57,7 @@ jobs:
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg title "$REPO — $AUTHOR pushed an acceptance update" \
+              --arg title "SHORT_REPO — $AUTHOR pushed an acceptance update" \
               --arg desc "$DESC" \
               --arg url "$LINK" \
               '{
@@ -98,8 +99,9 @@ jobs:
       - name: Notify Discord (production)
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_PROD_WEBHOOK_URL }}
-          REPO: ${{ github.event.repository.name }}
+          SHORT_REPO: ${{ github.event.repository.name }}
           TAG: ${{ github.event.release.tag_name }}
+          AUTHOR: ${{ github.actor }}
           BODY: ${{ github.event.release.body }}
           URL: ${{ github.event.release.html_url }}
         run: |
@@ -108,7 +110,7 @@ jobs:
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg title "🚀 $REPO — $TAG" \
+              --arg title "🚀 SHORT_REPO — $AUTHOR pushed release $TAG" \
               --arg desc "$DESC" \
               --arg url "$URL" \
               '{
