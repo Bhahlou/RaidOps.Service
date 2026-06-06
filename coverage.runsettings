@@ -2,24 +2,54 @@
 <RunSettings>
   <DataCollectionRunSettings>
     <DataCollectors>
+
+      <!-- Used by: dotnet test with collect XPlat Code Coverage (coverlet, CLI and CI) -->
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Include>[RaidOps.*]*</Include>
+          <Exclude>[RaidOps.IntegrationTests]*,[RaidOps.UnitTests]*</Exclude>
+          <ExcludeByAttribute>ExcludeFromCodeCoverage,GeneratedCode,CompilerGenerated</ExcludeByAttribute>
+          <ExcludeByFile>**/Migrations/*.cs</ExcludeByFile>
+          <SingleHit>false</SingleHit>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+        </Configuration>
+      </DataCollector>
+
+      <!-- Used by: Visual Studio Test Explorer (native .coverage format) -->
       <DataCollector friendlyName="Code Coverage">
         <Configuration>
           <CodeCoverage>
             <ModulePaths>
+              <Include>
+                <ModulePath>.*raidops\.api\.dll$</ModulePath>
+                <ModulePath>.*raidops\.domain\.dll$</ModulePath>
+                <ModulePath>.*raidops\.application\.contracts\.dll$</ModulePath>
+                <ModulePath>.*raidops\.application\.implementations\.dll$</ModulePath>
+                <ModulePath>.*raidops\.externalapplication\.contracts\.dll$</ModulePath>
+                <ModulePath>.*raidops\.externalapplication\.implementations\.dll$</ModulePath>
+                <ModulePath>.*raidops\.infrastructure\.persistence\.contracts\.dll$</ModulePath>
+                <ModulePath>.*raidops\.infrastructure\.persistence\.implementations\.dll$</ModulePath>
+                <ModulePath>.*raidops\.registry\.dll$</ModulePath>
+              </Include>
               <Exclude>
-                <!-- Exclude test project from test coverage measurement -->
+                <ModulePath>.*raidops\.integrationtests\.dll$</ModulePath>
                 <ModulePath>.*raidops\.unittests\.dll$</ModulePath>
               </Exclude>
             </ModulePaths>
-            <!-- Also excluse code marked as [ExcludeFromCodeCoverage] (eg : ConfigureSwaggerOptions) -->
             <Attributes>
               <Exclude>
                 <Attribute>^System\.Diagnostics\.CodeAnalysis\.ExcludeFromCodeCoverageAttribute$</Attribute>
               </Exclude>
             </Attributes>
+            <Sources>
+              <Exclude>
+                <Source>.*\\Migrations\\.*</Source>
+              </Exclude>
+            </Sources>
           </CodeCoverage>
         </Configuration>
       </DataCollector>
+
     </DataCollectors>
   </DataCollectionRunSettings>
 </RunSettings>
