@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v0.2.0...v0.2.1) (2026-06-06)
+
+
+### 🐛 Bug Fixes
+
+* Indicate ongoing roll out to host ([#20](https://github.com/Bhahlou/RaidOps.Service/issues/20)) ([43e3d6b](https://github.com/Bhahlou/RaidOps.Service/commit/43e3d6bd79d57c2a48a9678e5b8a3bf6df240e40))
+
 ## [0.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v0.1.0...v0.2.0) (2026-06-06)
 
 
