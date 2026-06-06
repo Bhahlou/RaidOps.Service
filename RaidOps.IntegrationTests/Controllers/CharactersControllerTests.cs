@@ -12,6 +12,9 @@ namespace RaidOps.IntegrationTests.Controllers;
 public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {
+    private static readonly int[] SingleId = [1];
+    private static readonly int[] NonExistentId = [99999];
+
     // ── Auth enforcement ────────────────────────────────────────────────────
 
     [Fact]
@@ -38,7 +41,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task Activate_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/characters/activate", new { CharacterIds = new[] { 1 } });
+        var response = await Client.PostAsJsonAsync("/api/v1/characters/activate", new { CharacterIds = SingleId });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -174,7 +177,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateAuthenticatedClient(discordId: id);
 
         var response = await client.PostAsJsonAsync("/api/v1/characters/activate",
-            new { characterIds = new[] { 99999 } });
+            new { characterIds = NonExistentId });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
