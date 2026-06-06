@@ -19,6 +19,7 @@
     <Project Path="RaidOps.Registry/RaidOps.Registry.csproj" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="RaidOps.IntegrationTests/RaidOps.IntegrationTests.csproj" />
     <Project Path="RaidOps.UnitTests/RaidOps.UnitTests.csproj" />
   </Folder>
 </Solution>

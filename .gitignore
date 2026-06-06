@@ -8,6 +8,7 @@ obj/
 
 ## Tests / couverture
 TestResults/
+coverage-report/
 *.coverage
 *.cobertura.xml
 coverage.opencover.xml
