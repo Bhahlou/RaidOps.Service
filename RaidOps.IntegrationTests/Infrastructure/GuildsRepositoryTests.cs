@@ -51,4 +51,41 @@ public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
             updated.IconHash.Should().Be("new-hash");
         }
     }
+
+    [Fact]
+    public async Task UnregisterAsync_GuildNotFound_DoesNothing()
+    {
+        const string guildId = "800000000000000003";
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            await repo.UnregisterAsync(guildId);
+
+            var guild = await db.Guilds.FindAsync(guildId);
+            guild.Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ExistingGuild_SetsIsRegisteredFalse()
+    {
+        const string guildId = "800000000000000004";
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Registered Guild", IsRegistered = true });
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            await repo.UnregisterAsync(guildId);
+
+            var guild = await db.Guilds.FindAsync(guildId);
+            guild!.IsRegistered.Should().BeFalse();
+        }
+    }
 }

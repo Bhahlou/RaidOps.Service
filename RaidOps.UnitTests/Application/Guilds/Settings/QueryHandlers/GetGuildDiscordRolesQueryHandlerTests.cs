@@ -70,7 +70,7 @@ public class GetGuildDiscordRolesQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Success_ReturnsMappedRoles()
+    public async Task HandleAsync_Success_ReturnsMappedRoles_NullColor()
     {
         var jsonRole = NetCordTestHelpers.MakeJsonRole(111111111UL, (Permissions)0);
         var netcordGuild = NetCordTestHelpers.MakeGuild(222222222UL, 333333333UL,
@@ -85,7 +85,23 @@ public class GetGuildDiscordRolesQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(1);
         result.Value[0].Id.Should().Be("111111111");
-        result.Value[0].Color.Should().Be(0);   // Colors null → default 0
-        _guildService.Verify(g => g.GetRoles(GuildId, default), Times.Once);
+        result.Value[0].Color.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_ReturnsMappedRoles_WithColor()
+    {
+        var jsonRole = NetCordTestHelpers.MakeJsonRole(222222222UL, (Permissions)0, primaryColor: 0xFF0000);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(333333333UL, 444444444UL,
+            new Dictionary<ulong, GuildUser>(), [jsonRole]);
+
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result?.Value?[0].Color.Should().Be(0xFF0000);
     }
 }
