@@ -33,7 +33,7 @@ public class GetGuildSettingsQueryHandlerTests
     {
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync((Guild?)null);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.GuildNotFound);
@@ -45,7 +45,7 @@ public class GetGuildSettingsQueryHandlerTests
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = false });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.GuildNotFound);
@@ -65,7 +65,7 @@ public class GetGuildSettingsQueryHandlerTests
                 MinRosterRoleId = "role-abc",
             });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.Timezone.Should().Be("Europe/Paris");
@@ -79,7 +79,7 @@ public class GetGuildSettingsQueryHandlerTests
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true, RosterMode = null });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.RosterMode.Should().Be(RosterMode.Open);

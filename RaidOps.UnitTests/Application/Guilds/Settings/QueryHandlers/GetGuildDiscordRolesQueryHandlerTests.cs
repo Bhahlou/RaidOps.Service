@@ -1,11 +1,13 @@
 using FluentAssertions;
 using Moq;
+using NetCord;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Settings.Queries;
 using RaidOps.Application.Implementations.Guilds.Settings.QueryHandlers;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
+using RaidOps.UnitTests.ExternalApplication.Bot;
 
 namespace RaidOps.UnitTests.Application.Guilds.Settings.QueryHandlers;
 
@@ -36,7 +38,7 @@ public class GetGuildDiscordRolesQueryHandlerTests
     {
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default)).ReturnsAsync([]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.Forbidden);
@@ -48,7 +50,7 @@ public class GetGuildDiscordRolesQueryHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = false }]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.Forbidden);
@@ -61,23 +63,29 @@ public class GetGuildDiscordRolesQueryHandlerTests
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
         _guildService.Setup(g => g.GetRoles(GuildId, default)).Throws<InvalidOperationException>();
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.GuildBotNotPresent);
     }
 
     [Fact]
-    public async Task HandleAsync_Success_ReturnsEmptyRoleList()
+    public async Task HandleAsync_Success_ReturnsMappedRoles()
     {
+        var jsonRole = NetCordTestHelpers.MakeJsonRole(111111111UL, (Permissions)0);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(222222222UL, 333333333UL,
+            new Dictionary<ulong, GuildUser>(), [jsonRole]);
+
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
-        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns([]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Should().BeEmpty();
+        result.Value.Should().HaveCount(1);
+        result.Value[0].Id.Should().Be("111111111");
+        result.Value[0].Color.Should().Be(0);   // Colors null → default 0
         _guildService.Verify(g => g.GetRoles(GuildId, default), Times.Once);
     }
 }
