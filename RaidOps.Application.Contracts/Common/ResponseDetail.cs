@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace RaidOps.Application.Contracts.Common;
 
 /// <summary>
 /// Centralises all error codes returned by command and query handlers.
 /// Use these constants with <see cref="Result{T}.Fail"/> instead of inline strings.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class ResponseDetail
 {
     // ── Generic ───────────────────────────────────────────────────────────
