@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -86,6 +87,65 @@ public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
 
             var guild = await db.Guilds.FindAsync(guildId);
             guild!.IsRegistered.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_GuildNotFound_ReturnsFalse()
+    {
+        const string guildId = "800000000000000005";
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            var result = await repo.UpdateSettingsAsync(guildId, "Europe/Paris", RosterMode.Open, null);
+
+            result.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_DiscordRoleOnly_SetsMinRosterRoleId()
+    {
+        const string guildId = "800000000000000006";
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Guild", IsRegistered = true });
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            var result = await repo.UpdateSettingsAsync(guildId, "Europe/Paris", RosterMode.DiscordRoleOnly, "role-123");
+
+            result.Should().BeTrue();
+            var guild = await db.Guilds.FindAsync(guildId);
+            guild!.MinRosterRoleId.Should().Be("role-123");
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_Open_SetsMinRosterRoleIdToNull()
+    {
+        const string guildId = "800000000000000007";
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Guild", IsRegistered = true, MinRosterRoleId = "role-abc" });
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            var result = await repo.UpdateSettingsAsync(guildId, "UTC", RosterMode.Open, "role-abc");
+
+            result.Should().BeTrue();
+            var guild = await db.Guilds.FindAsync(guildId);
+            guild!.MinRosterRoleId.Should().BeNull();
         }
     }
 }
