@@ -16,7 +16,7 @@ public class GetGuildDiscordRolesQueryHandler(
     IDiscordBotService discordBotService) : IQueryHandlerAsync<GetGuildDiscordRolesQuery, List<DiscordRoleResponse>>
 {
     /// <inheritdoc/>
-    public async Task<Result<List<DiscordRoleResponse>>> HandleAsync(GetGuildDiscordRolesQuery query, CancellationToken cancellationToken = default)
+    public async Task<Result<List<DiscordRoleResponse>>> HandleAsync(GetGuildDiscordRolesQuery query, CancellationToken cancellationToken)
     {
         var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(query.RequesterDiscordId, cancellationToken);
         var membership = userGuilds.FirstOrDefault(g => g.GuildId == query.GuildId);

@@ -16,7 +16,7 @@ public class GetGuildSettingsQueryHandler(
     /// <inheritdoc/>
     public async Task<Result<GuildSettingsResponse>> HandleAsync(
         GetGuildSettingsQuery query,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var guild = await guildsRepository.GetByIdAsync(query.GuildId, cancellationToken);
 
