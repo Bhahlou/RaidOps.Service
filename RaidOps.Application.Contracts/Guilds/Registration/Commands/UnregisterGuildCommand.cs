@@ -1,6 +1,6 @@
 using RaidOps.Application.Contracts.CQRS;
 
-namespace RaidOps.Application.Contracts.Guilds.Commands;
+namespace RaidOps.Application.Contracts.Guilds.Registration.Commands;
 
 /// <summary>
 /// Command that marks a Discord guild as unregistered in RaidOps.
@@ -8,8 +8,6 @@ namespace RaidOps.Application.Contracts.Guilds.Commands;
 /// </summary>
 public class UnregisterGuildCommand : ICommandRequest
 {
-    /// <summary>
-    /// The Discord snowflake ID of the guild to unregister.
-    /// </summary>
+    /// <summary>The Discord snowflake ID of the guild to unregister.</summary>
     public required string GuildId { get; set; }
 }

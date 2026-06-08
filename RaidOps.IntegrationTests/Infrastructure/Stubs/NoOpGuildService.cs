@@ -15,4 +15,6 @@ internal class NoOpGuildService : IGuildService
     public IEnumerable<GuildUser> GetUsers(string guildId, CancellationToken cancellationToken = default) => [];
 
     public IEnumerable<GuildUser> GetAdmins(string guildId, CancellationToken cancellationToken = default) => [];
+
+    public IEnumerable<Role> GetRoles(string guildId, CancellationToken cancellationToken = default) => [];
 }

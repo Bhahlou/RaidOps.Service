@@ -1,5 +1,6 @@
 using NetCord;
 using NetCord.Gateway;
+using NetCord.Rest;
 
 namespace RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 
@@ -26,4 +27,11 @@ public interface IGuildService
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the guild is not in the bot's cache.</exception>
     IEnumerable<GuildUser> GetAdmins(string guildId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns all non-managed, non-everyone roles for the given guild from the bot's Gateway cache.
+    /// Managed roles (bot integrations) and the implicit <c>@everyone</c> role are excluded.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the guild is not in the bot's cache.</exception>
+    IEnumerable<Role> GetRoles(string guildId, CancellationToken cancellationToken = default);
 }

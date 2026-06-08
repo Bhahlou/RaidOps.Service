@@ -41,6 +41,7 @@ public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandler
                     Name = ug.Guild.Name,
                     IconHash = ug.Guild.IconHash,
                     IsRegistered = ug.Guild.IsRegistered,
+                    IsConfigured = ug.Guild.Timezone != null && ug.Guild.RosterMode != null,
                     IsAdmin = ug.IsAdmin
                 }).ToList()
         });

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Guilds.Commands;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 
 namespace RaidOps.ExternalApplication.Implementations.Bot;
 

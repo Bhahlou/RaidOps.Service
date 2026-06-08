@@ -27,6 +27,7 @@ public static class ResponseDetail
     // ── Guild ─────────────────────────────────────────────────────────────
     public const string GuildNotFound = nameof(GuildNotFound);
     public const string GuildBotNotPresent = nameof(GuildBotNotPresent);
+    public const string GuildNotRegistered = nameof(GuildNotRegistered);
 
     // ── Branch ────────────────────────────────────────────────────────────
     public const string BranchNotFound = nameof(BranchNotFound);

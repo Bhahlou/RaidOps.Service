@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -12,9 +13,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260608122541_AddGuildSettings")]
+    partial class AddGuildSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -217,6 +220,10 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
+                    b.PrimitiveCollection<List<string>>("AllowedRosterRoleIds")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<string>("IconHash")
                         .HasColumnType("text");
 
@@ -225,9 +232,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("MinRosterRoleId")
                         .HasColumnType("text");
 
                     b.Property<int?>("RosterMode")

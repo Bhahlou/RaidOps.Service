@@ -1,9 +1,9 @@
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Guilds.Commands;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.Application.Implementations.Guilds.CommandHandlers;
+namespace RaidOps.Application.Implementations.Guilds.Registration.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="UnregisterGuildCommand"/> by setting <c>IsRegistered = false</c>
@@ -12,13 +12,7 @@ namespace RaidOps.Application.Implementations.Guilds.CommandHandlers;
 public class UnregisterGuildCommandHandler(
     IGuildsRepository guildsRepository) : ICommandHandlerAsync<UnregisterGuildCommand>
 {
-    /// <summary>
-    /// Marks the guild identified by <see cref="UnregisterGuildCommand.GuildId"/> as unregistered.
-    /// Succeeds even if the guild is not found (idempotent — removal events may fire multiple times).
-    /// </summary>
-    /// <param name="command">The command containing the guild ID to unregister.</param>
-    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns>A successful <see cref="CommandResponse"/> in all cases.</returns>
+    /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UnregisterGuildCommand command, CancellationToken cancellationToken = default)
     {
         await guildsRepository.UnregisterAsync(command.GuildId, cancellationToken);
