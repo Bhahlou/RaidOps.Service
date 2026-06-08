@@ -127,6 +127,20 @@ internal static class NetCordTestHelpers
         var role = Uninitialized<Role>();
         SetField(role, typeof(Role), "_jsonModel", jsonRole);
         SetField(role, typeof(Role), "<GuildId>k__BackingField", guildId);
+
+        // Role.Colors is a cached RoleColors class reference populated during construction.
+        // GetUninitializedObject skips constructors, so we must mirror it manually.
+        var jsonColors = typeof(JsonRole)
+            .GetField("<Colors>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.GetValue(jsonRole);
+        if (jsonColors is not null)
+        {
+            var ctor = typeof(RoleColors)
+                .GetConstructors(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)
+                .First();
+            SetField(role, typeof(Role), "<Colors>k__BackingField", ctor.Invoke([jsonColors]));
+        }
+
         return role;
     }
 
@@ -163,12 +177,22 @@ internal static class NetCordTestHelpers
 
     // ── Role ──────────────────────────────────────────────────────────────────
 
-    internal static JsonRole MakeJsonRole(ulong id, Permissions permissions, bool managed = false)
+    internal static JsonRole MakeJsonRole(ulong id, Permissions permissions, bool managed = false, int? primaryColor = null)
     {
         var r = Uninitialized<JsonRole>();
         SetField(r, typeof(JsonRole).BaseType!, "<Id>k__BackingField", id);
         SetField(r, typeof(JsonRole), "<Permissions>k__BackingField", permissions);
         SetField(r, typeof(JsonRole), "<Managed>k__BackingField", managed);
+
+        if (primaryColor.HasValue)
+        {
+            var jsonRoleColorsType = Type.GetType("NetCord.JsonModels.JsonRoleColors, NetCord")!;
+            var jsonColors = RuntimeHelpers.GetUninitializedObject(jsonRoleColorsType);
+            SetField(jsonColors, jsonRoleColorsType, "<PrimaryColor>k__BackingField", new Color(primaryColor.Value));
+            // JsonRoleColors is a reference type — set directly (no Nullable wrapper needed)
+            SetField(r, typeof(JsonRole), "<Colors>k__BackingField", jsonColors);
+        }
+
         return r;
     }
 

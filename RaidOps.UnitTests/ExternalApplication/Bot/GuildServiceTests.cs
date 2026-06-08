@@ -141,6 +141,59 @@ public class GuildServiceTests
         act.Should().Throw<InvalidOperationException>().WithMessage($"*{GuildId}*");
     }
 
+    // ── GetRoles ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetRoles_GuildNotInCache_ThrowsInvalidOperationException()
+    {
+        var sut = new GuildService(
+            NetCordTestHelpers.MakeGatewayClient(NetCordTestHelpers.EmptyCache().Object));
+
+        var act = () => sut.GetRoles(GuildId.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{GuildId}*");
+    }
+
+    [Fact]
+    public void GetRoles_EveryoneRole_Excluded()
+    {
+        // @everyone has the same snowflake as the guild itself
+        var everyone = NetCordTestHelpers.MakeJsonRole(GuildId, (Permissions)0);
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), roles: [everyone]);
+        var sut = MakeSut(guild);
+
+        var roles = sut.GetRoles(GuildId.ToString()).ToList();
+
+        roles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetRoles_ManagedRole_Excluded()
+    {
+        var managed = NetCordTestHelpers.MakeJsonRole(AdminRoleId, (Permissions)0, managed: true);
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), roles: [managed]);
+        var sut = MakeSut(guild);
+
+        var roles = sut.GetRoles(GuildId.ToString()).ToList();
+
+        roles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetRoles_AssignableRole_Returned()
+    {
+        var assignable = NetCordTestHelpers.MakeJsonRole(AdminRoleId, (Permissions)0, managed: false);
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), roles: [assignable]);
+        var sut = MakeSut(guild);
+
+        var roles = sut.GetRoles(GuildId.ToString()).ToList();
+
+        roles.Should().ContainSingle(r => r.Id == AdminRoleId);
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private static GuildService MakeSut(Guild guild)

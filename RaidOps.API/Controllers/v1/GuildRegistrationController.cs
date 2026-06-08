@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Guilds.Commands;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.Application.Contracts.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Web;
@@ -11,12 +11,12 @@ using System.Web;
 namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
-/// Exposes guild-management endpoints, including the Discord bot OAuth2 registration flow.
-/// All routes require a valid JWT Bearer token.
+/// Handles the Discord bot OAuth2 guild registration flow (initiate + callback).
 /// </summary>
 [ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/guilds")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class GuildsController(
+public class GuildRegistrationController(
     ICommandDispatcher commandDispatcher,
     IQueryDispatcher queryDispatcher,
     IJwtService jwtService,
@@ -26,8 +26,8 @@ public class GuildsController(
         ?? throw new InvalidOperationException("FrontendUrl is not configured");
     private readonly string _discordClientId = configuration["Discord:ClientId"]
         ?? throw new InvalidOperationException("Discord:ClientId is not configured");
-    private readonly long _botPermissions = long.TryParse(configuration["Discord:BotPermissions"], out var p) 
-        ? p 
+    private readonly long _botPermissions = long.TryParse(configuration["Discord:BotPermissions"], out var p)
+        ? p
         : throw new InvalidOperationException("Discord:BotPermissions is not configured");
 
     /// <summary>
@@ -35,11 +35,6 @@ public class GuildsController(
     /// Verifies that the authenticated user is an admin of the requested Discord guild,
     /// generates a signed CSRF state token, then redirects to the Discord authorization page.
     /// </summary>
-    /// <param name="guildId">The Discord snowflake ID of the guild to register.</param>
-    /// <returns>
-    /// A 302 redirect to Discord's bot authorization URL on success,
-    /// or <c>401 Unauthorized</c> / <c>403 Forbidden</c> if the user is not an admin of the guild.
-    /// </returns>
     [HttpGet("register/initiate")]
     public IActionResult Initiate([FromQuery] string guildId)
     {
@@ -48,7 +43,7 @@ public class GuildsController(
             return Unauthorized();
 
         var state = jwtService.GenerateStateToken(guildId, discordId);
-        var callbackUrl = Url.Action(nameof(Callback), "Guilds", new { version = "1.0" }, Request.Scheme)!;
+        var callbackUrl = Url.Action(nameof(Callback), "GuildRegistration", new { version = "1.0" }, Request.Scheme)!;
         var discordUrl = BuildBotInviteUrl(guildId, callbackUrl, state);
 
         return Redirect(discordUrl);
@@ -57,15 +52,8 @@ public class GuildsController(
     /// <summary>
     /// Handles the Discord OAuth2 callback after the user authorizes the bot.
     /// Validates the CSRF state token, dispatches <see cref="RegisterGuildCommand"/>,
-    /// and redirects the user to the guild dashboard on success.
+    /// and redirects the user to the guild registration completion page on success.
     /// </summary>
-    /// <param name="guild_id">The Discord snowflake ID of the guild the bot was added to (provided by Discord).</param>
-    /// <param name="state">The signed CSRF state token generated during <see cref="Initiate"/>.</param>
-    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns>
-    /// A 302 redirect to the guild dashboard on success,
-    /// or a redirect to <c>/no-guild?error=…</c> on failure.
-    /// </returns>
     [HttpGet("register/callback")]
     public async Task<IActionResult> Callback(
         [FromQuery] string? guild_id,
@@ -95,12 +83,9 @@ public class GuildsController(
         if (result.IsFailed)
             return Redirect($"{_frontendUrl}/no-guild?error=register_failed");
 
-        return Redirect($"{_frontendUrl}/guilds/{guild_id}/dashboard");
+        return Redirect($"{_frontendUrl}/guild-register/{guild_id}");
     }
 
-    /// <summary>
-    /// Builds the Discord bot authorization URL with the required OAuth2 parameters.
-    /// </summary>
     private string BuildBotInviteUrl(string guildId, string redirectUri, string state)
     {
         var query = HttpUtility.ParseQueryString(string.Empty);

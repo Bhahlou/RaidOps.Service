@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -11,6 +12,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 /// </summary>
 public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
 {
+    /// <summary>
+    /// Returns the guild identified by <paramref name="guildId"/>, or <c>null</c> if not found.
+    /// </summary>
+    public async Task<Guild?> GetByIdAsync(string guildId, CancellationToken cancellationToken = default)
+        => await context.Guilds.FindAsync([guildId], cancellationToken);
+
     /// <summary>
     /// Inserts guilds that do not yet exist in the database and updates the
     /// <see cref="Guild.Name"/> and <see cref="Guild.IconHash"/> of those that do,
@@ -73,5 +80,25 @@ public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
 
         guild.IsRegistered = false;
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Updates the settings fields on the guild identified by <paramref name="guildId"/>.
+    /// </summary>
+    public async Task<bool> UpdateSettingsAsync(
+        string guildId,
+        string timezone,
+        RosterMode rosterMode,
+        string? minRosterRoleId,
+        CancellationToken cancellationToken = default)
+    {
+        var guild = await context.Guilds.FindAsync([guildId], cancellationToken);
+        if (guild == null) return false;
+
+        guild.Timezone = timezone;
+        guild.RosterMode = rosterMode;
+        guild.MinRosterRoleId = rosterMode == RosterMode.DiscordRoleOnly ? minRosterRoleId : null;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
     }
 }

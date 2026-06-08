@@ -1,15 +1,15 @@
 using FluentAssertions;
 using Moq;
-using RaidOps.Application.Contracts.Guilds.Commands;
-using RaidOps.Application.Implementations.Guilds.CommandHandlers;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
+using RaidOps.Application.Implementations.Guilds.Registration.CommandHandlers;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.UnitTests.Application.Guilds.CommandHandlers;
+namespace RaidOps.UnitTests.Application.Guilds.Registration.CommandHandlers;
 
 public class UnregisterGuildCommandHandlerTests
 {
-    private readonly Mock<IGuildsRepository>         _guilds = new();
-    private readonly UnregisterGuildCommandHandler   _sut;
+    private readonly Mock<IGuildsRepository>       _guilds = new();
+    private readonly UnregisterGuildCommandHandler _sut;
 
     private const string GuildId = "guild-1";
 

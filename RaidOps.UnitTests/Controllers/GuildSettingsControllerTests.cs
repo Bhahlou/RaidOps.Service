@@ -1,0 +1,157 @@
+using FluentAssertions;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using RaidOps.API.Controllers.v1;
+using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Guilds.Settings.Commands;
+using RaidOps.Application.Contracts.Guilds.Settings.Queries;
+using RaidOps.Application.Contracts.Guilds.Settings.Responses;
+using RaidOps.Domain.Enums;
+
+namespace RaidOps.UnitTests.Controllers;
+
+public class GuildSettingsControllerTests
+{
+    private readonly Mock<ICommandDispatcher>   _commands = new();
+    private readonly Mock<IQueryDispatcher>     _queries  = new();
+    private readonly GuildSettingsController    _sut;
+
+    private const string DiscordId = "user-1";
+    private const string GuildId   = "guild-1";
+
+    public GuildSettingsControllerTests()
+    {
+        _sut = new GuildSettingsController(_commands.Object, _queries.Object)
+        {
+            ControllerContext = ControllerTestHelpers.MakeContext(DiscordId)
+        };
+    }
+
+    // ── GetSettings ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetSettings_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+
+        var result = await _sut.GetSettings(GuildId, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetSettings_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
+                It.IsAny<GetGuildSettingsQuery>(), default))
+            .ReturnsAsync(Result<GuildSettingsResponse>.Fail(ResponseDetail.GuildNotFound));
+
+        var result = await _sut.GetSettings(GuildId, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetSettings_Success_ReturnsOkWithResponse()
+    {
+        var response = new GuildSettingsResponse { Timezone = "Europe/Paris", RosterMode = RosterMode.Open };
+        _queries.Setup(q => q.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
+                It.IsAny<GetGuildSettingsQuery>(), default))
+            .ReturnsAsync(Result<GuildSettingsResponse>.Ok(response));
+
+        var result = await _sut.GetSettings(GuildId, default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(response);
+    }
+
+    [Fact]
+    public async Task GetSettings_PassesCorrectQueryFields()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
+                It.IsAny<GetGuildSettingsQuery>(), default))
+            .ReturnsAsync(Result<GuildSettingsResponse>.Ok(new GuildSettingsResponse()));
+
+        await _sut.GetSettings(GuildId, default);
+
+        _queries.Verify(q => q.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
+            It.Is<GetGuildSettingsQuery>(x => x.GuildId == GuildId && x.RequesterDiscordId == DiscordId),
+            default), Times.Once);
+    }
+
+    // ── GetDiscordRoles ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetDiscordRoles_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+
+        var result = await _sut.GetDiscordRoles(GuildId, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetDiscordRoles_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetGuildDiscordRolesQuery, List<DiscordRoleResponse>>(
+                It.IsAny<GetGuildDiscordRolesQuery>(), default))
+            .ReturnsAsync(Result<List<DiscordRoleResponse>>.Fail(ResponseDetail.GuildBotNotPresent));
+
+        var result = await _sut.GetDiscordRoles(GuildId, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetDiscordRoles_Success_ReturnsOkWithRoles()
+    {
+        var roles = new List<DiscordRoleResponse> { new() { Id = "r1", Name = "Officer" } };
+        _queries.Setup(q => q.DispatchAsync<GetGuildDiscordRolesQuery, List<DiscordRoleResponse>>(
+                It.IsAny<GetGuildDiscordRolesQuery>(), default))
+            .ReturnsAsync(Result<List<DiscordRoleResponse>>.Ok(roles));
+
+        var result = await _sut.GetDiscordRoles(GuildId, default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(roles);
+    }
+
+    // ── UpdateSettings ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateSettings_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", RosterMode = RosterMode.Open };
+
+        var result = await _sut.UpdateSettings(GuildId, command, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task UpdateSettings_CommandFails_ReturnsBadRequest()
+    {
+        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", RosterMode = RosterMode.Open };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateGuildSettingsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.Forbidden));
+
+        var result = await _sut.UpdateSettings(GuildId, command, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdateSettings_Success_SetsRouteFieldsAndReturnsOk()
+    {
+        var command = new UpdateGuildSettingsCommand { Timezone = "Europe/Paris", RosterMode = RosterMode.Open };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateGuildSettingsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        var result = await _sut.UpdateSettings(GuildId, command, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        command.GuildId.Should().Be(GuildId);
+        command.RequesterDiscordId.Should().Be(DiscordId);
+    }
+}

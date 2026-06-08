@@ -6,31 +6,31 @@ using Moq;
 using RaidOps.API.Controllers.v1;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Guilds.Commands;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.Application.Contracts.Services;
 
 namespace RaidOps.UnitTests.Controllers;
 
-public class GuildsControllerTests
+public class GuildRegistrationControllerTests
 {
-    private readonly Mock<ICommandDispatcher> _commands   = new();
-    private readonly Mock<IQueryDispatcher>   _queries    = new();
-    private readonly Mock<IJwtService>        _jwt        = new();
-    private readonly Mock<IConfiguration>     _config;
-    private readonly GuildsController         _sut;
+    private readonly Mock<ICommandDispatcher>  _commands = new();
+    private readonly Mock<IQueryDispatcher>    _queries  = new();
+    private readonly Mock<IJwtService>         _jwt      = new();
+    private readonly Mock<IConfiguration>      _config;
+    private readonly GuildRegistrationController _sut;
 
     private const string DiscordId   = "user-1";
     private const string GuildId     = "guild-1";
     private const string FrontendUrl = "https://app";
 
-    public GuildsControllerTests()
+    public GuildRegistrationControllerTests()
     {
         _config = ControllerTestHelpers.MakeConfig(
-            ("FrontendUrl",             FrontendUrl),
-            ("Discord:ClientId",        "discord-client-id"),
-            ("Discord:BotPermissions",  "8"));
+            ("FrontendUrl",            FrontendUrl),
+            ("Discord:ClientId",       "discord-client-id"),
+            ("Discord:BotPermissions", "8"));
 
-        _sut = new GuildsController(_commands.Object, _queries.Object, _jwt.Object, _config.Object)
+        _sut = new GuildRegistrationController(_commands.Object, _queries.Object, _jwt.Object, _config.Object)
         {
             ControllerContext = ControllerTestHelpers.MakeContext(DiscordId)
         };
@@ -39,8 +39,6 @@ public class GuildsControllerTests
         urlHelper.Setup(u => u.Action(It.IsAny<UrlActionContext>())).Returns("https://api/guilds/callback");
         _sut.Url = urlHelper.Object;
     }
-
-    // ── Initiate ──────────────────────────────────────────────────────────────
 
     // ── Constructor guards ────────────────────────────────────────────────────
 
@@ -51,7 +49,7 @@ public class GuildsControllerTests
     public void Constructor_MissingConfig_Throws(string key1, string key2, string val2, string missingKey)
     {
         var config = ControllerTestHelpers.MakeConfig((key1, "https://app"), (key2, val2));
-        var act = () => new GuildsController(_commands.Object, _queries.Object, _jwt.Object, config.Object);
+        var act = () => new GuildRegistrationController(_commands.Object, _queries.Object, _jwt.Object, config.Object);
         act.Should().Throw<InvalidOperationException>().WithMessage($"*{missingKey}*");
     }
 
@@ -125,7 +123,7 @@ public class GuildsControllerTests
     }
 
     [Fact]
-    public async Task Callback_Success_RedirectsToDashboard()
+    public async Task Callback_Success_RedirectsToGuildRegisterPage()
     {
         _jwt.Setup(j => j.ValidateStateToken("state"))
             .Returns((GuildId, DiscordId));
@@ -135,6 +133,6 @@ public class GuildsControllerTests
         var result = await _sut.Callback(GuildId, "state", default);
 
         result.Should().BeOfType<RedirectResult>()
-            .Which.Url.Should().Be($"{FrontendUrl}/guilds/{GuildId}/dashboard");
+            .Which.Url.Should().Be($"{FrontendUrl}/guild-register/{GuildId}");
     }
 }

@@ -1,5 +1,6 @@
 using NetCord;
 using NetCord.Gateway;
+using NetCord.Rest;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 
 namespace RaidOps.ExternalApplication.Implementations.Bot;
@@ -50,5 +51,17 @@ public class GuildService(GatewayClient gatewayClient) : IGuildService
             admins.Add(owner);
 
         return admins;
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<Role> GetRoles(string guildId, CancellationToken cancellationToken = default)
+    {
+        if (!gatewayClient.Cache.Guilds.TryGetValue(ulong.Parse(guildId), out var guild))
+            throw new InvalidOperationException($"Guild '{guildId}' not found in bot cache.");
+
+        // Exclude @everyone (same snowflake as the guild) and bot-managed integration roles.
+        return [.. guild.Roles.Values
+            .Where(r => r.Id != guild.Id && !r.Managed)
+            .OrderByDescending(r => r.Position)];
     }
 }

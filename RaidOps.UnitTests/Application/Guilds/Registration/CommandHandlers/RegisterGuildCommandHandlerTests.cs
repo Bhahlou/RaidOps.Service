@@ -1,13 +1,13 @@
 using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
-using RaidOps.Application.Contracts.Guilds.Commands;
-using RaidOps.Application.Implementations.Guilds.CommandHandlers;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
+using RaidOps.Application.Implementations.Guilds.Registration.CommandHandlers;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
-namespace RaidOps.UnitTests.Application.Guilds.CommandHandlers;
+namespace RaidOps.UnitTests.Application.Guilds.Registration.CommandHandlers;
 
 public class RegisterGuildCommandHandlerTests
 {
@@ -17,7 +17,7 @@ public class RegisterGuildCommandHandlerTests
     private readonly Mock<IGuildService>         _guildService = new();
     private readonly RegisterGuildCommandHandler _sut;
 
-    private const string GuildId    = "guild-1";
+    private const string GuildId     = "guild-1";
     private const string RequesterId = "user-1";
 
     private static readonly RegisterGuildCommand Command = new()
@@ -76,7 +76,6 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        // Bot is present (Get does not throw)
         _guilds.Setup(g => g.RegisterAsync(GuildId, default)).ReturnsAsync(false);
 
         var result = await _sut.HandleAsync(Command);

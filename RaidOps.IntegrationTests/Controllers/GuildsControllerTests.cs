@@ -93,6 +93,6 @@ public class GuildsControllerTests(RaidOpsWebApplicationFactory factory)
         var response = await client.GetAsync($"/api/v1/guilds/register/callback?guild_id={guildId}&state={state}");
 
         response.StatusCode.Should().Be(HttpStatusCode.Found);
-        response.Headers.Location!.ToString().Should().Contain($"/guilds/{guildId}/dashboard");
+        response.Headers.Location!.ToString().Should().Contain($"/guild-register/{guildId}");
     }
 }

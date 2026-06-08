@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace RaidOps.Application.Contracts.Common;
 
 /// <summary>
 /// Centralises all error codes returned by command and query handlers.
 /// Use these constants with <see cref="Result{T}.Fail"/> instead of inline strings.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class ResponseDetail
 {
     // ── Generic ───────────────────────────────────────────────────────────
@@ -27,6 +30,7 @@ public static class ResponseDetail
     // ── Guild ─────────────────────────────────────────────────────────────
     public const string GuildNotFound = nameof(GuildNotFound);
     public const string GuildBotNotPresent = nameof(GuildBotNotPresent);
+    public const string GuildNotRegistered = nameof(GuildNotRegistered);
 
     // ── Branch ────────────────────────────────────────────────────────────
     public const string BranchNotFound = nameof(BranchNotFound);

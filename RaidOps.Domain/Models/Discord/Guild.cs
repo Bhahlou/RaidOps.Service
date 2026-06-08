@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using RaidOps.Domain.Enums;
 
 namespace RaidOps.Domain.Models.Discord;
 
@@ -26,6 +27,25 @@ public class Guild
     /// Only registered guilds unlock the full feature set (raid planning, roster, loot).
     /// </summary>
     public bool IsRegistered { get; set; }
+
+    /// <summary>
+    /// IANA timezone identifier for this guild (e.g. "Europe/Paris").
+    /// Null until the guild owner completes the settings step of the registration flow.
+    /// </summary>
+    public string? Timezone { get; set; }
+
+    /// <summary>
+    /// Controls who may join the guild's roster.
+    /// Null until the guild owner completes the settings step of the registration flow.
+    /// </summary>
+    public RosterMode? RosterMode { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of the minimum role required to join the roster.
+    /// Members with this role <em>or any role with a higher position</em> are granted access.
+    /// Only relevant when <see cref="RosterMode"/> is <see cref="RosterMode.DiscordRoleOnly"/>.
+    /// </summary>
+    public string? MinRosterRoleId { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────
 

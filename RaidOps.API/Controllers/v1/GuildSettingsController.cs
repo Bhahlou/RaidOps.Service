@@ -1,0 +1,76 @@
+using Asp.Versioning;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Guilds.Settings.Commands;
+using RaidOps.Application.Contracts.Guilds.Settings.Queries;
+using RaidOps.Application.Contracts.Guilds.Settings.Responses;
+using System.IdentityModel.Tokens.Jwt;
+
+namespace RaidOps.API.Controllers.v1;
+
+/// <summary>
+/// Exposes guild settings endpoints: read and write settings, fetch Discord roles.
+/// </summary>
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/guilds")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+public class GuildSettingsController(
+    ICommandDispatcher commandDispatcher,
+    IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
+{
+    /// <summary>
+    /// Returns the current settings (timezone, roster mode, role threshold) of the specified guild.
+    /// </summary>
+    [HttpGet("{guildId}/settings")]
+    public async Task<IActionResult> GetSettings(string guildId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
+            new GetGuildSettingsQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Returns the assignable Discord roles for the specified guild.
+    /// </summary>
+    [HttpGet("{guildId}/discord-roles")]
+    public async Task<IActionResult> GetDiscordRoles(string guildId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildDiscordRolesQuery, List<DiscordRoleResponse>>(
+            new GetGuildDiscordRolesQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Persists the guild settings (timezone, roster mode and role threshold).
+    /// </summary>
+    [HttpPatch("{guildId}/settings")]
+    public async Task<IActionResult> UpdateSettings(
+        string guildId,
+        [FromBody] UpdateGuildSettingsCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+}

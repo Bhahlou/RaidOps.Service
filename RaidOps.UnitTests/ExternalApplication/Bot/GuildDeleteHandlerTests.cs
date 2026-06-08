@@ -5,7 +5,7 @@ using Moq;
 using NetCord.Gateway;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Guilds.Commands;
+using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.ExternalApplication.Implementations.Bot;
 using System.Runtime.CompilerServices;
 using System.Reflection;
