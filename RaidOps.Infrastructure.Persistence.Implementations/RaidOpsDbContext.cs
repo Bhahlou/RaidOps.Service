@@ -137,9 +137,10 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasIndex(s => new { s.CharacterId, s.ExpansionId })
             .IsUnique();
 
-        // CharacterSpec — composite PK (CharacterExpansionStateId, SpecId)
+        // CharacterSpec — composite PK (CharacterExpansionStateId, SpecId, IsMain)
+        // IsMain is included so Classic same-spec dual-spec (e.g. Ret/Ret) can be stored.
         modelBuilder.Entity<CharacterSpec>()
-            .HasKey(cs => new { cs.CharacterExpansionStateId, cs.SpecId });
+            .HasKey(cs => new { cs.CharacterExpansionStateId, cs.SpecId, cs.IsMain });
 
         modelBuilder.Entity<CharacterSpec>()
             .HasOne(cs => cs.CharacterExpansionState)

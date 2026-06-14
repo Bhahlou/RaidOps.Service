@@ -135,6 +135,27 @@ public class SpecResolverServiceTests
         result.Should().ContainSingle(s => !s.IsMain);
     }
 
+    [Fact]
+    public async Task Classic_SameSpecDualSpec_ProducesTwoEntriesWithDifferentIsMain()
+    {
+        // Regression guard: a player running the same spec in both talent sets (e.g. Ret/Ret,
+        // Prot/Prot) must produce two CharacterSpec rows with the same SpecId.
+        // The DB PK is (CharacterExpansionStateId, SpecId, IsMain) — changed from
+        // (CharacterExpansionStateId, SpecId) — specifically to allow this.
+        var ret = MakeSpec(70, "Retribution");
+        _repo.Setup(r => r.GetSpecByNameAndClassAsync("Retribution", 2, default)).ReturnsAsync(ret);
+
+        var active   = ClassicGroup(isActive: true,  ("Retribution", 31));
+        var inactive = ClassicGroup(isActive: false, ("Retribution", 28));
+        var response = ClassicResponse(active, inactive);
+
+        var result = await _sut.ResolveAsync(response, classId: 2, _state);
+
+        result.Should().HaveCount(2);
+        result.Should().ContainSingle(s => s.SpecId == 70 && s.IsMain);
+        result.Should().ContainSingle(s => s.SpecId == 70 && !s.IsMain);
+    }
+
     // ── Modern (MoP+) ─────────────────────────────────────────────────────────
 
     [Fact]
