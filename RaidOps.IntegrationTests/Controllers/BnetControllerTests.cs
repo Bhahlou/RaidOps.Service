@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
+[Collection("Integration")]
 public class BnetControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

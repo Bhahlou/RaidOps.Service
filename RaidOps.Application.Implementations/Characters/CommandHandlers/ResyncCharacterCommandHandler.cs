@@ -42,9 +42,19 @@ public class ResyncCharacterCommandHandler(
             var realmSlug = character.Realm.Slug;
             var name = character.Name;
 
-            var detailTask = bnetApiService.GetCharacterAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-            var mediaTask  = bnetApiService.GetCharacterMediaAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
-            var specsTask  = bnetApiService.GetCharacterSpecializationsAsync(bnetAccount.AccessToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            string appToken;
+            try
+            {
+                appToken = await bnetApiService.GetAppTokenAsync(bnetAccount.Region, cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
+            }
+
+            var detailTask = bnetApiService.GetCharacterAsync(appToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            var mediaTask  = bnetApiService.GetCharacterMediaAsync(appToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
+            var specsTask  = bnetApiService.GetCharacterSpecializationsAsync(appToken, bnetAccount.Region, profileNamespace, realmSlug, name, cancellationToken);
 
             try
             {

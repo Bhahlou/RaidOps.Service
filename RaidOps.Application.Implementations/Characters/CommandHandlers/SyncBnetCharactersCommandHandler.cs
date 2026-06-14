@@ -48,16 +48,13 @@ public class SyncBnetCharactersCommandHandler(
             foreach (var c in wowAccount.Characters)
             {
                 var realm = await realmRepository.GetBySlugAndBranchAsync(c.Realm.Slug, command.BranchId, cancellationToken);
-                if (realm is null)
-                {
-                    realm = await realmRepository.AddAsync(new Realm
+                realm ??= await realmRepository.AddAsync(new Realm
                     {
                         Slug = c.Realm.Slug,
                         Name = c.Realm.Name,
                         Region = account.Region,
                         BranchId = command.BranchId
                     }, cancellationToken);
-                }
 
                 var character = await characterRepository.UpsertAsync(new Character
                 {

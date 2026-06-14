@@ -26,7 +26,8 @@ public class GuildService(GatewayClient gatewayClient) : IGuildService
     {
         if (gatewayClient.Cache.Guilds.TryGetValue(ulong.Parse(guildId), out var guild))
             return guild.Users.Values;
-
+        
+        
         throw new InvalidOperationException($"Guild '{guildId}' not found in bot cache.");
     }
 

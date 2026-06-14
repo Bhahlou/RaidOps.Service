@@ -47,7 +47,7 @@ public class SpecResolverService(ICharacterRepository characterRepository) : ISp
         if (offspecEntry is not null)
         {
             var offSpec = await characterRepository.GetSpecByIdAsync(offspecEntry.Specialization.Id, cancellationToken);
-            if (offSpec is not null)
+            if (offSpec is not null && result.All(r => r.SpecId != offSpec.Id))
                 result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
         }
 
@@ -77,6 +77,7 @@ public class SpecResolverService(ICharacterRepository characterRepository) : ISp
         if (offTree is not null)
         {
             var offSpec = await characterRepository.GetSpecByNameAndClassAsync(ResolveClassicSpecName(offTree), classId, cancellationToken);
+            // No dedup: same-spec dual-spec is valid in Classic (e.g. Ret/Ret with different talent builds).
             if (offSpec is not null)
                 result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
         }

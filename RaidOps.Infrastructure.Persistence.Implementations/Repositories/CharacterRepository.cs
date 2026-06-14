@@ -11,6 +11,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepository
 {
     /// <inheritdoc/>
+    public async Task<Character?> GetByIdAsync(int characterId, CancellationToken cancellationToken = default)
+        => await context.Characters
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == characterId, cancellationToken);
+
+    /// <inheritdoc/>
     public async Task<IEnumerable<Character>> GetByUserWithDetailsAsync(
         string userDiscordId,
         bool activeOnly = false,
@@ -136,14 +142,23 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
 
             if (state.Specs.Count > 0)
             {
-                var existingSpecs = await context.CharacterSpecs
-                    .Where(s => s.CharacterExpansionStateId == existing.Id)
-                    .ToListAsync(cancellationToken);
-                context.CharacterSpecs.RemoveRange(existingSpecs);
+                var stateId = existing.Id;
 
-                foreach (var spec in state.Specs)
-                    spec.CharacterExpansionStateId = existing.Id;
-                context.CharacterSpecs.AddRange(state.Specs);
+                await context.CharacterSpecs
+                    .Where(s => s.CharacterExpansionStateId == stateId)
+                    .ExecuteDeleteAsync(cancellationToken);
+
+                // Clear tracker to avoid relationship-fixup conflicts from accumulated state.
+                context.ChangeTracker.Clear();
+
+                var freshSpecs = state.Specs.Select(s => new CharacterSpec
+                {
+                    CharacterExpansionStateId = stateId,
+                    SpecId = s.SpecId,
+                    IsMain = s.IsMain,
+                }).ToList();
+
+                context.CharacterSpecs.AddRange(freshSpecs);
                 await context.SaveChangesAsync(cancellationToken);
             }
         }

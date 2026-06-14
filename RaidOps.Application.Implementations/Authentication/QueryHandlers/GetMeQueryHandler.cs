@@ -33,7 +33,7 @@ public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandler
             DiscordId = user.DiscordId,
             Name = user.Name,
             AvatarHash = user.AvatarHash,
-            Guilds = user.UserGuilds
+            Guilds = [.. user.UserGuilds
                 .Where(ug => ug.IsAdmin || ug.Guild.IsRegistered)
                 .Select(ug => new UserGuildResponse
                 {
@@ -43,7 +43,7 @@ public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandler
                     IsRegistered = ug.Guild.IsRegistered,
                     IsConfigured = ug.Guild.Timezone != null && ug.Guild.RosterMode != null,
                     IsAdmin = ug.IsAdmin
-                }).ToList()
+                })]
         });
     }
 }

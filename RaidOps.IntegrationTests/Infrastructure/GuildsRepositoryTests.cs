@@ -11,6 +11,7 @@ namespace RaidOps.IntegrationTests.Infrastructure;
 /// The HTTP layer doesn't exercise both branches because the Discord API stub
 /// returns an empty guild list, leaving the foreach body uncovered.
 /// </summary>
+[Collection("Integration")]
 public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

@@ -6,7 +6,8 @@ namespace RaidOps.Domain.Models.Character;
 /// <summary>
 /// Links a <see cref="Spec"/> to a <see cref="CharacterExpansionState"/>.
 /// A character can have multiple specs per expansion (e.g. main + off-spec).
-/// Composite primary key: (<see cref="CharacterExpansionStateId"/>, <see cref="SpecId"/>).
+/// Composite primary key: (<see cref="CharacterExpansionStateId"/>, <see cref="SpecId"/>, <see cref="IsMain"/>)
+/// — <see cref="IsMain"/> is part of the PK to allow Classic same-spec dual-spec (e.g. Ret/Ret).
 /// </summary>
 [Table("CharacterSpecs")]
 public class CharacterSpec

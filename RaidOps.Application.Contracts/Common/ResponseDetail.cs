@@ -31,6 +31,14 @@ public static class ResponseDetail
     public const string GuildNotFound = nameof(GuildNotFound);
     public const string GuildBotNotPresent = nameof(GuildBotNotPresent);
     public const string GuildNotRegistered = nameof(GuildNotRegistered);
+    public const string GuildNotConfigured = nameof(GuildNotConfigured);
+
+    // ── Membership ────────────────────────────────────────────────────────
+    public const string CharacterNotFound = nameof(CharacterNotFound);
+    public const string CharacterNotOwned = nameof(CharacterNotOwned);
+    public const string AlreadyMember = nameof(AlreadyMember);
+    public const string NotAMember = nameof(NotAMember);
+    public const string RosterAccessDenied = nameof(RosterAccessDenied);
 
     // ── Branch ────────────────────────────────────────────────────────────
     public const string BranchNotFound = nameof(BranchNotFound);

@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.Registration.CommandHandlers;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
@@ -15,6 +16,7 @@ public class RegisterGuildCommandHandlerTests
     private readonly Mock<IGuildsRepository>     _guilds       = new();
     private readonly Mock<IDiscordBotService>    _bot          = new();
     private readonly Mock<IGuildService>         _guildService = new();
+    private readonly Mock<IAuditLogService>      _auditLog     = new();
     private readonly RegisterGuildCommandHandler _sut;
 
     private const string GuildId     = "guild-1";
@@ -28,7 +30,7 @@ public class RegisterGuildCommandHandlerTests
     public RegisterGuildCommandHandlerTests()
     {
         _bot.Setup(b => b.Guilds).Returns(_guildService.Object);
-        _sut = new RegisterGuildCommandHandler(_userGuilds.Object, _guilds.Object, _bot.Object);
+        _sut = new RegisterGuildCommandHandler(_userGuilds.Object, _guilds.Object, _bot.Object, _auditLog.Object);
     }
 
     [Fact]

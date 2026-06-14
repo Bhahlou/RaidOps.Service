@@ -206,6 +206,63 @@ public class BnetApiServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*deserialize*");
     }
 
+    // ── GetAppTokenAsync ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAppTokenAsync_Success_ReturnsAccessToken()
+    {
+        var json = """{"access_token":"app-tok","token_type":"Bearer","expires_in":86400}""";
+        var sut  = MakeSut(HttpStatusCode.OK, json);
+
+        var result = await sut.GetAppTokenAsync("eu");
+
+        result.Should().Be("app-tok");
+    }
+
+    [Fact]
+    public async Task GetAppTokenAsync_SetsBasicAuthHeader()
+    {
+        var json    = """{"access_token":"app-tok","token_type":"Bearer","expires_in":86400}""";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
+        var sut     = new BnetApiService(new HttpClient(handler), _config.Object);
+
+        await sut.GetAppTokenAsync("eu");
+
+        handler.LastRequest!.Headers.Authorization!.Scheme.Should().Be("Basic");
+    }
+
+    [Fact]
+    public async Task GetAppTokenAsync_UsesClientCredentialsGrant()
+    {
+        var json    = """{"access_token":"app-tok","token_type":"Bearer","expires_in":86400}""";
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
+        var sut     = new BnetApiService(new HttpClient(handler), _config.Object);
+
+        await sut.GetAppTokenAsync("eu");
+
+        handler.LastRequestBody.Should().Contain("grant_type=client_credentials");
+    }
+
+    [Fact]
+    public async Task GetAppTokenAsync_NullJsonBody_ThrowsInvalidOperationException()
+    {
+        var sut = MakeSut(HttpStatusCode.OK, "null");
+
+        var act = () => sut.GetAppTokenAsync("eu");
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*deserialize*");
+    }
+
+    [Fact]
+    public async Task GetAppTokenAsync_NonSuccessStatus_ThrowsHttpRequestException()
+    {
+        var sut = MakeSut(HttpStatusCode.Unauthorized);
+
+        var act = () => sut.GetAppTokenAsync("eu");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private BnetApiService MakeSut(HttpStatusCode status, string? content = null)

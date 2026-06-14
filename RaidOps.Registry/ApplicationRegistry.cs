@@ -13,6 +13,7 @@ internal static class ApplicationRegistry
         services.AddScoped<IDiscordSyncService, DiscordSyncService>();
         services.AddScoped<IRaidOpsAuthService, RaidOpsAuthService>();
         services.AddScoped<ISpecResolverService, SpecResolverService>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
         return services;
     }
 }

@@ -112,6 +112,28 @@ public class BnetApiService(HttpClient httpClient, IConfiguration configuration)
     }
 
     /// <inheritdoc/>
+    public async Task<string> GetAppTokenAsync(string region, CancellationToken cancellationToken = default)
+    {
+        var clientId     = configuration["BattleNet:ClientId"]!;
+        var clientSecret = configuration["BattleNet:ClientSecret"]!;
+        var credentials  = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{BnetBase(region)}/oauth/token");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        request.Content = new FormUrlEncodedContent([
+            new KeyValuePair<string, string>("grant_type", "client_credentials"),
+        ]);
+
+        var response = await httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        var token = JsonSerializer.Deserialize<BnetTokenResponse>(content)
+            ?? throw new InvalidOperationException("Failed to deserialize BNet app token response.");
+        return token.AccessToken;
+    }
+
+    /// <inheritdoc/>
     public async Task<BnetCharacterDetailResponse> GetCharacterAsync(
         string accessToken, string region, string profileNamespace,
         string realmSlug, string characterName,

@@ -23,6 +23,12 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="UserGuild"/> join table linking users to Discord guilds.</summary>
     public DbSet<UserGuild> UserGuilds => Set<UserGuild>();
 
+    /// <summary>Gets the <see cref="GuildMembership"/> table linking characters to guild rosters.</summary>
+    public DbSet<GuildMembership> GuildMemberships => Set<GuildMembership>();
+
+    /// <summary>Gets the <see cref="GuildAuditLog"/> table recording guild action history.</summary>
+    public DbSet<GuildAuditLog> GuildAuditLogs => Set<GuildAuditLog>();
+
     // ── Static reference data ─────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="Expansion"/> lookup table.</summary>
@@ -131,9 +137,10 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasIndex(s => new { s.CharacterId, s.ExpansionId })
             .IsUnique();
 
-        // CharacterSpec — composite PK (CharacterExpansionStateId, SpecId)
+        // CharacterSpec — composite PK (CharacterExpansionStateId, SpecId, IsMain)
+        // IsMain is included so Classic same-spec dual-spec (e.g. Ret/Ret) can be stored.
         modelBuilder.Entity<CharacterSpec>()
-            .HasKey(cs => new { cs.CharacterExpansionStateId, cs.SpecId });
+            .HasKey(cs => new { cs.CharacterExpansionStateId, cs.SpecId, cs.IsMain });
 
         modelBuilder.Entity<CharacterSpec>()
             .HasOne(cs => cs.CharacterExpansionState)
@@ -144,6 +151,30 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne(cs => cs.Spec)
             .WithMany()
             .HasForeignKey(cs => cs.SpecId);
+
+        // GuildMembership — composite PK (CharacterId, GuildId)
+        modelBuilder.Entity<GuildMembership>()
+            .HasKey(m => new { m.CharacterId, m.GuildId });
+
+        modelBuilder.Entity<GuildMembership>()
+            .HasOne(m => m.Character)
+            .WithMany()
+            .HasForeignKey(m => m.CharacterId);
+
+        modelBuilder.Entity<GuildMembership>()
+            .HasOne(m => m.Guild)
+            .WithMany(g => g.Memberships)
+            .HasForeignKey(m => m.GuildId);
+
+        // GuildAuditLog — FK to Guild; logs are immutable so no cascade delete
+        modelBuilder.Entity<GuildAuditLog>()
+            .HasOne(l => l.Guild)
+            .WithMany()
+            .HasForeignKey(l => l.GuildId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GuildAuditLog>()
+            .HasIndex(l => new { l.GuildId, l.OccurredAt });
 
         // Realm — unique (Slug, Region, BranchId), FK to Branch
         modelBuilder.Entity<Realm>()

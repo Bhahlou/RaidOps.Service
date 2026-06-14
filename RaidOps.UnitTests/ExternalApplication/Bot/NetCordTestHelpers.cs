@@ -177,12 +177,13 @@ internal static class NetCordTestHelpers
 
     // ── Role ──────────────────────────────────────────────────────────────────
 
-    internal static JsonRole MakeJsonRole(ulong id, Permissions permissions, bool managed = false, int? primaryColor = null)
+    internal static JsonRole MakeJsonRole(ulong id, Permissions permissions, bool managed = false, int? primaryColor = null, int position = 0)
     {
         var r = Uninitialized<JsonRole>();
         SetField(r, typeof(JsonRole).BaseType!, "<Id>k__BackingField", id);
         SetField(r, typeof(JsonRole), "<Permissions>k__BackingField", permissions);
         SetField(r, typeof(JsonRole), "<Managed>k__BackingField", managed);
+        SetField(r, typeof(JsonRole), "<Position>k__BackingField", position);
 
         if (primaryColor.HasValue)
         {
