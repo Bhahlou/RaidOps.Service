@@ -41,7 +41,7 @@ public class GetCharacterMembershipsQueryHandlerTests
     {
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync((Character?)null);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.CharacterNotFound);
@@ -55,7 +55,7 @@ public class GetCharacterMembershipsQueryHandlerTests
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
             .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = "other-user" });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.CharacterNotOwned);
@@ -69,7 +69,7 @@ public class GetCharacterMembershipsQueryHandlerTests
         SetupCharacter();
         _memberships.Setup(r => r.GetByCharacterIdAsync(CharacterId, default)).ReturnsAsync([]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -95,7 +95,7 @@ public class GetCharacterMembershipsQueryHandlerTests
                 },
             ]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(1);

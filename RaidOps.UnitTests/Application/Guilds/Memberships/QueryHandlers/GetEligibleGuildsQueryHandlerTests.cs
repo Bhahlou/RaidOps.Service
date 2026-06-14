@@ -60,7 +60,7 @@ public class GetEligibleGuildsQueryHandlerTests
     {
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync((Character?)null);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.CharacterNotFound);
@@ -74,7 +74,7 @@ public class GetEligibleGuildsQueryHandlerTests
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
             .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = "other-user" });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.CharacterNotOwned);
@@ -89,7 +89,7 @@ public class GetEligibleGuildsQueryHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(DiscordId, default)).ReturnsAsync([]);
         _memberships.Setup(r => r.GetByCharacterIdAsync(CharacterId, default)).ReturnsAsync([]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -106,7 +106,7 @@ public class GetEligibleGuildsQueryHandlerTests
         _memberships.Setup(r => r.GetByCharacterIdAsync(CharacterId, default))
             .ReturnsAsync([new GuildMembership { CharacterId = CharacterId, GuildId = GuildId }]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -122,7 +122,7 @@ public class GetEligibleGuildsQueryHandlerTests
         SetupNoExistingMembership();
         _guilds.Setup(r => r.GetByIdAsync(GuildId, default)).ReturnsAsync((DiscordGuild?)null);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -139,7 +139,7 @@ public class GetEligibleGuildsQueryHandlerTests
         _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = false });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -156,7 +156,7 @@ public class GetEligibleGuildsQueryHandlerTests
         _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = true, RosterMode = null });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -173,7 +173,7 @@ public class GetEligibleGuildsQueryHandlerTests
         _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = true, RosterMode = RosterMode.Open });
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle(g => g.GuildId == GuildId && g.GuildName == "RaidOps");
@@ -190,7 +190,7 @@ public class GetEligibleGuildsQueryHandlerTests
         SetupRoleOnlyGuild();
         _guild.Setup(gs => gs.GetRoles(GuildId, default)).Throws<InvalidOperationException>();
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -210,7 +210,7 @@ public class GetEligibleGuildsQueryHandlerTests
         var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [otherRole]);
         _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -228,7 +228,7 @@ public class GetEligibleGuildsQueryHandlerTests
         SetupMinRole(position: 5);
         _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -252,7 +252,7 @@ public class GetEligibleGuildsQueryHandlerTests
         var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [LowRoleUlong]);
         _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -269,7 +269,7 @@ public class GetEligibleGuildsQueryHandlerTests
         SetupRoleOnlyGuild();
         SetupRoleAccess();
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle(g => g.GuildId == GuildId && g.GuildName == "RaidOps");

@@ -40,7 +40,7 @@ public class GetMyMembershipsInGuildQueryHandlerTests
     {
         _memberships.Setup(r => r.GetByGuildIdAndUserAsync(GuildId, DiscordId, default)).ReturnsAsync([]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -55,7 +55,7 @@ public class GetMyMembershipsInGuildQueryHandlerTests
         _memberships.Setup(r => r.GetByGuildIdAndUserAsync(GuildId, DiscordId, default))
             .ReturnsAsync([MakeMembership(joinedAt, activeGuildName: "ActiveGuild", withActive: true)]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(1);
@@ -94,10 +94,11 @@ public class GetMyMembershipsInGuildQueryHandlerTests
                 Character     = character,
             }]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
-        result.Value[0].GuildName.Should().Be("HighGuild");
+        result.Value.Should().HaveCount(1);
+        result.Value![0].GuildName.Should().Be("HighGuild");
     }
 
     // ── No expansion states — GuildName is null ───────────────────────────
@@ -117,10 +118,11 @@ public class GetMyMembershipsInGuildQueryHandlerTests
                 Character     = character,
             }]);
 
-        var result = await _sut.HandleAsync(Query);
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
 
         result.IsSuccess.Should().BeTrue();
-        result.Value[0].GuildName.Should().BeNull();
+        result.Value.Should().HaveCount(1);
+        result.Value![0].GuildName.Should().BeNull();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

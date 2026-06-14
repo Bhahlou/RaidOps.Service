@@ -21,7 +21,7 @@ public class GetEligibleGuildsQueryHandler(
     IDiscordBotService discordBotService) : IQueryHandlerAsync<GetEligibleGuildsQuery, List<EligibleGuildResponse>>
 {
     /// <inheritdoc/>
-    public async Task<Result<List<EligibleGuildResponse>>> HandleAsync(GetEligibleGuildsQuery query, CancellationToken cancellationToken = default)
+    public async Task<Result<List<EligibleGuildResponse>>> HandleAsync(GetEligibleGuildsQuery query, CancellationToken cancellationToken)
     {
         var character = await characterRepository.GetByIdAsync(query.CharacterId, cancellationToken);
         if (character == null)
@@ -39,16 +39,19 @@ public class GetEligibleGuildsQueryHandler(
 
         var eligible = new List<EligibleGuildResponse>();
 
-        foreach (var userGuild in userGuilds)
+        foreach (var guildId in userGuilds.Select(ug => ug.GuildId))
         {
-            if (alreadyJoinedIds.Contains(userGuild.GuildId))
+            if (alreadyJoinedIds.Contains(guildId))
                 continue;
 
-            var guild = await guildsRepository.GetByIdAsync(userGuild.GuildId, cancellationToken);
+            var guild = await guildsRepository.GetByIdAsync(guildId, cancellationToken);
             if (guild == null || !guild.IsRegistered || guild.RosterMode == null)
                 continue;
 
-            if (guild.RosterMode == RosterMode.Open)
+            var isEligible = guild.RosterMode == RosterMode.Open
+                || (guild.MinRosterRoleId != null && HasDiscordRoleAccess(guild.Id, guild.MinRosterRoleId, query.RequesterDiscordId, cancellationToken));
+
+            if (isEligible)
             {
                 eligible.Add(new EligibleGuildResponse
                 {
@@ -56,46 +59,35 @@ public class GetEligibleGuildsQueryHandler(
                     GuildName = guild.Name,
                     GuildIconHash = guild.IconHash,
                 });
-                continue;
-            }
-
-            // DiscordRoleOnly — verify the user has a role at or above the threshold
-            if (guild.MinRosterRoleId == null)
-                continue;
-
-            try
-            {
-                var roles = discordBotService.Guilds.GetRoles(guild.Id, cancellationToken)
-                    .ToDictionary(r => r.Id.ToString());
-
-                if (!roles.TryGetValue(guild.MinRosterRoleId, out var minRole))
-                    continue;
-
-                var guildUser = discordBotService.Guilds.GetUsers(guild.Id, cancellationToken)
-                    .FirstOrDefault(u => u.Id.ToString() == query.RequesterDiscordId);
-
-                if (guildUser == null)
-                    continue;
-
-                var hasAccess = guildUser.RoleIds.Any(rid =>
-                    roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
-
-                if (hasAccess)
-                {
-                    eligible.Add(new EligibleGuildResponse
-                    {
-                        GuildId = guild.Id,
-                        GuildName = guild.Name,
-                        GuildIconHash = guild.IconHash,
-                    });
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                // Bot not in this guild — skip silently
             }
         }
 
         return Result<List<EligibleGuildResponse>>.Ok(eligible);
+    }
+
+    private bool HasDiscordRoleAccess(string guildId, string minRosterRoleId, string requesterDiscordId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var roles = discordBotService.Guilds.GetRoles(guildId, cancellationToken)
+                .ToDictionary(r => r.Id.ToString());
+
+            if (!roles.TryGetValue(minRosterRoleId, out var minRole))
+                return false;
+
+            var guildUser = discordBotService.Guilds.GetUsers(guildId, cancellationToken)
+                .FirstOrDefault(u => u.Id.ToString() == requesterDiscordId);
+
+            if (guildUser == null)
+                return false;
+
+            return guildUser.RoleIds.Any(rid =>
+                roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
+        }
+        catch (InvalidOperationException)
+        {
+            // Bot not in this guild — skip silently
+            return false;
+        }
     }
 }

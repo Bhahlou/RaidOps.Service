@@ -52,33 +52,9 @@ public class JoinGuildCommandHandler(
         // Verify roster access based on RosterMode
         if (guild.RosterMode == RosterMode.DiscordRoleOnly)
         {
-            if (guild.MinRosterRoleId == null)
-                return Result<CommandResponse>.Fail(ResponseDetail.GuildNotConfigured, "Roster role threshold is not configured.");
-
-            try
-            {
-                var roles = discordBotService.Guilds.GetRoles(command.GuildId, cancellationToken)
-                    .ToDictionary(r => r.Id.ToString());
-
-                if (!roles.TryGetValue(guild.MinRosterRoleId, out var minRole))
-                    return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "The required Discord role no longer exists.");
-
-                var guildUser = discordBotService.Guilds.GetUsers(command.GuildId, cancellationToken)
-                    .FirstOrDefault(u => u.Id.ToString() == command.RequesterDiscordId);
-
-                if (guildUser == null)
-                    return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You are not found in this Discord server.");
-
-                var hasAccess = guildUser.RoleIds.Any(rid =>
-                    roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
-
-                if (!hasAccess)
-                    return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You do not have the required Discord role to join this roster.");
-            }
-            catch (InvalidOperationException)
-            {
-                return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild.");
-            }
+            var accessError = CheckDiscordRoleAccess(guild.MinRosterRoleId, command.GuildId, command.RequesterDiscordId, cancellationToken);
+            if (accessError != null)
+                return accessError;
         }
 
         // Verify no existing membership
@@ -105,5 +81,38 @@ public class JoinGuildCommandHandler(
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character added to the guild roster."));
+    }
+
+    private Result<CommandResponse>? CheckDiscordRoleAccess(string? minRosterRoleId, string guildId, string requesterDiscordId, CancellationToken cancellationToken)
+    {
+        if (minRosterRoleId == null)
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildNotConfigured, "Roster role threshold is not configured.");
+
+        try
+        {
+            var roles = discordBotService.Guilds.GetRoles(guildId, cancellationToken)
+                .ToDictionary(r => r.Id.ToString());
+
+            if (!roles.TryGetValue(minRosterRoleId, out var minRole))
+                return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "The required Discord role no longer exists.");
+
+            var guildUser = discordBotService.Guilds.GetUsers(guildId, cancellationToken)
+                .FirstOrDefault(u => u.Id.ToString() == requesterDiscordId);
+
+            if (guildUser == null)
+                return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You are not found in this Discord server.");
+
+            var hasAccess = guildUser.RoleIds.Any(rid =>
+                roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
+
+            if (!hasAccess)
+                return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You do not have the required Discord role to join this roster.");
+        }
+        catch (InvalidOperationException)
+        {
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild.");
+        }
+
+        return null;
     }
 }

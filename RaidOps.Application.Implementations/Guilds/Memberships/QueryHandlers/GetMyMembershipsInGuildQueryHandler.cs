@@ -14,7 +14,7 @@ public class GetMyMembershipsInGuildQueryHandler(
     IGuildMembershipRepository membershipRepository) : IQueryHandlerAsync<GetMyMembershipsInGuildQuery, List<CharacterInGuildResponse>>
 {
     /// <inheritdoc/>
-    public async Task<Result<List<CharacterInGuildResponse>>> HandleAsync(GetMyMembershipsInGuildQuery query, CancellationToken cancellationToken = default)
+    public async Task<Result<List<CharacterInGuildResponse>>> HandleAsync(GetMyMembershipsInGuildQuery query, CancellationToken cancellationToken)
     {
         var memberships = await membershipRepository.GetByGuildIdAndUserAsync(
             query.GuildId,
