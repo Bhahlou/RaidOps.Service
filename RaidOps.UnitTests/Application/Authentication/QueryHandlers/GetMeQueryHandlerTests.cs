@@ -3,6 +3,7 @@ using Moq;
 using RaidOps.Application.Contracts.Authentication.Queries;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Implementations.Authentication.QueryHandlers;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -116,7 +117,8 @@ public class GetMeQueryHandlerTests
     public async Task HandleAsync_GuildResponse_MapsAllFields()
     {
         _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
-            .ReturnsAsync(MakeUser([MakeUserGuild("g1", isAdmin: true, isRegistered: true, name: "RaidOps", iconHash: "icon42")]));
+            .ReturnsAsync(MakeUser([MakeUserGuild("g1", isAdmin: true, isRegistered: true,
+                name: "RaidOps", iconHash: "icon42", timezone: "Europe/Paris", rosterMode: RosterMode.Open)]));
 
         var result = await _sut.HandleAsync(Query, default);
 
@@ -126,6 +128,45 @@ public class GetMeQueryHandlerTests
         guild.IconHash.Should().Be("icon42");
         guild.IsRegistered.Should().BeTrue();
         guild.IsAdmin.Should().BeTrue();
+        guild.IsConfigured.Should().BeTrue();
+    }
+
+    // ── IsConfigured mapping ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_BothTimezoneAndRosterModeSet_IsConfiguredTrue()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([MakeUserGuild("g1", isAdmin: true, isRegistered: true,
+                timezone: "Europe/Paris", rosterMode: RosterMode.Open)]));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Guilds.Single().IsConfigured.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_TimezoneNull_IsConfiguredFalse()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([MakeUserGuild("g1", isAdmin: true, isRegistered: true,
+                timezone: null, rosterMode: RosterMode.Open)]));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Guilds.Single().IsConfigured.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_RosterModeNull_IsConfiguredFalse()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([MakeUserGuild("g1", isAdmin: true, isRegistered: true,
+                timezone: "Europe/Paris", rosterMode: null)]));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Guilds.Single().IsConfigured.Should().BeFalse();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -139,11 +180,13 @@ public class GetMeQueryHandlerTests
     };
 
     private static UserGuild MakeUserGuild(
-        string guildId,
-        bool   isAdmin,
-        bool   isRegistered,
-        string name     = "Guild Name",
-        string? iconHash = null) => new()
+        string       guildId,
+        bool         isAdmin,
+        bool         isRegistered,
+        string       name       = "Guild Name",
+        string?      iconHash   = null,
+        string?      timezone   = null,
+        RosterMode?  rosterMode = null) => new()
     {
         UserDiscordId = DiscordId,
         GuildId       = guildId,
@@ -154,6 +197,8 @@ public class GetMeQueryHandlerTests
             Name         = name,
             IconHash     = iconHash,
             IsRegistered = isRegistered,
+            Timezone     = timezone,
+            RosterMode   = rosterMode,
         },
     };
 }

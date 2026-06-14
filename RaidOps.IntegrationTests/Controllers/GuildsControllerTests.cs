@@ -5,6 +5,7 @@ using System.Net;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
+[Collection("Integration")]
 public class GuildsControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

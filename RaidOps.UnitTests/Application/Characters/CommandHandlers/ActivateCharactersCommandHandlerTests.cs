@@ -55,9 +55,29 @@ public class ActivateCharactersCommandHandlerTests
 
         _characters.Setup(r => r.UpsertAsync(It.IsAny<Character>(), default))
             .ReturnsAsync((Character c, CancellationToken _) => c);
+
+        _bnetApi.Setup(b => b.GetAppTokenAsync(It.IsAny<string>(), default))
+            .ReturnsAsync("app-token");
     }
 
     // ── No BNet account ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_AppTokenFetchFails_ActivatesWithoutEnrichment()
+    {
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
+            .ReturnsAsync([MakeCharacter()]);
+        _bnetApi.Setup(b => b.GetAppTokenAsync(It.IsAny<string>(), default))
+            .ThrowsAsync(new HttpRequestException("token endpoint unreachable"));
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        _bnetApi.Verify(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _characters.Verify(r => r.UpsertAsync(It.IsAny<Character>(), default), Times.Never);
+        _characters.Verify(r => r.ActivateAsync(Command.CharacterIds, DiscordId, default), Times.Once);
+    }
 
     [Fact]
     public async Task HandleAsync_NoBnetAccount_ActivatesWithoutEnrichment()

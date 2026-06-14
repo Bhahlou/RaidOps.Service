@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
+[Collection("Integration")]
 public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {
@@ -49,7 +50,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     public async Task GetMe_WhenUserHasRegisteredGuild_ReturnsGuildInResponse()
     {
         const string id = "200000000000000002";
-        const string guildId = "800000000000000001";
+        const string guildId = "850000000000000001";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -70,7 +71,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     public async Task GetMe_WhenUserIsAdminOfUnregisteredGuild_ReturnsGuildInResponse()
     {
         const string id = "200000000000000003";
-        const string guildId = "800000000000000002";
+        const string guildId = "850000000000000002";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));

@@ -10,6 +10,7 @@ namespace RaidOps.IntegrationTests.Controllers;
 /// Integration tests for GET /api/v1/wowbranches.
 /// Validates auth enforcement and that seeded reference data is returned correctly.
 /// </summary>
+[Collection("Integration")]
 public class WowBranchesControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

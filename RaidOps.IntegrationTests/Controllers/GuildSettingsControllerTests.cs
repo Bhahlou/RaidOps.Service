@@ -6,6 +6,7 @@ using System.Text.Json;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
+[Collection("Integration")]
 public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

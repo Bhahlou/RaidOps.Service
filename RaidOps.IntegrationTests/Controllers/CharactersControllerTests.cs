@@ -9,6 +9,7 @@ using System.Net.Http.Json;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
+[Collection("Integration")]
 public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

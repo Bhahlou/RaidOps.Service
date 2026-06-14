@@ -51,6 +51,15 @@ public interface IBnetApiService
     Task<BnetWowAccountsResponse> GetWowCharactersAsync(string accessToken, string region, string profileNamespace, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Obtains a short-lived application access token using the client credentials grant.
+    /// Suitable for calling public profile API endpoints that do not require user consent.
+    /// </summary>
+    /// <param name="region">BNet region code: "us", "eu", "kr", or "tw".</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    /// <returns>A valid application access token.</returns>
+    Task<string> GetAppTokenAsync(string region, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Fetches the character profile (level, item level, guild) from
     /// <c>GET /profile/wow/character/{realmSlug}/{characterName}</c>.
     /// </summary>

@@ -7,6 +7,12 @@ namespace RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 public interface ICharacterRepository
 {
     /// <summary>
+    /// Returns the character with the given internal ID, or <c>null</c> if not found.
+    /// Does not load navigation properties; use this for ownership checks and simple lookups.
+    /// </summary>
+    Task<Character?> GetByIdAsync(int characterId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns characters owned by the given user, including realm, class, race, and expansion states.
     /// When <paramref name="activeOnly"/> is <c>true</c>, only returns characters with <c>IsActiveInRaidOps = true</c>.
     /// Ordered alphabetically by name.

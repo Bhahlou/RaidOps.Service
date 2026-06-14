@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Infrastructure.Persistence.Implementations;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace RaidOps.IntegrationTests.Infrastructure;
 
@@ -9,12 +11,22 @@ namespace RaidOps.IntegrationTests.Infrastructure;
 /// Base class for integration tests.
 /// Provides an unauthenticated HTTP client and helpers for auth, DB access, and data seeding.
 /// </summary>
-public abstract class IntegrationTestBase : IClassFixture<RaidOpsWebApplicationFactory>
+public abstract class IntegrationTestBase
 {
     protected readonly RaidOpsWebApplicationFactory Factory;
 
     /// <summary>Unauthenticated HTTP client (follows redirects).</summary>
     protected readonly HttpClient Client;
+
+    /// <summary>
+    /// JSON options matching the API configuration (enums as strings).
+    /// Use for ReadFromJsonAsync calls that involve enum-typed response fields.
+    /// </summary>
+    protected static readonly JsonSerializerOptions ApiJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     protected IntegrationTestBase(RaidOpsWebApplicationFactory factory)
     {

@@ -1,6 +1,8 @@
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
+using RaidOps.Application.Contracts.Services;
+using RaidOps.Domain.Enums;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Guilds.Settings.CommandHandlers;
@@ -11,7 +13,8 @@ namespace RaidOps.Application.Implementations.Guilds.Settings.CommandHandlers;
 /// </summary>
 public class UpdateGuildSettingsCommandHandler(
     IUserGuildsRepository userGuildsRepository,
-    IGuildsRepository guildsRepository) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
+    IGuildsRepository guildsRepository,
+    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateGuildSettingsCommand command, CancellationToken cancellationToken = default)
@@ -35,6 +38,12 @@ public class UpdateGuildSettingsCommandHandler(
             command.RosterMode,
             command.MinRosterRoleId,
             cancellationToken);
+
+        await auditLogService.LogAsync(
+            command.GuildId,
+            command.RequesterDiscordId,
+            GuildAuditAction.SettingsUpdated,
+            cancellationToken: cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild settings updated successfully."));
     }

@@ -34,8 +34,15 @@ public class ActivateCharactersCommandHandler(
         var characters = (await characterRepository.GetByIdsWithDetailsAsync(
             command.CharacterIds, command.UserDiscordId, cancellationToken)).ToList();
 
+        string? appToken = null;
+        if (bnetAccount is not null)
+        {
+            try { appToken = await bnetApiService.GetAppTokenAsync(bnetAccount.Region, cancellationToken); }
+            catch (HttpRequestException) { /* enrichment skipped below if appToken is null */ }
+        }
+
         // Fetch BNet data for all characters in parallel (pure HTTP, no DbContext).
-        var fetchTasks = characters.Select(c => FetchEnrichmentAsync(c, bnetAccount?.AccessToken, bnetAccount?.Region, cancellationToken));
+        var fetchTasks = characters.Select(c => FetchEnrichmentAsync(c, appToken, bnetAccount?.Region, cancellationToken));
         var enrichments = await Task.WhenAll(fetchTasks);
 
         // Persist sequentially — DbContext is not thread-safe.

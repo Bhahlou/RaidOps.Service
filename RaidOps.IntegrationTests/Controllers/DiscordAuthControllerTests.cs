@@ -4,6 +4,7 @@ using System.Net;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
+[Collection("Integration")]
 public class DiscordAuthControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {

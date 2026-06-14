@@ -82,6 +82,9 @@ internal class NoOpBnetApiService : IBnetApiService
             ]
         });
 
+    public Task<string> GetAppTokenAsync(string region, CancellationToken cancellationToken = default)
+        => Task.FromResult("stub-app-token");
+
     public Task<BnetCharacterDetailResponse> GetCharacterAsync(
         string accessToken, string region, string profileNamespace,
         string realmSlug, string characterName,

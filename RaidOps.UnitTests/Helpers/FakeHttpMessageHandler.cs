@@ -6,19 +6,27 @@ namespace RaidOps.UnitTests.Helpers;
 /// <summary>
 /// Fake HttpMessageHandler that returns a preset response for all requests.
 /// Captures the last sent request for assertion purposes.
+/// The request body is read eagerly to avoid ObjectDisposedException
+/// when the caller inspects it after HttpClient disposes the content.
 /// </summary>
 internal class FakeHttpMessageHandler(HttpStatusCode statusCode, string? content = null) : HttpMessageHandler
 {
     public HttpRequestMessage? LastRequest { get; private set; }
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    /// <summary>Body of the last sent request, pre-read before HttpClient disposes the content.</summary>
+    public string? LastRequestBody { get; private set; }
+
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         LastRequest = request;
+        if (request.Content is not null)
+            LastRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
+
         var response = new HttpResponseMessage(statusCode);
         if (content is not null)
             response.Content = new StringContent(content, Encoding.UTF8, "application/json");
-        return Task.FromResult(response);
+        return response;
     }
 }

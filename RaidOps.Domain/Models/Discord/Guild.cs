@@ -49,6 +49,9 @@ public class Guild
 
     // ── Navigation ────────────────────────────────────────────────────────
 
-    /// <summary>User memberships associated with this guild.</summary>
+    /// <summary>Discord user memberships associated with this guild.</summary>
     public virtual ICollection<UserGuild> UserGuilds { get; set; } = [];
+
+    /// <summary>Character roster memberships for this guild.</summary>
+    public virtual ICollection<GuildMembership> Memberships { get; set; } = [];
 }

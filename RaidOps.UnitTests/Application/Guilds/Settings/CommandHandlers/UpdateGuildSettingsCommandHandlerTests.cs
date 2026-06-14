@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.Settings.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -13,6 +14,7 @@ public class UpdateGuildSettingsCommandHandlerTests
 {
     private readonly Mock<IUserGuildsRepository>        _userGuilds = new();
     private readonly Mock<IGuildsRepository>            _guilds     = new();
+    private readonly Mock<IAuditLogService>             _auditLog   = new();
     private readonly UpdateGuildSettingsCommandHandler  _sut;
 
     private const string GuildId     = "guild-1";
@@ -29,7 +31,7 @@ public class UpdateGuildSettingsCommandHandlerTests
 
     public UpdateGuildSettingsCommandHandlerTests()
     {
-        _sut = new UpdateGuildSettingsCommandHandler(_userGuilds.Object, _guilds.Object);
+        _sut = new UpdateGuildSettingsCommandHandler(_userGuilds.Object, _guilds.Object, _auditLog.Object);
     }
 
     [Fact]

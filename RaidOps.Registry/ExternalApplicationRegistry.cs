@@ -29,7 +29,7 @@ internal static class ExternalApplicationsRegistry
             .AddDiscordGateway(options =>
             {
                 options.Token = configuration["Discord:BotToken"]!;
-                options.Intents = GatewayIntents.Guilds | GatewayIntents.GuildUsers;
+                options.Intents = GatewayIntents.Guilds | GatewayIntents.GuildUsers | GatewayIntents.GuildPresences;
             })
             .AddGatewayHandlers(typeof(DiscordBotService).Assembly);
 

@@ -1,6 +1,8 @@
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
+using RaidOps.Application.Contracts.Services;
+using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -13,7 +15,8 @@ namespace RaidOps.Application.Implementations.Guilds.Registration.CommandHandler
 public class RegisterGuildCommandHandler(
     IUserGuildsRepository userGuildsRepository,
     IGuildsRepository guildsRepository,
-    IDiscordBotService discordBotService) : ICommandHandlerAsync<RegisterGuildCommand>
+    IDiscordBotService discordBotService,
+    IAuditLogService auditLogService) : ICommandHandlerAsync<RegisterGuildCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(RegisterGuildCommand command, CancellationToken cancellationToken = default)
@@ -36,6 +39,13 @@ public class RegisterGuildCommandHandler(
         var registered = await guildsRepository.RegisterAsync(command.GuildId, cancellationToken);
         if (!registered)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildNotFound, $"Guild '{command.GuildId}' does not exist.");
+
+        await auditLogService.LogAsync(
+            command.GuildId,
+            command.RequesterDiscordId,
+            GuildAuditAction.GuildRegistered,
+            cancellationToken: cancellationToken);
+
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild registered successfully."));
     }
