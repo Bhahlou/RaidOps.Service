@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.Characters.Responses;
 using RaidOps.Domain.Enums;
@@ -17,6 +18,11 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
 {
     private static readonly int[] SingleId = [1];
     private static readonly int[] NonExistentId = [99999];
+    private static readonly int[] SingleViableSpec = [62];
+    private static readonly int[] WrongClassViableSpec = [71];
+    private static readonly int[] ViableSpecsExcludingMain = [62, 64];
+    private static readonly int[] ThreeViableSpecs = [62, 63, 64];
+    private static readonly int[] ReplacementViableSpec = [64];
 
     // ── Auth enforcement ────────────────────────────────────────────────────
 
@@ -66,7 +72,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
     public async Task SetRaidSpecs_WithoutToken_Returns401()
     {
         var response = await Client.PostAsJsonAsync("/api/v1/characters/1/raid-specs",
-            new { mainSpecId = 62, viableSpecIds = new[] { 62 } });
+            new { mainSpecId = 62, viableSpecIds = SingleViableSpec });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -313,7 +319,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateAuthenticatedClient(discordId: id);
 
         var response = await client.PostAsJsonAsync("/api/v1/characters/99999/raid-specs",
-            new { mainSpecId = 62, viableSpecIds = new[] { 62 } });
+            new { mainSpecId = 62, viableSpecIds = SingleViableSpec });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -327,7 +333,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
 
         // 71 = Arms (Warrior, ClassId=1) — invalid for a Mage character.
         var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
-            new { mainSpecId = 71, viableSpecIds = new[] { 71 } });
+            new { mainSpecId = 71, viableSpecIds = WrongClassViableSpec });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -340,7 +346,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateAuthenticatedClient(discordId: id);
 
         var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
-            new { mainSpecId = 63, viableSpecIds = new[] { 62, 64 } });
+            new { mainSpecId = 63, viableSpecIds = ViableSpecsExcludingMain });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -353,7 +359,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateAuthenticatedClient(discordId: id);
 
         var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
-            new { mainSpecId = 63, viableSpecIds = new[] { 62, 63, 64 } });
+            new { mainSpecId = 63, viableSpecIds = ThreeViableSpecs });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -373,10 +379,10 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateAuthenticatedClient(discordId: id);
 
         await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
-            new { mainSpecId = 62, viableSpecIds = new[] { 62, 63, 64 } });
+            new { mainSpecId = 62, viableSpecIds = ThreeViableSpecs });
 
         var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
-            new { mainSpecId = 64, viableSpecIds = new[] { 64 } });
+            new { mainSpecId = 64, viableSpecIds = ReplacementViableSpec });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -386,6 +392,57 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
             raidSpecs.Should().ContainSingle();
             raidSpecs[0].SpecId.Should().Be(64);
             raidSpecs[0].IsMain.Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task SetRaidSpecs_WhenValid_PersistsSpecNavigableBackToCharacter()
+    {
+        const string id = "300000000000000065";
+        var charId = await SeedUserWithActiveCharacter(id, bnetCharacterId: 90065);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
+            new { mainSpecId = 62, viableSpecIds = SingleViableSpec });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var raidSpec = await db.CharacterRaidSpecs
+                .Include(rs => rs.Character)
+                .SingleAsync(rs => rs.CharacterId == charId);
+            raidSpec.Character.Id.Should().Be(charId);
+        }
+    }
+
+    // ── Domain — BnetCharacterSpec relationship ─────────────────────────────
+
+    [Fact]
+    public async Task BnetCharacterSpec_NavigatesBackToItsExpansionState()
+    {
+        const string id = "300000000000000066";
+        var charId = await SeedUserWithActiveCharacter(id, bnetCharacterId: 90066);
+
+        var (seedScope, seedDb) = CreateDbScope();
+        using (seedScope)
+        {
+            var state = await seedDb.CharacterExpansionStates.SingleAsync(s => s.CharacterId == charId);
+            seedDb.BnetCharacterSpecs.Add(new BnetCharacterSpec
+            {
+                CharacterExpansionStateId = state.Id,
+                SpecId = 62,
+                IsMain = true,
+            });
+            await seedDb.SaveChangesAsync();
+        }
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var bnetSpec = await db.BnetCharacterSpecs
+                .Include(s => s.CharacterExpansionState)
+                .SingleAsync(s => s.SpecId == 62 && s.CharacterExpansionState.CharacterId == charId);
+            bnetSpec.CharacterExpansionState.CharacterId.Should().Be(charId);
         }
     }
 

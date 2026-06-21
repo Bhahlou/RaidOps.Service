@@ -149,11 +149,45 @@ public class CharacterMapperTests
         dto.IsMain.Should().BeTrue();
     }
 
+    // ── Raid specs ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ToDto_RaidSpecs_MainSpecComesFirst()
+    {
+        var offspec = MakeRaidSpec(specId: 71, name: "Arms",       isMain: false);
+        var main    = MakeRaidSpec(specId: 73, name: "Protection", isMain: true);
+
+        var character = MakeCharacter(raidSpecs: [offspec, main]);
+
+        var dto = CharacterMapper.ToDto(character);
+
+        dto.RaidSpecs.Should().HaveCount(2);
+        dto.RaidSpecs[0].IsMain.Should().BeTrue();
+        dto.RaidSpecs[0].SpecId.Should().Be(73);
+        dto.RaidSpecs[1].IsMain.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToDto_RaidSpecs_MapsSpecFields()
+    {
+        var raidSpec = MakeRaidSpec(specId: 71, name: "Arms", isMain: true, iconUrl: "https://cdn/arms.jpg");
+
+        var character = MakeCharacter(raidSpecs: [raidSpec]);
+
+        var dto = CharacterMapper.ToDto(character).RaidSpecs.Single();
+
+        dto.SpecId.Should().Be(71);
+        dto.Name.Should().Be("Arms");
+        dto.IconUrl.Should().Be("https://cdn/arms.jpg");
+        dto.IsMain.Should().BeTrue();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static Character MakeCharacter(
         Faction faction = Faction.Alliance,
-        ICollection<CharacterExpansionState>? states = null) => new()
+        ICollection<CharacterExpansionState>? states = null,
+        ICollection<CharacterRaidSpec>? raidSpecs = null) => new()
     {
         Id            = 1,
         Name          = "Arthas",
@@ -167,9 +201,17 @@ public class CharacterMapperTests
         Branch = new Branch   { Id = 1, Name = "Retail",  BnetNamespacePrefix = "dynamic", CurrentExpansionId = 10 },
         Realm  = new Realm    { Id = 1, Name = "Kazzak", Slug = "kazzak", Region = "eu", BranchId = 1 },
         ExpansionStates = states ?? [new CharacterExpansionState { ExpansionId = 10, Level = 80, IsActive = true }],
+        RaidSpecs = raidSpecs ?? [],
     };
 
     private static BnetCharacterSpec MakeSpec(int specId, string name, bool isMain, string iconUrl = "") => new()
+    {
+        SpecId = specId,
+        IsMain = isMain,
+        Spec   = new Spec { Id = specId, Name = name, IconUrl = iconUrl },
+    };
+
+    private static CharacterRaidSpec MakeRaidSpec(int specId, string name, bool isMain, string iconUrl = "") => new()
     {
         SpecId = specId,
         IsMain = isMain,
