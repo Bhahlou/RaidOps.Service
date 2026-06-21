@@ -55,6 +55,6 @@ public class CharacterExpansionState
     /// <summary>The expansion this snapshot covers.</summary>
     public virtual Expansion Expansion { get; set; } = null!;
 
-    /// <summary>The specialisations the character has played in this expansion.</summary>
-    public virtual ICollection<CharacterSpec> Specs { get; set; } = [];
+    /// <summary>The specialisations the character has played in this expansion, as reported by Battle.net.</summary>
+    public virtual ICollection<BnetCharacterSpec> Specs { get; set; } = [];
 }

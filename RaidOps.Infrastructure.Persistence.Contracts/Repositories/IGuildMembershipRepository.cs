@@ -16,15 +16,6 @@ public interface IGuildMembershipRepository
     Task<List<GuildMembership>> GetByCharacterIdAsync(int characterId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all memberships in the given guild that belong to characters owned by the specified user.
-    /// Includes Character (with Realm and Class) navigation data.
-    /// </summary>
-    /// <param name="guildId">Discord snowflake ID of the guild.</param>
-    /// <param name="userDiscordId">Discord snowflake ID of the player.</param>
-    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    Task<List<GuildMembership>> GetByGuildIdAndUserAsync(string guildId, string userDiscordId, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Returns all memberships in the given guild, including Character (with Realm and Class) navigation data.
     /// </summary>
     /// <param name="guildId">Discord snowflake ID of the guild.</param>

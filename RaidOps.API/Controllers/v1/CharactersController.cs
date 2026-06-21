@@ -22,7 +22,8 @@ public class CharactersController(
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
     /// <summary>
-    /// Returns all WoW characters the user has activated in RaidOps.
+    /// Returns all WoW characters the user has activated in RaidOps, along with their linked
+    /// Battle.net account — everything the characters list page needs in one request.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
@@ -30,7 +31,7 @@ public class CharactersController(
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null) return Unauthorized();
 
-        var result = await QueryDispatcher.DispatchAsync<GetCharactersQuery, IEnumerable<CharacterDto>>(
+        var result = await QueryDispatcher.DispatchAsync<GetCharactersQuery, GetCharactersResponse>(
             new GetCharactersQuery { UserDiscordId = discordId }, cancellationToken);
 
         return ToActionResult(result);
@@ -116,6 +117,30 @@ public class CharactersController(
             return BadRequest(new { error = result.Error, detail = result.Detail });
 
         return Ok(result.Value!.Body);
+    }
+
+    /// <summary>
+    /// Sets the user-curated specs the character is viable to raid with, replacing any previous set.
+    /// Usable right after activation or later as an edit. The character must belong to the authenticated user.
+    /// </summary>
+    [HttpPost("{id:int}/raid-specs")]
+    public async Task<IActionResult> SetRaidSpecs(
+        int id,
+        [FromBody] SetCharacterRaidSpecsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
+
+        var result = await CommandDispatcher.DispatchAsync(new SetCharacterRaidSpecsCommand
+        {
+            UserDiscordId = discordId,
+            CharacterId = id,
+            MainSpecId = request.MainSpecId,
+            ViableSpecIds = request.ViableSpecIds,
+        }, cancellationToken);
+
+        return ToActionResult(result);
     }
 
     /// <summary>

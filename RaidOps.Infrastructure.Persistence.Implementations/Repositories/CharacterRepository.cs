@@ -37,6 +37,10 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
             .Include(c => c.ExpansionStates)
                 .ThenInclude(s => s.Specs)
                     .ThenInclude(cs => cs.Spec)
+            .Include(c => c.RaidSpecs)
+                .ThenInclude(rs => rs.Spec)
+            .Include(c => c.GuildMemberships)
+                .ThenInclude(m => m.Guild)
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
     }
@@ -144,24 +148,44 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
             {
                 var stateId = existing.Id;
 
-                await context.CharacterSpecs
+                await context.BnetCharacterSpecs
                     .Where(s => s.CharacterExpansionStateId == stateId)
                     .ExecuteDeleteAsync(cancellationToken);
 
                 // Clear tracker to avoid relationship-fixup conflicts from accumulated state.
                 context.ChangeTracker.Clear();
 
-                var freshSpecs = state.Specs.Select(s => new CharacterSpec
+                var freshSpecs = state.Specs.Select(s => new BnetCharacterSpec
                 {
                     CharacterExpansionStateId = stateId,
                     SpecId = s.SpecId,
                     IsMain = s.IsMain,
                 }).ToList();
 
-                context.CharacterSpecs.AddRange(freshSpecs);
+                context.BnetCharacterSpecs.AddRange(freshSpecs);
                 await context.SaveChangesAsync(cancellationToken);
             }
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task UpsertRaidSpecsAsync(int characterId, IEnumerable<CharacterRaidSpec> raidSpecs, CancellationToken cancellationToken = default)
+    {
+        await context.CharacterRaidSpecs
+            .Where(rs => rs.CharacterId == characterId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        context.ChangeTracker.Clear();
+
+        var freshSpecs = raidSpecs.Select(rs => new CharacterRaidSpec
+        {
+            CharacterId = characterId,
+            SpecId = rs.SpecId,
+            IsMain = rs.IsMain,
+        }).ToList();
+
+        context.CharacterRaidSpecs.AddRange(freshSpecs);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc/>

@@ -65,4 +65,11 @@ public interface ICharacterRepository
     /// Returns <c>true</c> if the character was found and deactivated; <c>false</c> if not found.
     /// </summary>
     Task<bool> DeactivateAsync(int characterId, string userDiscordId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fully replaces the user-curated raid-viable specs for the given character with
+    /// <paramref name="raidSpecs"/>. Unlike <see cref="UpsertExpansionStateAsync"/>'s BNet-sourced
+    /// specs, these are never touched by sync — only by this method.
+    /// </summary>
+    Task UpsertRaidSpecsAsync(int characterId, IEnumerable<CharacterRaidSpec> raidSpecs, CancellationToken cancellationToken = default);
 }

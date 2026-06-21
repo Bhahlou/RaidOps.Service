@@ -49,7 +49,7 @@ public class CharacterMapperTests
         dto.Level.Should().Be(0);
         dto.ItemLevel.Should().BeNull();
         dto.GuildName.Should().BeNull();
-        dto.Specs.Should().BeEmpty();
+        dto.BnetSpecs.Should().BeEmpty();
     }
 
     // ── Field mapping ─────────────────────────────────────────────────────────
@@ -121,10 +121,10 @@ public class CharacterMapperTests
 
         var dto = CharacterMapper.ToDto(character);
 
-        dto.Specs.Should().HaveCount(2);
-        dto.Specs[0].IsMain.Should().BeTrue();
-        dto.Specs[0].SpecId.Should().Be(72);
-        dto.Specs[1].IsMain.Should().BeFalse();
+        dto.BnetSpecs.Should().HaveCount(2);
+        dto.BnetSpecs[0].IsMain.Should().BeTrue();
+        dto.BnetSpecs[0].SpecId.Should().Be(72);
+        dto.BnetSpecs[1].IsMain.Should().BeFalse();
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class CharacterMapperTests
             },
         ]);
 
-        var dto = CharacterMapper.ToDto(character).Specs.Single();
+        var dto = CharacterMapper.ToDto(character).BnetSpecs.Single();
 
         dto.SpecId.Should().Be(71);
         dto.Name.Should().Be("Arms");
@@ -169,7 +169,7 @@ public class CharacterMapperTests
         ExpansionStates = states ?? [new CharacterExpansionState { ExpansionId = 10, Level = 80, IsActive = true }],
     };
 
-    private static CharacterSpec MakeSpec(int specId, string name, bool isMain, string iconUrl = "") => new()
+    private static BnetCharacterSpec MakeSpec(int specId, string name, bool isMain, string iconUrl = "") => new()
     {
         SpecId = specId,
         IsMain = isMain,

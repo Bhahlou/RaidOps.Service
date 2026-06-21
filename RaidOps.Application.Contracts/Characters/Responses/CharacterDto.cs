@@ -1,3 +1,5 @@
+using RaidOps.Application.Contracts.Guilds.Memberships.Responses;
+
 namespace RaidOps.Application.Contracts.Characters.Responses;
 
 /// <summary>
@@ -20,6 +22,12 @@ public class CharacterDto : CharacterBaseDto
     /// <summary>In-game guild name from the active expansion state. <c>null</c> if unguilded or not yet fetched.</summary>
     public string? GuildName { get; set; }
 
-    /// <summary>Active specialisations for this character (main spec + optional offspec).</summary>
-    public List<CharacterSpecDto> Specs { get; set; } = [];
+    /// <summary>Active specialisations for this character as reported by Battle.net (main spec + optional offspec).</summary>
+    public List<BnetCharacterSpecDto> BnetSpecs { get; set; } = [];
+
+    /// <summary>User-curated specs this character is viable to raid with. Empty until the user sets them.</summary>
+    public List<CharacterRaidSpecDto> RaidSpecs { get; set; } = [];
+
+    /// <summary>Guild rosters this character is currently a member of.</summary>
+    public List<GuildMembershipResponse> GuildMemberships { get; set; } = [];
 }

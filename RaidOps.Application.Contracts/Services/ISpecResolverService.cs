@@ -10,10 +10,10 @@ namespace RaidOps.Application.Contracts.Services;
 public interface ISpecResolverService
 {
     /// <summary>
-    /// Returns the resolved <see cref="CharacterSpec"/> collection (main + offspec)
+    /// Returns the resolved <see cref="BnetCharacterSpec"/> collection (main + offspec)
     /// to persist on the given <paramref name="state"/>.
     /// </summary>
-    Task<ICollection<CharacterSpec>> ResolveAsync(
+    Task<ICollection<BnetCharacterSpec>> ResolveAsync(
         BnetCharacterSpecializationsResponse specsResponse,
         int classId,
         CharacterExpansionState state,

@@ -1,4 +1,5 @@
 using RaidOps.Application.Contracts.Characters.Responses;
+using RaidOps.Application.Contracts.Guilds.Memberships.Responses;
 using RaidOps.Domain.Models.Character;
 
 namespace RaidOps.Application.Implementations.Characters;
@@ -34,14 +35,34 @@ internal static class CharacterMapper
             ItemLevel  = activeState?.ItemLevel,
             AvatarUrl  = c.AvatarUrl,
             GuildName  = activeState?.GuildName,
-            Specs      = (activeState?.Specs ?? [])
+            BnetSpecs  = (activeState?.Specs ?? [])
                 .OrderByDescending(s => s.IsMain)
-                .Select(s => new CharacterSpecDto
+                .Select(s => new BnetCharacterSpecDto
                 {
                     SpecId  = s.SpecId,
                     Name    = s.Spec.Name,
                     IconUrl = s.Spec.IconUrl,
                     IsMain  = s.IsMain,
+                })
+                .ToList(),
+            RaidSpecs  = c.RaidSpecs
+                .OrderByDescending(rs => rs.IsMain)
+                .Select(rs => new CharacterRaidSpecDto
+                {
+                    SpecId  = rs.SpecId,
+                    Name    = rs.Spec.Name,
+                    IconUrl = rs.Spec.IconUrl,
+                    IsMain  = rs.IsMain,
+                })
+                .ToList(),
+            GuildMemberships = c.GuildMemberships
+                .Select(m => new GuildMembershipResponse
+                {
+                    GuildId       = m.GuildId,
+                    GuildName     = m.Guild.Name,
+                    GuildIconHash = m.Guild.IconHash,
+                    CharacterRank = m.CharacterRank,
+                    JoinedAt      = m.JoinedAt,
                 })
                 .ToList(),
         };

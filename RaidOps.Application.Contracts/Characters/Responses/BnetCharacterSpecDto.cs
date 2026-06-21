@@ -1,7 +1,7 @@
 namespace RaidOps.Application.Contracts.Characters.Responses;
 
-/// <summary>A specialisation linked to a character for a given expansion.</summary>
-public class CharacterSpecDto
+/// <summary>A specialisation linked to a character for a given expansion, as reported by Battle.net.</summary>
+public class BnetCharacterSpecDto
 {
     /// <summary>Blizzard spec ID.</summary>
     public int SpecId { get; set; }
