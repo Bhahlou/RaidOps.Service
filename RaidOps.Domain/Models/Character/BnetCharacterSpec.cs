@@ -4,13 +4,14 @@ using RaidOps.Domain.Models.Reference;
 namespace RaidOps.Domain.Models.Character;
 
 /// <summary>
-/// Links a <see cref="Spec"/> to a <see cref="CharacterExpansionState"/>.
-/// A character can have multiple specs per expansion (e.g. main + off-spec).
+/// Links a <see cref="Spec"/> to a <see cref="CharacterExpansionState"/>, as reported by the
+/// Battle.net API (main + off-spec). Recalculated and fully replaced on every activation/resync —
+/// not to be confused with <c>CharacterRaidSpec</c>, which is user-curated and never touched by sync.
 /// Composite primary key: (<see cref="CharacterExpansionStateId"/>, <see cref="SpecId"/>, <see cref="IsMain"/>)
 /// — <see cref="IsMain"/> is part of the PK to allow Classic same-spec dual-spec (e.g. Ret/Ret).
 /// </summary>
-[Table("CharacterSpecs")]
-public class CharacterSpec
+[Table("BnetCharacterSpecs")]
+public class BnetCharacterSpec
 {
     /// <summary>FK to the expansion state this spec entry belongs to.</summary>
     public int CharacterExpansionStateId { get; set; }

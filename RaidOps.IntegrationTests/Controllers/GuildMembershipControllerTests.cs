@@ -26,13 +26,6 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
     // ── Auth enforcement ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetCharacterMemberships_WithoutToken_Returns401()
-    {
-        var response = await Client.GetAsync("/api/v1/characters/1/memberships");
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
     public async Task GetEligibleGuilds_WithoutToken_Returns401()
     {
         var response = await Client.GetAsync("/api/v1/characters/1/eligible-guilds");
@@ -60,80 +53,6 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
     {
         var response = await Client.DeleteAsync("/api/v1/characters/1/memberships/guild-1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetMyCharactersInGuild_WithoutToken_Returns401()
-    {
-        var response = await Client.GetAsync("/api/v1/guilds/guild-1/my-characters");
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    // ── GetCharacterMemberships ─────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetCharacterMemberships_WhenCharacterNotFound_Returns400()
-    {
-        const string id = "400000000000000001";
-        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync("/api/v1/characters/99999/memberships");
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task GetCharacterMemberships_WhenNotOwner_Returns400()
-    {
-        const string ownerId     = "400000000000000011";
-        const string requesterId = "400000000000000012";
-        var charId = await SeedUserWithCharacter(ownerId, bnetCharacterId: 80011);
-        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(requesterId)); return Task.CompletedTask; });
-        var client = CreateAuthenticatedClient(discordId: requesterId);
-
-        var response = await client.GetAsync($"/api/v1/characters/{charId}/memberships");
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task GetCharacterMemberships_WhenNoMemberships_ReturnsEmptyList()
-    {
-        const string id = "400000000000000020";
-        var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80020);
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/characters/{charId}/memberships");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<List<GuildMembershipResponse>>();
-        body.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetCharacterMemberships_WhenMembershipsExist_ReturnsList()
-    {
-        const string id      = "400000000000000021";
-        const string guildId = "820000000000000021";
-        var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80021);
-        await SeedAsync(db =>
-        {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildMemberships.Add(new GuildMembership
-            {
-                CharacterId = charId, GuildId = guildId,
-                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
-            });
-            return Task.CompletedTask;
-        });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/characters/{charId}/memberships");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<List<GuildMembershipResponse>>(ApiJsonOptions);
-        body.Should().ContainSingle(m => m.GuildId == guildId && m.CharacterRank == CharacterRank.Main);
     }
 
     // ── GetEligibleGuilds ───────────────────────────────────────────────────
@@ -399,53 +318,6 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
             var membership = await db.GuildMemberships.FindAsync(charId, guildId);
             membership.Should().BeNull();
         }
-    }
-
-    // ── GetMyCharactersInGuild ─────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetMyCharactersInGuild_WhenNoCharactersOnRoster_ReturnsEmptyList()
-    {
-        const string id      = "400000000000000070";
-        const string guildId = "820000000000000070";
-        await SeedAsync(db =>
-        {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            return Task.CompletedTask;
-        });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/my-characters");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<List<CharacterInGuildResponse>>();
-        body.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetMyCharactersInGuild_WhenCharactersOnRoster_ReturnsList()
-    {
-        const string id      = "400000000000000071";
-        const string guildId = "820000000000000071";
-        var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80071);
-        await SeedAsync(db =>
-        {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildMemberships.Add(new GuildMembership
-            {
-                CharacterId = charId, GuildId = guildId,
-                CharacterRank = CharacterRank.Alt, JoinedAt = DateTime.UtcNow,
-            });
-            return Task.CompletedTask;
-        });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/my-characters");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<List<CharacterInGuildResponse>>(ApiJsonOptions);
-        body.Should().ContainSingle(c => c.CharacterId == charId && c.CharacterRank == CharacterRank.Alt);
     }
 
     // ── Audit log persistence ─────────────────────────────────────────────

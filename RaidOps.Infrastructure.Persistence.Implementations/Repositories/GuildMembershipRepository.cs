@@ -21,18 +21,6 @@ public class GuildMembershipRepository(RaidOpsDbContext context) : IGuildMembers
             .ToListAsync(cancellationToken);
 
     /// <summary>
-    /// Returns the memberships in a guild that belong to characters owned by the given user.
-    /// </summary>
-    public async Task<List<GuildMembership>> GetByGuildIdAndUserAsync(string guildId, string userDiscordId, CancellationToken cancellationToken = default)
-        => await context.GuildMemberships
-            .Include(m => m.Character).ThenInclude(c => c.Realm)
-            .Include(m => m.Character).ThenInclude(c => c.Class)
-            .Include(m => m.Character).ThenInclude(c => c.ExpansionStates)
-            .Where(m => m.GuildId == guildId && m.Character.UserDiscordId == userDiscordId && m.Character.IsActiveInRaidOps)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-    /// <summary>
     /// Returns all roster memberships for the given guild with character navigation data.
     /// </summary>
     public async Task<List<GuildMembership>> GetByGuildIdAsync(string guildId, CancellationToken cancellationToken = default)

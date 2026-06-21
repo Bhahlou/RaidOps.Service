@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -11,9 +12,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260620203922_RenameCharacterSpecsAndAddCharacterRaidSpecs")]
+    partial class RenameCharacterSpecsAndAddCharacterRaidSpecs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -54,7 +57,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("UserDiscordId");
 
-                    b.ToTable("BattleNetAccounts", (string)null);
+                    b.ToTable("BattleNetAccounts");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Character.BnetCharacterSpec", b =>
@@ -72,7 +75,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("SpecId");
 
-                    b.ToTable("BnetCharacterSpecs", (string)null);
+                    b.ToTable("BnetCharacterSpecs");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Character.Character", b =>
@@ -135,7 +138,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("BnetCharacterId", "RealmId")
                         .IsUnique();
 
-                    b.ToTable("Characters", (string)null);
+                    b.ToTable("Characters");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Character.CharacterExpansionState", b =>
@@ -172,7 +175,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("CharacterId", "ExpansionId")
                         .IsUnique();
 
-                    b.ToTable("CharacterExpansionStates", (string)null);
+                    b.ToTable("CharacterExpansionStates");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Character.CharacterRaidSpec", b =>
@@ -190,7 +193,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("SpecId");
 
-                    b.ToTable("CharacterRaidSpecs", (string)null);
+                    b.ToTable("CharacterRaidSpecs");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Character.Realm", b =>
@@ -226,7 +229,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("Slug", "Region", "BranchId")
                         .IsUnique();
 
-                    b.ToTable("Realms", (string)null);
+                    b.ToTable("Realms");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.Guild", b =>
@@ -255,7 +258,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Guilds", (string)null);
+                    b.ToTable("Guilds");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.GuildAuditLog", b =>
@@ -288,7 +291,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("GuildId", "OccurredAt");
 
-                    b.ToTable("GuildAuditLogs", (string)null);
+                    b.ToTable("GuildAuditLogs");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.GuildMembership", b =>
@@ -309,7 +312,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("GuildId");
 
-                    b.ToTable("GuildMemberships", (string)null);
+                    b.ToTable("GuildMemberships");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.User", b =>
@@ -333,7 +336,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("DiscordId");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.UserGuild", b =>
@@ -351,7 +354,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("GuildId");
 
-                    b.ToTable("UserGuilds", (string)null);
+                    b.ToTable("UserGuilds");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Branch", b =>
@@ -376,7 +379,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("CurrentExpansionId");
 
-                    b.ToTable("Branches", (string)null);
+                    b.ToTable("Branches");
 
                     b.HasData(
                         new
@@ -429,7 +432,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Expansions", (string)null);
+                    b.ToTable("Expansions");
 
                     b.HasData(
                         new
@@ -529,7 +532,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Races", (string)null);
+                    b.ToTable("Races");
 
                     b.HasData(
                         new
@@ -764,7 +767,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasIndex("ClassId");
 
-                    b.ToTable("Specs", (string)null);
+                    b.ToTable("Specs");
 
                     b.HasData(
                         new
@@ -1101,7 +1104,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("WowClasses", (string)null);
+                    b.ToTable("WowClasses");
 
                     b.HasData(
                         new

@@ -32,36 +32,6 @@ public class GuildMembershipControllerTests
         };
     }
 
-    // ── GetCharacterMemberships ───────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetCharacterMemberships_SubMissing_ReturnsUnauthorized()
-    {
-        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
-        (await _sut.GetCharacterMemberships(CharacterId, default)).Should().BeOfType<UnauthorizedResult>();
-    }
-
-    [Fact]
-    public async Task GetCharacterMemberships_QuerySucceeds_ReturnsOk()
-    {
-        _queries.Setup(q => q.DispatchAsync<GetCharacterMembershipsQuery, List<GuildMembershipResponse>>(
-                It.Is<GetCharacterMembershipsQuery>(x =>
-                    x.CharacterId == CharacterId && x.RequesterDiscordId == DiscordId), default))
-            .ReturnsAsync(Result<List<GuildMembershipResponse>>.Ok([]));
-
-        (await _sut.GetCharacterMemberships(CharacterId, default)).Should().BeOfType<OkObjectResult>();
-    }
-
-    [Fact]
-    public async Task GetCharacterMemberships_QueryFails_ReturnsBadRequest()
-    {
-        _queries.Setup(q => q.DispatchAsync<GetCharacterMembershipsQuery, List<GuildMembershipResponse>>(
-                It.IsAny<GetCharacterMembershipsQuery>(), default))
-            .ReturnsAsync(Result<List<GuildMembershipResponse>>.Fail(ResponseDetail.CharacterNotFound));
-
-        (await _sut.GetCharacterMemberships(CharacterId, default)).Should().BeOfType<BadRequestObjectResult>();
-    }
-
     // ── GetEligibleGuilds ─────────────────────────────────────────────────────
 
     [Fact]
@@ -191,23 +161,4 @@ public class GuildMembershipControllerTests
         (await _sut.LeaveGuild(CharacterId, GuildId, default)).Should().BeOfType<BadRequestObjectResult>();
     }
 
-    // ── GetMyCharactersInGuild ────────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetMyCharactersInGuild_SubMissing_ReturnsUnauthorized()
-    {
-        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
-        (await _sut.GetMyCharactersInGuild(GuildId, default)).Should().BeOfType<UnauthorizedResult>();
-    }
-
-    [Fact]
-    public async Task GetMyCharactersInGuild_QuerySucceeds_ReturnsOk()
-    {
-        _queries.Setup(q => q.DispatchAsync<GetMyMembershipsInGuildQuery, List<CharacterInGuildResponse>>(
-                It.Is<GetMyMembershipsInGuildQuery>(x =>
-                    x.GuildId == GuildId && x.RequesterDiscordId == DiscordId), default))
-            .ReturnsAsync(Result<List<CharacterInGuildResponse>>.Ok([]));
-
-        (await _sut.GetMyCharactersInGuild(GuildId, default)).Should().BeOfType<OkObjectResult>();
-    }
 }

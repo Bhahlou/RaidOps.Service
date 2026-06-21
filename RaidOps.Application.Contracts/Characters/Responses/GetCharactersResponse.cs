@@ -1,0 +1,14 @@
+namespace RaidOps.Application.Contracts.Characters.Responses;
+
+/// <summary>
+/// Response for <c>GET /api/v1/characters</c> — bundles the user's linked Battle.net account
+/// alongside their characters so the front end can load everything for the page in one request.
+/// </summary>
+public class GetCharactersResponse
+{
+    /// <summary>The user's linked Battle.net account, or <c>null</c> if none is linked yet.</summary>
+    public BnetAccountResponse? BnetAccount { get; set; }
+
+    /// <summary>The user's imported characters.</summary>
+    public List<CharacterDto> Characters { get; set; } = [];
+}

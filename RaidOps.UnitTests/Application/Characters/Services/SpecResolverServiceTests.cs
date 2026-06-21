@@ -139,7 +139,7 @@ public class SpecResolverServiceTests
     public async Task Classic_SameSpecDualSpec_ProducesTwoEntriesWithDifferentIsMain()
     {
         // Regression guard: a player running the same spec in both talent sets (e.g. Ret/Ret,
-        // Prot/Prot) must produce two CharacterSpec rows with the same SpecId.
+        // Prot/Prot) must produce two BnetCharacterSpec rows with the same SpecId.
         // The DB PK is (CharacterExpansionStateId, SpecId, IsMain) — changed from
         // (CharacterExpansionStateId, SpecId) — specifically to allow this.
         var ret = MakeSpec(70, "Retribution");

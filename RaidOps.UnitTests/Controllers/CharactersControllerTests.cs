@@ -39,9 +39,9 @@ public class CharactersControllerTests
     [Fact]
     public async Task GetAll_QuerySucceeds_ReturnsOk()
     {
-        _queries.Setup(q => q.DispatchAsync<GetCharactersQuery, IEnumerable<CharacterDto>>(
+        _queries.Setup(q => q.DispatchAsync<GetCharactersQuery, GetCharactersResponse>(
                 It.Is<GetCharactersQuery>(x => x.UserDiscordId == DiscordId), default))
-            .ReturnsAsync(Result<IEnumerable<CharacterDto>>.Ok([]));
+            .ReturnsAsync(Result<GetCharactersResponse>.Ok(new GetCharactersResponse()));
 
         (await _sut.GetAll(default)).Should().BeOfType<OkObjectResult>();
     }
@@ -134,6 +134,36 @@ public class CharactersControllerTests
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.NotFound));
 
         (await _sut.Resync(10, default)).Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    // ── SetRaidSpecs ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SetRaidSpecs_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.SetRaidSpecs(10, new SetCharacterRaidSpecsRequest { MainSpecId = 71, ViableSpecIds = [71] }, default))
+            .Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task SetRaidSpecs_CommandSucceeds_ReturnsOk()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<SetCharacterRaidSpecsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        (await _sut.SetRaidSpecs(10, new SetCharacterRaidSpecsRequest { MainSpecId = 71, ViableSpecIds = [71, 72] }, default))
+            .Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task SetRaidSpecs_CommandFails_ReturnsBadRequest()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<SetCharacterRaidSpecsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest));
+
+        (await _sut.SetRaidSpecs(10, new SetCharacterRaidSpecsRequest { MainSpecId = 71, ViableSpecIds = [71] }, default))
+            .Should().BeOfType<BadRequestObjectResult>();
     }
 
     // ── Deactivate ────────────────────────────────────────────────────────────

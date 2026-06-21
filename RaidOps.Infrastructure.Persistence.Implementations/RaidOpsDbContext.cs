@@ -60,8 +60,11 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="CharacterExpansionState"/> table.</summary>
     public DbSet<CharacterExpansionState> CharacterExpansionStates => Set<CharacterExpansionState>();
 
-    /// <summary>Gets the <see cref="CharacterSpec"/> join table.</summary>
-    public DbSet<CharacterSpec> CharacterSpecs => Set<CharacterSpec>();
+    /// <summary>Gets the <see cref="BnetCharacterSpec"/> join table.</summary>
+    public DbSet<BnetCharacterSpec> BnetCharacterSpecs => Set<BnetCharacterSpec>();
+
+    /// <summary>Gets the <see cref="CharacterRaidSpec"/> join table.</summary>
+    public DbSet<CharacterRaidSpec> CharacterRaidSpecs => Set<CharacterRaidSpec>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -137,20 +140,34 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasIndex(s => new { s.CharacterId, s.ExpansionId })
             .IsUnique();
 
-        // CharacterSpec — composite PK (CharacterExpansionStateId, SpecId, IsMain)
+        // BnetCharacterSpec — composite PK (CharacterExpansionStateId, SpecId, IsMain)
         // IsMain is included so Classic same-spec dual-spec (e.g. Ret/Ret) can be stored.
-        modelBuilder.Entity<CharacterSpec>()
+        modelBuilder.Entity<BnetCharacterSpec>()
             .HasKey(cs => new { cs.CharacterExpansionStateId, cs.SpecId, cs.IsMain });
 
-        modelBuilder.Entity<CharacterSpec>()
+        modelBuilder.Entity<BnetCharacterSpec>()
             .HasOne(cs => cs.CharacterExpansionState)
             .WithMany(s => s.Specs)
             .HasForeignKey(cs => cs.CharacterExpansionStateId);
 
-        modelBuilder.Entity<CharacterSpec>()
+        modelBuilder.Entity<BnetCharacterSpec>()
             .HasOne(cs => cs.Spec)
             .WithMany()
             .HasForeignKey(cs => cs.SpecId);
+
+        // CharacterRaidSpec — composite PK (CharacterId, SpecId); user-curated, no IsMain-in-PK quirk needed
+        modelBuilder.Entity<CharacterRaidSpec>()
+            .HasKey(rs => new { rs.CharacterId, rs.SpecId });
+
+        modelBuilder.Entity<CharacterRaidSpec>()
+            .HasOne(rs => rs.Character)
+            .WithMany(c => c.RaidSpecs)
+            .HasForeignKey(rs => rs.CharacterId);
+
+        modelBuilder.Entity<CharacterRaidSpec>()
+            .HasOne(rs => rs.Spec)
+            .WithMany()
+            .HasForeignKey(rs => rs.SpecId);
 
         // GuildMembership — composite PK (CharacterId, GuildId)
         modelBuilder.Entity<GuildMembership>()
@@ -158,7 +175,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<GuildMembership>()
             .HasOne(m => m.Character)
-            .WithMany()
+            .WithMany(c => c.GuildMemberships)
             .HasForeignKey(m => m.CharacterId);
 
         modelBuilder.Entity<GuildMembership>()

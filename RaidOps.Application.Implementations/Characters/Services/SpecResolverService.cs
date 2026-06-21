@@ -20,7 +20,7 @@ namespace RaidOps.Application.Implementations.Characters.Services;
 public class SpecResolverService(ICharacterRepository characterRepository) : ISpecResolverService
 {
     /// <inheritdoc/>
-    public Task<ICollection<CharacterSpec>> ResolveAsync(
+    public Task<ICollection<BnetCharacterSpec>> ResolveAsync(
         BnetCharacterSpecializationsResponse specsResponse,
         int classId,
         CharacterExpansionState state,
@@ -31,30 +31,30 @@ public class SpecResolverService(ICharacterRepository characterRepository) : ISp
             : ResolveClassicAsync(specsResponse, classId, state, cancellationToken);
     }
 
-    private async Task<ICollection<CharacterSpec>> ResolveModernAsync(
+    private async Task<ICollection<BnetCharacterSpec>> ResolveModernAsync(
         BnetCharacterSpecializationsResponse specsResponse,
         CharacterExpansionState state,
         CancellationToken cancellationToken)
     {
         var activeId = specsResponse.ActiveSpecialization!.Id;
-        var result = new List<CharacterSpec>();
+        var result = new List<BnetCharacterSpec>();
 
         var mainSpec = await characterRepository.GetSpecByIdAsync(activeId, cancellationToken);
         if (mainSpec is not null)
-            result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = mainSpec.Id, IsMain = true });
+            result.Add(new BnetCharacterSpec { CharacterExpansionStateId = state.Id, SpecId = mainSpec.Id, IsMain = true });
 
         var offspecEntry = specsResponse.Specializations.FirstOrDefault(s => s.Specialization.Id != activeId);
         if (offspecEntry is not null)
         {
             var offSpec = await characterRepository.GetSpecByIdAsync(offspecEntry.Specialization.Id, cancellationToken);
             if (offSpec is not null && result.All(r => r.SpecId != offSpec.Id))
-                result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
+                result.Add(new BnetCharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
         }
 
         return result;
     }
 
-    private async Task<ICollection<CharacterSpec>> ResolveClassicAsync(
+    private async Task<ICollection<BnetCharacterSpec>> ResolveClassicAsync(
         BnetCharacterSpecializationsResponse specsResponse,
         int classId,
         CharacterExpansionState state,
@@ -63,14 +63,14 @@ public class SpecResolverService(ICharacterRepository characterRepository) : ISp
         var activeGroup   = specsResponse.SpecializationGroups.FirstOrDefault(g => g.IsActive);
         var inactiveGroup = specsResponse.SpecializationGroups.FirstOrDefault(g => !g.IsActive);
 
-        var result = new List<CharacterSpec>();
+        var result = new List<BnetCharacterSpec>();
 
         var mainTree = activeGroup?.Specializations.MaxBy(t => t.SpentPoints);
         if (mainTree is not null)
         {
             var mainSpec = await characterRepository.GetSpecByNameAndClassAsync(ResolveClassicSpecName(mainTree), classId, cancellationToken);
             if (mainSpec is not null)
-                result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = mainSpec.Id, IsMain = true });
+                result.Add(new BnetCharacterSpec { CharacterExpansionStateId = state.Id, SpecId = mainSpec.Id, IsMain = true });
         }
 
         var offTree = inactiveGroup?.Specializations.MaxBy(t => t.SpentPoints);
@@ -79,7 +79,7 @@ public class SpecResolverService(ICharacterRepository characterRepository) : ISp
             var offSpec = await characterRepository.GetSpecByNameAndClassAsync(ResolveClassicSpecName(offTree), classId, cancellationToken);
             // No dedup: same-spec dual-spec is valid in Classic (e.g. Ret/Ret with different talent builds).
             if (offSpec is not null)
-                result.Add(new CharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
+                result.Add(new BnetCharacterSpec { CharacterExpansionStateId = state.Id, SpecId = offSpec.Id, IsMain = false });
         }
 
         return result;

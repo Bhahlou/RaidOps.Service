@@ -81,4 +81,10 @@ public class Character
 
     /// <summary>Per-expansion progress snapshots (level, item level, active specs).</summary>
     public virtual ICollection<CharacterExpansionState> ExpansionStates { get; set; } = [];
+
+    /// <summary>User-curated specs this character is viable to raid with. Not tied to BNet sync.</summary>
+    public virtual ICollection<CharacterRaidSpec> RaidSpecs { get; set; } = [];
+
+    /// <summary>Guild rosters this character is currently a member of.</summary>
+    public virtual ICollection<GuildMembership> GuildMemberships { get; set; } = [];
 }

@@ -21,22 +21,6 @@ public class GuildMembershipController(
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
     /// <summary>
-    /// Returns all guilds a character is currently on the roster of.
-    /// </summary>
-    [HttpGet("characters/{characterId:int}/memberships")]
-    public async Task<IActionResult> GetCharacterMemberships(int characterId, CancellationToken cancellationToken)
-    {
-        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        if (discordId == null) return Unauthorized();
-
-        var result = await QueryDispatcher.DispatchAsync<GetCharacterMembershipsQuery, List<GuildMembershipResponse>>(
-            new GetCharacterMembershipsQuery { CharacterId = characterId, RequesterDiscordId = discordId },
-            cancellationToken);
-
-        return ToActionResult(result);
-    }
-
-    /// <summary>
     /// Returns the guilds that a character is eligible to join
     /// (Discord member, configured roster mode grants access, not yet a member).
     /// </summary>
@@ -106,22 +90,6 @@ public class GuildMembershipController(
 
         var result = await CommandDispatcher.DispatchAsync(
             new LeaveGuildCommand { CharacterId = characterId, GuildId = guildId, RequesterDiscordId = discordId },
-            cancellationToken);
-
-        return ToActionResult(result);
-    }
-
-    /// <summary>
-    /// Returns the requesting user's characters that are on a specific guild's roster.
-    /// </summary>
-    [HttpGet("guilds/{guildId}/my-characters")]
-    public async Task<IActionResult> GetMyCharactersInGuild(string guildId, CancellationToken cancellationToken)
-    {
-        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        if (discordId == null) return Unauthorized();
-
-        var result = await QueryDispatcher.DispatchAsync<GetMyMembershipsInGuildQuery, List<CharacterInGuildResponse>>(
-            new GetMyMembershipsInGuildQuery { GuildId = guildId, RequesterDiscordId = discordId },
             cancellationToken);
 
         return ToActionResult(result);
