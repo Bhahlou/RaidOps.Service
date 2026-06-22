@@ -53,33 +53,9 @@ public class UpdateGuildSettingsCommandHandler(
         var variables = new Dictionary<string, string>();
         var changedFields = new List<string>();
 
-        if (oldTimezone != command.Timezone)
-        {
-            changedFields.Add("timezone");
-            if (oldTimezone != null)
-                variables["oldTimezone"] = oldTimezone;
-            variables["newTimezone"] = command.Timezone;
-        }
-
-        if (oldRosterMode != command.RosterMode)
-        {
-            changedFields.Add("rosterMode");
-            if (oldRosterMode != null)
-                variables["oldRosterMode"] = oldRosterMode.ToString()!;
-            variables["newRosterMode"] = command.RosterMode.ToString();
-        }
-
-        // Only meaningful when the role threshold still applies in the new state — switching to
-        // Open makes any prior role threshold moot, so there's nothing worth logging about it.
-        if (command.RosterMode == RosterMode.DiscordRoleOnly && oldMinRosterRoleId != newMinRosterRoleId)
-        {
-            changedFields.Add("minRosterRoleId");
-            var roles = TryGetRoles(command.GuildId, cancellationToken);
-            if (oldMinRosterRoleId != null)
-                AddRoleVariables(variables, "old", roles, oldMinRosterRoleId);
-            if (newMinRosterRoleId != null)
-                AddRoleVariables(variables, "new", roles, newMinRosterRoleId);
-        }
+        RecordChange(variables, changedFields, "timezone", "Timezone", oldTimezone, command.Timezone);
+        RecordChange(variables, changedFields, "rosterMode", "RosterMode", oldRosterMode, command.RosterMode);
+        RecordMinRosterRoleChange(variables, changedFields, command.GuildId, command.RosterMode, oldMinRosterRoleId, newMinRosterRoleId, cancellationToken);
 
         if (changedFields.Count > 0)
         {
@@ -96,6 +72,54 @@ public class UpdateGuildSettingsCommandHandler(
     }
 
     /// <summary>
+    /// Records a scalar field change: adds <paramref name="changedFieldKey"/> to
+    /// <paramref name="changedFields"/> and the old/new values to <paramref name="variables"/>,
+    /// or does nothing if the value didn't change. The old value is omitted when null
+    /// (first-time configuration), so the audit log doesn't show a meaningless "from nothing".
+    /// </summary>
+    private static void RecordChange<T>(
+        Dictionary<string, string> variables,
+        List<string> changedFields,
+        string changedFieldKey,
+        string variableSuffix,
+        T? oldValue,
+        T newValue)
+    {
+        if (Equals(oldValue, newValue))
+            return;
+
+        changedFields.Add(changedFieldKey);
+        if (oldValue is not null)
+            variables[$"old{variableSuffix}"] = oldValue.ToString()!;
+        variables[$"new{variableSuffix}"] = newValue!.ToString()!;
+    }
+
+    /// <summary>
+    /// Records a minimum-roster-role change, resolving the old/new role display info.
+    /// Only meaningful when the role threshold still applies in the new state — switching to
+    /// Open makes any prior role threshold moot, so there's nothing worth logging about it.
+    /// </summary>
+    private void RecordMinRosterRoleChange(
+        Dictionary<string, string> variables,
+        List<string> changedFields,
+        string guildId,
+        RosterMode newRosterMode,
+        string? oldMinRosterRoleId,
+        string? newMinRosterRoleId,
+        CancellationToken cancellationToken)
+    {
+        if (newRosterMode != RosterMode.DiscordRoleOnly || oldMinRosterRoleId == newMinRosterRoleId)
+            return;
+
+        changedFields.Add("minRosterRoleId");
+        var roles = TryGetRoles(guildId, cancellationToken);
+        if (oldMinRosterRoleId != null)
+            AddRoleVariables(variables, "old", roles, oldMinRosterRoleId);
+        if (newMinRosterRoleId != null)
+            AddRoleVariables(variables, "new", roles, newMinRosterRoleId);
+    }
+
+    /// <summary>
     /// Fetches the guild's Discord roles from the bot's Gateway cache, or null if the bot isn't
     /// in the guild — callers fall back to a placeholder rather than failing the settings update.
     /// </summary>
@@ -103,7 +127,7 @@ public class UpdateGuildSettingsCommandHandler(
     {
         try
         {
-            return discordBotService.Guilds.GetRoles(guildId, cancellationToken).ToList();
+            return [.. discordBotService.Guilds.GetRoles(guildId, cancellationToken)];
         }
         catch (InvalidOperationException)
         {
