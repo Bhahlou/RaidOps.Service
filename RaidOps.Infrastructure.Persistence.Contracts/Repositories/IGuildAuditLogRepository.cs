@@ -1,3 +1,4 @@
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 
 namespace RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -21,4 +22,16 @@ public interface IGuildAuditLogRepository
     /// <param name="limit">Maximum number of entries to return.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
     Task<List<GuildAuditLog>> GetRecentByGuildIdAsync(string guildId, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a page of audit log entries for a guild, ordered newest-first, optionally
+    /// filtered to a set of action types.
+    /// </summary>
+    /// <param name="guildId">Discord snowflake ID of the guild.</param>
+    /// <param name="skip">Number of entries to skip.</param>
+    /// <param name="take">Maximum number of entries to return.</param>
+    /// <param name="actionTypes">When set and non-empty, only entries with one of these action types are returned.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    Task<List<GuildAuditLog>> GetPagedByGuildIdAsync(
+        string guildId, int skip, int take, IReadOnlyCollection<GuildAuditAction>? actionTypes, CancellationToken cancellationToken = default);
 }

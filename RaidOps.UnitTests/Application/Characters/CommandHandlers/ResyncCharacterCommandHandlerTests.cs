@@ -93,6 +93,23 @@ public class ResyncCharacterCommandHandlerTests
     // ── BNet API throws ───────────────────────────────────────────────────────
 
     [Fact]
+    public async Task HandleAsync_GetAppTokenThrows_ReturnsBnetApiError()
+    {
+        _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
+            .ReturnsAsync([MakeCharacter()]);
+        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+
+        _bnetApi.Setup(b => b.GetAppTokenAsync(It.IsAny<string>(), default))
+            .ThrowsAsync(new HttpRequestException("BNet unreachable"));
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.BnetApiError);
+        _bnetApi.Verify(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
     public async Task HandleAsync_BnetApiThrows_ReturnsBnetApiError()
     {
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))

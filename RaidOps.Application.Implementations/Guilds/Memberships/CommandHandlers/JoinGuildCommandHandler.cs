@@ -77,7 +77,11 @@ public class JoinGuildCommandHandler(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.MemberJoined,
-            new Dictionary<string, string> { ["characterName"] = character.Name },
+            new Dictionary<string, string>
+            {
+                ["characterName"] = character.Name,
+                ["characterClassId"] = character.ClassId.ToString(),
+            },
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character added to the guild roster."));

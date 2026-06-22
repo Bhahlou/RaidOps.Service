@@ -409,6 +409,8 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
             log.Should().NotBeNull();
             log!.ActorDiscordId.Should().Be(id);
             log.Details.Should().Contain("Alt");
+            // characterClassId lets the audit log viewer show the class icon/color next to the name.
+            log.Details.Should().Contain("\"characterClassId\":\"8\"");
         }
     }
 

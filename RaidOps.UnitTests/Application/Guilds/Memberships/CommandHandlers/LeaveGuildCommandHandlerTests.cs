@@ -91,12 +91,13 @@ public class LeaveGuildCommandHandlerTests
         _memberships.Verify(r => r.DeleteAsync(CharacterId, GuildId, default), Times.Once);
         _auditLog.Verify(a => a.LogAsync(
             GuildId, DiscordId, GuildAuditAction.MemberLeft,
-            It.IsAny<Dictionary<string, string>?>(), default), Times.Once);
+            It.Is<Dictionary<string, string>>(v => v["characterName"] == "Arthas" && v["characterClassId"] == "5"),
+            default), Times.Once);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private void SetupCharacter() =>
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
-            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId });
+            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId, ClassId = 5 });
 }

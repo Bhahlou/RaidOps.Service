@@ -34,7 +34,11 @@ public class LeaveGuildCommandHandler(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.MemberLeft,
-            new Dictionary<string, string> { ["characterName"] = character.Name },
+            new Dictionary<string, string>
+            {
+                ["characterName"] = character.Name,
+                ["characterClassId"] = character.ClassId.ToString(),
+            },
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character removed from the guild roster."));

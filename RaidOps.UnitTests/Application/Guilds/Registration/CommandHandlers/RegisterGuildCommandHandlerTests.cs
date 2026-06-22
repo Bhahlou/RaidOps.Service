@@ -4,6 +4,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.Registration.CommandHandlers;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -78,7 +79,7 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guilds.Setup(g => g.RegisterAsync(GuildId, default)).ReturnsAsync(false);
+        _guilds.Setup(g => g.RegisterAsync(GuildId, default)).ReturnsAsync((Guild?)null);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -92,11 +93,50 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guilds.Setup(g => g.RegisterAsync(GuildId, default)).ReturnsAsync(true);
+        _guilds.Setup(g => g.RegisterAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild", IconHash = "icon123" });
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsSuccess.Should().BeTrue();
         _guilds.Verify(g => g.RegisterAsync(GuildId, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_LogsGuildNameAndIconHash()
+    {
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+
+        _guilds.Setup(g => g.RegisterAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild", IconHash = "icon123" });
+
+        await _sut.HandleAsync(Command);
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId,
+            RequesterId,
+            GuildAuditAction.GuildRegistered,
+            It.Is<Dictionary<string, string>>(v => v["guildName"] == "Test Guild" && v["guildIconHash"] == "icon123"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_GuildHasNoIcon_OmitsIconHashVariable()
+    {
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+
+        _guilds.Setup(g => g.RegisterAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild", IconHash = null });
+
+        await _sut.HandleAsync(Command);
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId,
+            RequesterId,
+            GuildAuditAction.GuildRegistered,
+            It.Is<Dictionary<string, string>>(v => v["guildName"] == "Test Guild" && !v.ContainsKey("guildIconHash")),
+            default), Times.Once);
     }
 }
