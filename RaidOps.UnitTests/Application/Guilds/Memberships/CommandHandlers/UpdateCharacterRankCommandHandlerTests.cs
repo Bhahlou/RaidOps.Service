@@ -121,7 +121,7 @@ public class UpdateCharacterRankCommandHandlerTests
         _auditLog.Verify(a => a.LogAsync(
             GuildId, DiscordId, GuildAuditAction.MemberRankUpdated,
             It.Is<Dictionary<string, string>?>(d =>
-                d != null && d["oldRank"] == "Main" && d["newRank"] == "Alt"),
+                d != null && d["oldRank"] == "Main" && d["newRank"] == "Alt" && d["characterClassId"] == "2"),
             default), Times.Once);
     }
 
@@ -129,5 +129,5 @@ public class UpdateCharacterRankCommandHandlerTests
 
     private void SetupCharacter() =>
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
-            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId });
+            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId, ClassId = 2 });
 }

@@ -36,15 +36,20 @@ public class RegisterGuildCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild. Please complete the bot invite before registering.");
         }
 
-        var registered = await guildsRepository.RegisterAsync(command.GuildId, cancellationToken);
-        if (!registered)
+        var guild = await guildsRepository.RegisterAsync(command.GuildId, cancellationToken);
+        if (guild == null)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildNotFound, $"Guild '{command.GuildId}' does not exist.");
+
+        var variables = new Dictionary<string, string> { ["guildName"] = guild.Name };
+        if (guild.IconHash != null)
+            variables["guildIconHash"] = guild.IconHash;
 
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.GuildRegistered,
-            cancellationToken: cancellationToken);
+            variables,
+            cancellationToken);
 
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild registered successfully."));

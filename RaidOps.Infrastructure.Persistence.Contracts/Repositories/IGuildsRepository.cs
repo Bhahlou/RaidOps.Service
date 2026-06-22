@@ -28,8 +28,8 @@ public interface IGuildsRepository
     /// </summary>
     /// <param name="guildId">The Discord snowflake ID of the guild to register.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns><c>true</c> if the guild was found and updated; <c>false</c> if no matching guild exists.</returns>
-    Task<bool> RegisterAsync(string guildId, CancellationToken cancellationToken = default);
+    /// <returns>The updated guild, or <c>null</c> if no matching guild exists.</returns>
+    Task<Guild?> RegisterAsync(string guildId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Marks the specified guild as unregistered in RaidOps by setting <see cref="Guild.IsRegistered"/> to <c>false</c>.

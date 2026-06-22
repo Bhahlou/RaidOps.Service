@@ -56,15 +56,15 @@ public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
     /// </summary>
     /// <param name="guildId">The Discord snowflake ID of the guild to register.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    /// <returns><c>true</c> if the guild was found and updated; <c>false</c> otherwise.</returns>
-    public async Task<bool> RegisterAsync(string guildId, CancellationToken cancellationToken = default)
+    /// <returns>The updated guild, or <c>null</c> if no matching guild exists.</returns>
+    public async Task<Guild?> RegisterAsync(string guildId, CancellationToken cancellationToken = default)
     {
         var guild = await context.Guilds.FindAsync([guildId], cancellationToken);
-        if (guild == null) return false;
+        if (guild == null) return null;
 
         guild.IsRegistered = true;
         await context.SaveChangesAsync(cancellationToken);
-        return true;
+        return guild;
     }
 
     /// <summary>

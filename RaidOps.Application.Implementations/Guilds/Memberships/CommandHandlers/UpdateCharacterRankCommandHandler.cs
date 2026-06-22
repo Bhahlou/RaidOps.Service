@@ -43,6 +43,7 @@ public class UpdateCharacterRankCommandHandler(
             new Dictionary<string, string>
             {
                 ["characterName"] = character.Name,
+                ["characterClassId"] = character.ClassId.ToString(),
                 ["oldRank"] = oldRank.ToString(),
                 ["newRank"] = command.CharacterRank.ToString(),
             },

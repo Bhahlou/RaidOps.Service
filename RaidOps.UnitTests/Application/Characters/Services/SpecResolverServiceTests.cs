@@ -191,6 +191,38 @@ public class SpecResolverServiceTests
     }
 
     [Fact]
+    public async Task Modern_OffspecIdNotFoundInDb_ReturnsOnlyMain()
+    {
+        var arms = MakeSpec(71, "Arms");
+        _repo.Setup(r => r.GetSpecByIdAsync(71, default)).ReturnsAsync(arms);
+        _repo.Setup(r => r.GetSpecByIdAsync(72, default)).ReturnsAsync((Spec?)null);
+
+        var response = ModernResponse(activeId: 71, offspecIds: 72);
+
+        var result = await _sut.ResolveAsync(response, classId: 1, _state);
+
+        result.Should().HaveCount(1);
+        result.Single().SpecId.Should().Be(71);
+    }
+
+    [Fact]
+    public async Task Modern_OffspecResolvesToSameSpecAsMain_DedupedToOnlyMain()
+    {
+        // Two distinct BNet specialization ids that both resolve to the same DB Spec —
+        // the dedup check must keep only the main entry, not add a duplicate offspec row.
+        var arms = MakeSpec(71, "Arms");
+        _repo.Setup(r => r.GetSpecByIdAsync(71, default)).ReturnsAsync(arms);
+        _repo.Setup(r => r.GetSpecByIdAsync(72, default)).ReturnsAsync(arms);
+
+        var response = ModernResponse(activeId: 71, offspecIds: 72);
+
+        var result = await _sut.ResolveAsync(response, classId: 1, _state);
+
+        result.Should().HaveCount(1);
+        result.Single().IsMain.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Modern_ActiveSpecNotFoundInDb_ReturnsEmpty()
     {
         _repo.Setup(r => r.GetSpecByIdAsync(It.IsAny<int>(), default)).ReturnsAsync((Spec?)null);

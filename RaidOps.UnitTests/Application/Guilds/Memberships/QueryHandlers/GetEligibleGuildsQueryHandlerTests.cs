@@ -179,6 +179,28 @@ public class GetEligibleGuildsQueryHandlerTests
         result.Value.Should().ContainSingle(g => g.GuildId == GuildId && g.GuildName == "RaidOps");
     }
 
+    // ── DiscordRoleOnly with no MinRosterRoleId set — Excluded, bot never queried ──
+
+    [Fact]
+    public async Task HandleAsync_DiscordRoleOnly_MinRosterRoleIdNull_GuildExcludedWithoutQueryingBot()
+    {
+        SetupCharacter();
+        SetupUserInGuild();
+        SetupNoExistingMembership();
+        _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new DiscordGuild
+            {
+                Id = GuildId, Name = "RaidOps", IsRegistered = true,
+                RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = null,
+            });
+
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().BeEmpty();
+        _guild.Verify(gs => gs.GetRoles(It.IsAny<string>(), default), Times.Never);
+    }
+
     // ── DiscordRoleOnly — BotNotPresent — Excluded silently ───────────────
 
     [Fact]
@@ -250,6 +272,30 @@ public class GetEligibleGuildsQueryHandlerTests
         _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
 
         var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [LowRoleUlong]);
+        _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = await _sut.HandleAsync(Query, new CancellationToken());
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().BeEmpty();
+    }
+
+    // ── DiscordRoleOnly — User's role id is unknown to the guild (e.g. deleted role) — Excluded ──
+
+    [Fact]
+    public async Task HandleAsync_DiscordRoleOnly_UserHasUnknownRoleId_GuildExcluded()
+    {
+        SetupCharacter();
+        SetupUserInGuild();
+        SetupNoExistingMembership();
+        SetupRoleOnlyGuild();
+
+        var minJson = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: 5);
+        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [minJson]);
+        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
+
+        const ulong unknownRoleUlong = 999999999999999999UL;
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [unknownRoleUlong]);
         _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
 
         var result = await _sut.HandleAsync(Query, new CancellationToken());

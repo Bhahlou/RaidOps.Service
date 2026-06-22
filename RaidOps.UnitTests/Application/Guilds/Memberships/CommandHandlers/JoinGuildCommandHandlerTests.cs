@@ -179,7 +179,8 @@ public class JoinGuildCommandHandlerTests
             default), Times.Once);
         _auditLog.Verify(a => a.LogAsync(
             GuildId, DiscordId, GuildAuditAction.MemberJoined,
-            It.IsAny<Dictionary<string, string>?>(), default), Times.Once);
+            It.Is<Dictionary<string, string>>(v => v["characterName"] == "Arthas" && v["characterClassId"] == "5"),
+            default), Times.Once);
     }
 
     // ── DiscordRoleOnly — MinRosterRoleId null ────────────────────────────
@@ -279,6 +280,29 @@ public class JoinGuildCommandHandlerTests
         result.Error.Should().Be(ResponseDetail.RosterAccessDenied);
     }
 
+    // ── DiscordRoleOnly — User's role id is unknown to the guild (e.g. deleted role) ──
+
+    [Fact]
+    public async Task HandleAsync_DiscordRoleOnly_UserHasUnknownRoleId_ReturnsRosterAccessDenied()
+    {
+        SetupCharacter();
+        SetupRoleOnlyGuild();
+        SetupDiscordMember();
+
+        var minJson = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: 5);
+        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [minJson]);
+        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
+
+        const ulong unknownRoleUlong = 999999999999999999UL;
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [unknownRoleUlong]);
+        _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.RosterAccessDenied);
+    }
+
     // ── DiscordRoleOnly — AlreadyMember ───────────────────────────────────
 
     [Fact]
@@ -322,7 +346,7 @@ public class JoinGuildCommandHandlerTests
 
     private void SetupCharacter() =>
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
-            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId });
+            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId, ClassId = 5 });
 
     private void SetupOpenGuild() =>
         _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
