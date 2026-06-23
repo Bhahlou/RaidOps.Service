@@ -9,7 +9,10 @@ namespace RaidOps.UnitTests.Helpers;
 /// The request body is read eagerly to avoid ObjectDisposedException
 /// when the caller inspects it after HttpClient disposes the content.
 /// </summary>
-internal class FakeHttpMessageHandler(HttpStatusCode statusCode, string? content = null) : HttpMessageHandler
+internal class FakeHttpMessageHandler(
+    HttpStatusCode statusCode,
+    string? content = null,
+    Exception? exceptionToThrow = null) : HttpMessageHandler
 {
     public HttpRequestMessage? LastRequest { get; private set; }
 
@@ -23,6 +26,9 @@ internal class FakeHttpMessageHandler(HttpStatusCode statusCode, string? content
         LastRequest = request;
         if (request.Content is not null)
             LastRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
+
+        if (exceptionToThrow is not null)
+            throw exceptionToThrow;
 
         var response = new HttpResponseMessage(statusCode);
         if (content is not null)

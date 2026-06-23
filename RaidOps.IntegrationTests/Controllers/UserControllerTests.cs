@@ -1,8 +1,11 @@
 using FluentAssertions;
 using RaidOps.Application.Contracts.Authentication.Responses;
+using RaidOps.Domain.Enums;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace RaidOps.IntegrationTests.Controllers;
 
@@ -12,6 +15,14 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
 {
     private const string Url = "/api/v1/user/me";
     private const string DiscordId = "200000000000000001";
+
+    // The API serializes enums as strings (see Program.cs's JsonStringEnumConverter registration)
+    // but HttpContent.ReadFromJsonAsync defaults to numeric enum parsing unless told otherwise.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     [Fact]
     public async Task GetMe_WithoutToken_Returns401()
@@ -63,8 +74,9 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         var response = await client.GetAsync(Url);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<UserResponse>();
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         body!.Guilds.Should().ContainSingle(g => g.Id == guildId && !g.IsAdmin && g.IsRegistered);
+        body.Guilds.Single().AccessLevel.Should().Be(GuildAccessLevel.Public);
     }
 
     [Fact]
@@ -84,7 +96,8 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         var response = await client.GetAsync(Url);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<UserResponse>();
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         body!.Guilds.Should().ContainSingle(g => g.Id == guildId && g.IsAdmin && !g.IsRegistered);
+        body.Guilds.Single().AccessLevel.Should().Be(GuildAccessLevel.Officer);
     }
 }

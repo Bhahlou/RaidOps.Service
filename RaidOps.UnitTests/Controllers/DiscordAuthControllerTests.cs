@@ -52,6 +52,45 @@ public class DiscordAuthControllerTests
         _sut.Signup().Should().BeOfType<ChallengeResult>();
     }
 
+    [Fact]
+    public void Signup_NoReturnTo_StashesHomeInProperties()
+    {
+        var urlHelper = new Mock<IUrlHelper>();
+        urlHelper.Setup(u => u.Action(It.IsAny<Microsoft.AspNetCore.Mvc.Routing.UrlActionContext>()))
+            .Returns("https://api/auth/signupCallback");
+        _sut.Url = urlHelper.Object;
+
+        var result = (ChallengeResult)_sut.Signup();
+
+        result.Properties!.Items["returnTo"].Should().Be("home");
+    }
+
+    [Fact]
+    public void Signup_WithAllowedReturnTo_StashesItInProperties()
+    {
+        var urlHelper = new Mock<IUrlHelper>();
+        urlHelper.Setup(u => u.Action(It.IsAny<Microsoft.AspNetCore.Mvc.Routing.UrlActionContext>()))
+            .Returns("https://api/auth/signupCallback");
+        _sut.Url = urlHelper.Object;
+
+        var result = (ChallengeResult)_sut.Signup("get-started");
+
+        result.Properties!.Items["returnTo"].Should().Be("get-started");
+    }
+
+    [Fact]
+    public void Signup_WithUnrecognizedReturnTo_DefaultsToHome()
+    {
+        var urlHelper = new Mock<IUrlHelper>();
+        urlHelper.Setup(u => u.Action(It.IsAny<Microsoft.AspNetCore.Mvc.Routing.UrlActionContext>()))
+            .Returns("https://api/auth/signupCallback");
+        _sut.Url = urlHelper.Object;
+
+        var result = (ChallengeResult)_sut.Signup("evil-redirect");
+
+        result.Properties!.Items["returnTo"].Should().Be("home");
+    }
+
     // ── SignupCallback ────────────────────────────────────────────────────────
 
     [Fact]

@@ -1,3 +1,5 @@
+using RaidOps.Domain.Enums;
+
 namespace RaidOps.Application.Contracts.Authentication.Responses;
 
 /// <summary>
@@ -37,4 +39,10 @@ public class UserGuildResponse
     /// Indicates whether the current user holds admin rights on this Discord server.
     /// </summary>
     public bool IsAdmin { get; set; }
+
+    /// <summary>
+    /// The user's access level on this guild (Public/Roster/Officer), as computed by
+    /// <see cref="RaidOps.Application.Contracts.Services.IGuildAccessService"/>.
+    /// </summary>
+    public GuildAccessLevel AccessLevel { get; set; }
 }

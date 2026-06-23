@@ -96,4 +96,42 @@ public class GuildsControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Found);
         response.Headers.Location!.ToString().Should().Contain($"/guild-register/{guildId}");
     }
+
+    [Fact]
+    public async Task Callback_WithGetStartedReturnTo_RedirectsToGetStarted()
+    {
+        const string id = "500000000000000004";
+        const string guildId = "900000000000000003";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var state = TestTokenBuilder.CreateStateToken(guildId, id, returnTo: "get-started");
+        var client = CreateAuthenticatedNonRedirectingClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/register/callback?guild_id={guildId}&state={state}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Found);
+        response.Headers.Location!.ToString().Should().Contain("/get-started");
+        response.Headers.Location!.ToString().Should().NotContain("/guild-register");
+    }
+
+    [Fact]
+    public async Task Callback_CancelledWithGetStartedReturnTo_RedirectsToGetStartedNotNoGuild()
+    {
+        const string id = "500000000000000005";
+        const string guildId = "900000000000000004";
+        var state = TestTokenBuilder.CreateStateToken(guildId, id, returnTo: "get-started");
+        var client = CreateAuthenticatedNonRedirectingClient(discordId: id);
+
+        // Discord omits guild_id when the bot-invite consent screen is cancelled.
+        var response = await client.GetAsync($"/api/v1/guilds/register/callback?state={state}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Found);
+        response.Headers.Location!.ToString().Should().Contain("/get-started");
+        response.Headers.Location!.ToString().Should().NotContain("/no-guild");
+    }
 }

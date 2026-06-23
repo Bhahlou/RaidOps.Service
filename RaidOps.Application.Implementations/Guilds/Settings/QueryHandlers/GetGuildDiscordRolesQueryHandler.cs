@@ -2,8 +2,9 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Queries;
 using RaidOps.Application.Contracts.Guilds.Settings.Responses;
+using RaidOps.Application.Contracts.Services;
+using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
-using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Guilds.Settings.QueryHandlers;
 
@@ -12,16 +13,14 @@ namespace RaidOps.Application.Implementations.Guilds.Settings.QueryHandlers;
 /// returning the guild's assignable Discord roles from the bot's Gateway cache.
 /// </summary>
 public class GetGuildDiscordRolesQueryHandler(
-    IUserGuildsRepository userGuildsRepository,
+    IGuildAccessService guildAccessService,
     IDiscordBotService discordBotService) : IQueryHandlerAsync<GetGuildDiscordRolesQuery, List<DiscordRoleResponse>>
 {
     /// <inheritdoc/>
     public async Task<Result<List<DiscordRoleResponse>>> HandleAsync(GetGuildDiscordRolesQuery query, CancellationToken cancellationToken)
     {
-        var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(query.RequesterDiscordId, cancellationToken);
-        var membership = userGuilds.FirstOrDefault(g => g.GuildId == query.GuildId);
-
-        if (membership == null || !membership.IsAdmin)
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+        if (accessLevel != GuildAccessLevel.Officer)
             return Result<List<DiscordRoleResponse>>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
 
         try

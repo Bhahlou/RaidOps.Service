@@ -130,6 +130,26 @@ public class JwtServiceTests
     }
 
     [Fact]
+    public void ValidateStateToken_WithReturnTo_RoundTripsReturnTo()
+    {
+        var token = _sut.GenerateStateToken(guildId: "guild-99", discordId: "user-42", returnTo: "get-started");
+
+        var result = _sut.ValidateStateToken(token);
+
+        result!.Value.ReturnTo.Should().Be("get-started");
+    }
+
+    [Fact]
+    public void ValidateStateToken_WithoutReturnTo_ReturnToIsNull()
+    {
+        var token = _sut.GenerateStateToken(guildId: "guild-99", discordId: "user-42");
+
+        var result = _sut.ValidateStateToken(token);
+
+        result!.Value.ReturnTo.Should().BeNull();
+    }
+
+    [Fact]
     public void ValidateStateToken_BnetTokenMissingGldClaim_ReturnsNull()
     {
         // A BNet state token is valid (correct key/issuer) but has no "gld" claim.

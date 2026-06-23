@@ -65,12 +65,32 @@ public class GuildRegistrationControllerTests
     [Fact]
     public void Initiate_Success_ReturnsRedirectToDiscord()
     {
-        _jwt.Setup(j => j.GenerateStateToken(GuildId, DiscordId)).Returns("state-token");
+        _jwt.Setup(j => j.GenerateStateToken(GuildId, DiscordId, null)).Returns("state-token");
 
         var result = _sut.Initiate(GuildId);
 
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().StartWith("https://discord.com/oauth2/authorize");
+    }
+
+    [Fact]
+    public void Initiate_WithAllowedReturnTo_PassesItToStateToken()
+    {
+        _jwt.Setup(j => j.GenerateStateToken(GuildId, DiscordId, "get-started")).Returns("state-token");
+
+        _sut.Initiate(GuildId, "get-started");
+
+        _jwt.Verify(j => j.GenerateStateToken(GuildId, DiscordId, "get-started"), Times.Once);
+    }
+
+    [Fact]
+    public void Initiate_WithUnrecognizedReturnTo_IsIgnored()
+    {
+        _jwt.Setup(j => j.GenerateStateToken(GuildId, DiscordId, null)).Returns("state-token");
+
+        _sut.Initiate(GuildId, "evil-redirect");
+
+        _jwt.Verify(j => j.GenerateStateToken(GuildId, DiscordId, null), Times.Once);
     }
 
     // ── Callback ──────────────────────────────────────────────────────────────
@@ -94,7 +114,7 @@ public class GuildRegistrationControllerTests
     public async Task Callback_InvalidState_RedirectsWithInvalidState()
     {
         _jwt.Setup(j => j.ValidateStateToken("bad-state"))
-            .Returns((ValueTuple<string, string>?)null);
+            .Returns(((string, string, string?)?)null);
 
         var result = await _sut.Callback(GuildId, "bad-state", default);
         result.Should().BeOfType<RedirectResult>().Which.Url.Should().Contain("invalid_state");
@@ -104,7 +124,7 @@ public class GuildRegistrationControllerTests
     public async Task Callback_StateMismatch_RedirectsWithStateMismatch()
     {
         _jwt.Setup(j => j.ValidateStateToken("state"))
-            .Returns((GuildId: "other-guild", DiscordId: "other-user"));
+            .Returns((GuildId: "other-guild", DiscordId: "other-user", ReturnTo: (string?)null));
 
         var result = await _sut.Callback(GuildId, "state", default);
         result.Should().BeOfType<RedirectResult>().Which.Url.Should().Contain("state_mismatch");
@@ -114,7 +134,7 @@ public class GuildRegistrationControllerTests
     public async Task Callback_RegisterFails_RedirectsWithRegisterFailed()
     {
         _jwt.Setup(j => j.ValidateStateToken("state"))
-            .Returns((GuildId, DiscordId));
+            .Returns((GuildId, DiscordId, (string?)null));
         _commands.Setup(c => c.DispatchAsync(It.IsAny<RegisterGuildCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent));
 
@@ -126,7 +146,7 @@ public class GuildRegistrationControllerTests
     public async Task Callback_Success_RedirectsToGuildRegisterPage()
     {
         _jwt.Setup(j => j.ValidateStateToken("state"))
-            .Returns((GuildId, DiscordId));
+            .Returns((GuildId, DiscordId, (string?)null));
         _commands.Setup(c => c.DispatchAsync(It.IsAny<RegisterGuildCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("registered")));
 
@@ -134,5 +154,46 @@ public class GuildRegistrationControllerTests
 
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().Be($"{FrontendUrl}/guild-register/{GuildId}");
+    }
+
+    [Fact]
+    public async Task Callback_Success_WithGetStartedReturnTo_RedirectsToGetStarted()
+    {
+        _jwt.Setup(j => j.ValidateStateToken("state"))
+            .Returns((GuildId, DiscordId, "get-started"));
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<RegisterGuildCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("registered")));
+
+        var result = await _sut.Callback(GuildId, "state", default);
+
+        result.Should().BeOfType<RedirectResult>()
+            .Which.Url.Should().Be($"{FrontendUrl}/get-started");
+    }
+
+    [Fact]
+    public async Task Callback_CancelledWithGetStartedReturnTo_RedirectsToGetStartedWithError()
+    {
+        // Discord omits guild_id when the user cancels the bot-invite consent screen, but still
+        // echoes back state — the cancelled flow should still return to get-started, not strand
+        // the user on /no-guild.
+        _jwt.Setup(j => j.ValidateStateToken("state"))
+            .Returns((GuildId, DiscordId, "get-started"));
+
+        var result = await _sut.Callback(null, "state", default);
+
+        result.Should().BeOfType<RedirectResult>()
+            .Which.Url.Should().Be($"{FrontendUrl}/get-started?error=invalid_request");
+    }
+
+    [Fact]
+    public async Task Callback_CancelledWithoutReturnTo_RedirectsToNoGuild()
+    {
+        _jwt.Setup(j => j.ValidateStateToken("state"))
+            .Returns((GuildId, DiscordId, (string?)null));
+
+        var result = await _sut.Callback(null, "state", default);
+
+        result.Should().BeOfType<RedirectResult>()
+            .Which.Url.Should().Be($"{FrontendUrl}/no-guild?error=invalid_request");
     }
 }
