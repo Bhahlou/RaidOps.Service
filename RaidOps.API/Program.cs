@@ -2,6 +2,7 @@ using Asp.Versioning;
 using AspNet.Security.OAuth.Discord;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -82,6 +83,24 @@ namespace RaidOps.API
                     options.SaveTokens = true;
                     options.Scope.Add("identify");
                     options.Scope.Add("guilds");
+                    options.Events = new OAuthEvents
+                    {
+                        // Discord redirects here with ?error=access_denied when the user cancels
+                        // the consent screen — without this, the OAuth middleware throws and the
+                        // request ends on the ASP.NET dev exception page instead of back on the
+                        // frontend. returnTo was stashed in the state by DiscordAuthController.Signup,
+                        // so the user lands back wherever they started the login from (home or
+                        // get-started) instead of a fixed page.
+                        OnRemoteFailure = context =>
+                        {
+                            context.HandleResponse();
+                            var returnTo = context.Properties?.Items.TryGetValue("returnTo", out var value) == true
+                                ? value
+                                : null;
+                            context.Response.Redirect($"{frontendUrl}/{returnTo ?? "home"}?error=access_denied");
+                            return Task.CompletedTask;
+                        }
+                    };
                 })
                 .AddJwtBearer(options =>
                 {

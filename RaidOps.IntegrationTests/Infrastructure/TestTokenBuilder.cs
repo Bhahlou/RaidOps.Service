@@ -60,15 +60,18 @@ public static class TestTokenBuilder
     /// Creates a signed state token for the guild registration OAuth2 flow.
     /// Mirrors JwtService.GenerateStateToken using the test signing key.
     /// </summary>
-    public static string CreateStateToken(string guildId, string discordId)
+    public static string CreateStateToken(string guildId, string discordId, string? returnTo = null)
     {
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, discordId),
-            new Claim("gld", guildId),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Sub, discordId),
+            new("gld", guildId),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
-        return BuildToken(claims, DateTime.UtcNow.AddMinutes(10));
+        if (returnTo != null)
+            claims.Add(new Claim("rtn", returnTo));
+
+        return BuildToken(claims.ToArray(), DateTime.UtcNow.AddMinutes(10));
     }
 
     private static string BuildToken(Claim[] claims, DateTime expiry)

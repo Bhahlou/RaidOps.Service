@@ -85,6 +85,25 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task GetSettings_WhenUserNotAdmin_Returns400()
+    {
+        const string id      = "510000000000000011";
+        const string guildId = "910000000000000011";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/settings");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task UpdateSettings_WhenUserNotAdmin_Returns400()
     {
         const string id      = "510000000000000003";

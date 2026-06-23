@@ -15,7 +15,7 @@ namespace RaidOps.UnitTests.Application.Guilds.Settings.CommandHandlers;
 
 public class UpdateGuildSettingsCommandHandlerTests
 {
-    private readonly Mock<IUserGuildsRepository>        _userGuilds   = new();
+    private readonly Mock<IGuildAccessService>          _access       = new();
     private readonly Mock<IGuildsRepository>            _guilds       = new();
     private readonly Mock<IDiscordBotService>           _discordBot   = new();
     private readonly Mock<IGuildService>                _guildService = new();
@@ -37,13 +37,13 @@ public class UpdateGuildSettingsCommandHandlerTests
     public UpdateGuildSettingsCommandHandlerTests()
     {
         _discordBot.Setup(b => b.Guilds).Returns(_guildService.Object);
-        _sut = new UpdateGuildSettingsCommandHandler(_userGuilds.Object, _guilds.Object, _discordBot.Object, _auditLog.Object);
+        _sut = new UpdateGuildSettingsCommandHandler(_access.Object, _guilds.Object, _discordBot.Object, _auditLog.Object);
     }
 
     [Fact]
     public async Task HandleAsync_RequesterNotMember_ReturnsForbidden()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default)).ReturnsAsync([]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.None);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -54,8 +54,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_RequesterNotAdmin_ReturnsForbidden()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = false }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -66,8 +65,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_GuildNotFound_ReturnsGuildNotFound()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync((Guild?)null);
 
         var result = await _sut.HandleAsync(Command);
@@ -79,8 +77,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_GuildNotRegistered_ReturnsGuildNotRegistered()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = false });
 
@@ -93,8 +90,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Success_ReturnsOkAndCallsUpdateSettings()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
         _guilds.Setup(g => g.UpdateSettingsAsync(GuildId, Command.Timezone, Command.RosterMode, null, default))
@@ -109,8 +105,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Success_FirstTimeConfiguration_OmitsOldValues()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true, Timezone = null, RosterMode = null, MinRosterRoleId = null });
 
@@ -135,8 +130,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -169,8 +163,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -197,8 +190,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -225,8 +217,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/London", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -253,8 +244,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/London", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -280,8 +270,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -308,8 +297,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.Open, MinRosterRoleId = null,
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {
@@ -335,8 +323,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
         };
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild
             {

@@ -14,7 +14,7 @@ namespace RaidOps.Application.Implementations.Guilds.Settings.CommandHandlers;
 /// confirming the guild is registered, then persisting the settings.
 /// </summary>
 public class UpdateGuildSettingsCommandHandler(
-    IUserGuildsRepository userGuildsRepository,
+    IGuildAccessService guildAccessService,
     IGuildsRepository guildsRepository,
     IDiscordBotService discordBotService,
     IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
@@ -22,10 +22,8 @@ public class UpdateGuildSettingsCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateGuildSettingsCommand command, CancellationToken cancellationToken = default)
     {
-        var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(command.RequesterDiscordId, cancellationToken);
-        var membership = userGuilds.FirstOrDefault(g => g.GuildId == command.GuildId);
-
-        if (membership == null || !membership.IsAdmin)
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        if (accessLevel != GuildAccessLevel.Officer)
             return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
 
         var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);

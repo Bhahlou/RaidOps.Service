@@ -30,19 +30,24 @@ public class GuildRegistrationController(
         ? p
         : throw new InvalidOperationException("Discord:BotPermissions is not configured");
 
+    /// <summary>Discriminators accepted for <see cref="Initiate"/>'s <c>returnTo</c> parameter.</summary>
+    private static readonly HashSet<string> AllowedReturnTargets = ["get-started"];
+
     /// <summary>
     /// Initiates the Discord bot OAuth2 flow for guild registration.
     /// Verifies that the authenticated user is an admin of the requested Discord guild,
     /// generates a signed CSRF state token, then redirects to the Discord authorization page.
     /// </summary>
     [HttpGet("register/initiate")]
-    public IActionResult Initiate([FromQuery] string guildId)
+    public IActionResult Initiate([FromQuery] string guildId, [FromQuery] string? returnTo = null)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
-        var state = jwtService.GenerateStateToken(guildId, discordId);
+        var safeReturnTo = returnTo != null && AllowedReturnTargets.Contains(returnTo) ? returnTo : null;
+
+        var state = jwtService.GenerateStateToken(guildId, discordId, safeReturnTo);
         var callbackUrl = Url.Action(nameof(Callback), "GuildRegistration", new { version = "1.0" }, Request.Scheme)!;
         var discordUrl = BuildBotInviteUrl(guildId, callbackUrl, state);
 
@@ -62,17 +67,19 @@ public class GuildRegistrationController(
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
-            return Redirect($"{_frontendUrl}/no-guild?error=unauthorized");
+            return RedirectToError("unauthorized", state);
 
+        // guild_id is absent when the user cancels the bot-invite consent screen — state is
+        // still echoed back by Discord in that case, so we can still recover returnTo from it.
         if (string.IsNullOrEmpty(state) || string.IsNullOrEmpty(guild_id))
-            return Redirect($"{_frontendUrl}/no-guild?error=invalid_request");
+            return RedirectToError("invalid_request", state);
 
         var stateData = jwtService.ValidateStateToken(state);
         if (stateData == null)
-            return Redirect($"{_frontendUrl}/no-guild?error=invalid_state");
+            return RedirectToError("invalid_state", state);
 
         if (stateData.Value.DiscordId != discordId || stateData.Value.GuildId != guild_id)
-            return Redirect($"{_frontendUrl}/no-guild?error=state_mismatch");
+            return RedirectToError("state_mismatch", state);
 
         var result = await CommandDispatcher.DispatchAsync(new RegisterGuildCommand
         {
@@ -81,9 +88,26 @@ public class GuildRegistrationController(
         }, cancellationToken);
 
         if (result.IsFailed)
-            return Redirect($"{_frontendUrl}/no-guild?error=register_failed");
+            return RedirectToError("register_failed", state);
+
+        // The get-started stepper handles the settings step itself once the guild shows as
+        // registered — no need to bounce through /guild-register first.
+        if (stateData.Value.ReturnTo == "get-started")
+            return Redirect($"{_frontendUrl}/get-started");
 
         return Redirect($"{_frontendUrl}/guild-register/{guild_id}");
+    }
+
+    /// <summary>
+    /// Redirects to /no-guild with the given error, unless the original state token carries a
+    /// recognized returnTo — in which case the user is sent back there instead, so a cancelled
+    /// or failed registration started from onboarding doesn't strand the user on /no-guild.
+    /// </summary>
+    private IActionResult RedirectToError(string error, string? state)
+    {
+        var returnTo = state != null ? jwtService.ValidateStateToken(state)?.ReturnTo : null;
+        var target = returnTo == "get-started" ? "get-started" : "no-guild";
+        return Redirect($"{_frontendUrl}/{target}?error={error}");
     }
 
     private string BuildBotInviteUrl(string guildId, string redirectUri, string state)

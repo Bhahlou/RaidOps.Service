@@ -2,6 +2,7 @@ using RaidOps.Application.Contracts.Authentication.Queries;
 using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Authentication.QueryHandlers;
@@ -10,7 +11,9 @@ namespace RaidOps.Application.Implementations.Authentication.QueryHandlers;
 /// Handles <see cref="GetMeQuery"/> by looking up the authenticated user in the
 /// database and projecting the result into a <see cref="UserResponse"/>.
 /// </summary>
-public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandlerAsync<GetMeQuery, UserResponse>
+public class GetMeQueryHandler(
+    IUsersRepository usersRepository,
+    IGuildAccessService guildAccessService) : IQueryHandlerAsync<GetMeQuery, UserResponse>
 {
     /// <summary>
     /// Retrieves the user identified by <see cref="GetMeQuery.DiscordId"/> and maps them
@@ -42,7 +45,8 @@ public class GetMeQueryHandler(IUsersRepository usersRepository) : IQueryHandler
                     IconHash = ug.Guild.IconHash,
                     IsRegistered = ug.Guild.IsRegistered,
                     IsConfigured = ug.Guild.Timezone != null && ug.Guild.RosterMode != null,
-                    IsAdmin = ug.IsAdmin
+                    IsAdmin = ug.IsAdmin,
+                    AccessLevel = guildAccessService.ComputeAccessLevel(ug, ug.Guild, cancellationToken),
                 })]
         });
     }

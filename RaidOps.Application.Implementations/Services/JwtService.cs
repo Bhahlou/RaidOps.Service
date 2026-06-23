@@ -72,17 +72,21 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// </summary>
     /// <param name="guildId">The Discord snowflake ID of the guild being registered.</param>
     /// <param name="discordId">The Discord snowflake ID of the user initiating the registration.</param>
+    /// <param name="returnTo">Optional discriminator for where the front end should land afterward.</param>
     /// <returns>A signed JWT string to be passed as the OAuth2 <c>state</c> parameter.</returns>
-    public string GenerateStateToken(string guildId, string discordId)
+    public string GenerateStateToken(string guildId, string discordId, string? returnTo = null)
     {
         var expiry = DateTime.UtcNow.AddMinutes(10);
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, discordId),
-            new Claim("gld", guildId),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Sub, discordId),
+            new("gld", guildId),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
-        return BuildToken(claims, expiry);
+        if (returnTo != null)
+            claims.Add(new Claim("rtn", returnTo));
+
+        return BuildToken(claims.ToArray(), expiry);
     }
 
     /// <summary>
@@ -91,14 +95,15 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// </summary>
     /// <param name="token">The JWT state token to validate.</param>
     /// <returns>
-    /// A tuple of <c>(GuildId, DiscordId)</c> on success, or <c>null</c> on failure.
+    /// A tuple of <c>(GuildId, DiscordId, ReturnTo)</c> on success, or <c>null</c> on failure.
     /// </returns>
-    public (string GuildId, string DiscordId)? ValidateStateToken(string token)
+    public (string GuildId, string DiscordId, string? ReturnTo)? ValidateStateToken(string token)
     {
         var principal = TryValidate(token);
         var discordId = principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         var guildId   = principal?.FindFirst("gld")?.Value;
-        return discordId is null || guildId is null ? null : (guildId, discordId);
+        var returnTo  = principal?.FindFirst("rtn")?.Value;
+        return discordId is null || guildId is null ? null : (guildId, discordId, returnTo);
     }
 
     /// <summary>
