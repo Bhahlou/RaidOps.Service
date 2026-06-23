@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RaidOps.Application.Contracts.Configuration;
+using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Registry;
 using System.Diagnostics.CodeAnalysis;
@@ -144,6 +145,9 @@ namespace RaidOps.API
                 var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
                 await db.Database.MigrateAsync();
             }
+
+            var deployNotifier = app.Services.GetRequiredService<IDiscordDeployNotifier>();
+            await deployNotifier.NotifyDeployedAsync();
 
             var apiVersions = app.DescribeApiVersions();
 

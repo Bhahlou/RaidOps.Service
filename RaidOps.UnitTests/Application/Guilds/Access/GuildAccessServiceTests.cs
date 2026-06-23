@@ -135,6 +135,33 @@ public class GuildAccessServiceTests
     }
 
     [Fact]
+    public async Task GetAccessLevelAsync_DiscordRoleOnly_UserHasLowerRole_ReturnsPublic()
+    {
+        const ulong lowerRoleUlong = 300000000000000001UL;
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(DiscordId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false }]);
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new DiscordGuild
+            {
+                Id = GuildId, Name = "RaidOps", IsRegistered = true,
+                RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = MinRoleId,
+            });
+
+        // The user holds a real role below the configured threshold's position.
+        var minRole = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: 5);
+        var lowerRole = NetCordTestHelpers.MakeJsonRole(lowerRoleUlong, (Permissions)0, position: 2);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [minRole, lowerRole]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
+
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [lowerRoleUlong]);
+        _guildService.Setup(g => g.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = await _sut.GetAccessLevelAsync(DiscordId, GuildId, default);
+
+        result.Should().Be(GuildAccessLevel.Public);
+    }
+
+    [Fact]
     public async Task GetAccessLevelAsync_DiscordRoleOnly_UserLacksRole_ReturnsPublic()
     {
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(DiscordId, default))

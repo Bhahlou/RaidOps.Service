@@ -30,8 +30,11 @@ public class GuildRegistrationController(
         ? p
         : throw new InvalidOperationException("Discord:BotPermissions is not configured");
 
+    /// <summary>The only <c>returnTo</c> discriminator currently supported — the get-started onboarding stepper.</summary>
+    private const string GetStartedReturnTarget = "get-started";
+
     /// <summary>Discriminators accepted for <see cref="Initiate"/>'s <c>returnTo</c> parameter.</summary>
-    private static readonly HashSet<string> AllowedReturnTargets = ["get-started"];
+    private static readonly HashSet<string> AllowedReturnTargets = [GetStartedReturnTarget];
 
     /// <summary>
     /// Initiates the Discord bot OAuth2 flow for guild registration.
@@ -92,8 +95,8 @@ public class GuildRegistrationController(
 
         // The get-started stepper handles the settings step itself once the guild shows as
         // registered — no need to bounce through /guild-register first.
-        if (stateData.Value.ReturnTo == "get-started")
-            return Redirect($"{_frontendUrl}/get-started");
+        if (stateData.Value.ReturnTo == GetStartedReturnTarget)
+            return Redirect($"{_frontendUrl}/{GetStartedReturnTarget}");
 
         return Redirect($"{_frontendUrl}/guild-register/{guild_id}");
     }
@@ -103,10 +106,10 @@ public class GuildRegistrationController(
     /// recognized returnTo — in which case the user is sent back there instead, so a cancelled
     /// or failed registration started from onboarding doesn't strand the user on /no-guild.
     /// </summary>
-    private IActionResult RedirectToError(string error, string? state)
+    private RedirectResult RedirectToError(string error, string? state)
     {
         var returnTo = state != null ? jwtService.ValidateStateToken(state)?.ReturnTo : null;
-        var target = returnTo == "get-started" ? "get-started" : "no-guild";
+        var target = returnTo == GetStartedReturnTarget ? GetStartedReturnTarget : "no-guild";
         return Redirect($"{_frontendUrl}/{target}?error={error}");
     }
 
