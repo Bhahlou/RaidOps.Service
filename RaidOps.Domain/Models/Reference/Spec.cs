@@ -35,8 +35,8 @@ public class Spec
     public int FirstExpansionId { get; set; }
 
     /// <summary>
-    /// Icon URL from the Blizzard game data API.
-    /// Populated by the spec icon sync job; <c>null</c> until synced.
+    /// Icon URL from Blizzard's render service. Static seed value (see <c>SeedSpecs</c>) —
+    /// spec icons essentially never change, so there is no runtime sync for this field.
     /// </summary>
     [MaxLength(512)]
     public string? IconUrl { get; set; }
