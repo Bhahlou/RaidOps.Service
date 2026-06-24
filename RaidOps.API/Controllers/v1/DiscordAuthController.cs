@@ -25,18 +25,26 @@ public class DiscordAuthController(
     private const string ACCESS_TOKEN = "access_token";
     private const string REFRESH_TOKEN = "refresh_token";
 
+    /// <summary>Discriminators accepted for <see cref="Signup"/>'s <c>returnTo</c> parameter — the
+    /// two pages the Discord login challenge can be triggered from.</summary>
+    private static readonly HashSet<string> AllowedReturnTargets = ["home", "get-started"];
+
     /// <summary>
     /// Initiates the Discord OAuth2 sign-up flow by issuing a challenge that redirects
-    /// the user to the Discord authorization page.
+    /// the user to the Discord authorization page. <paramref name="returnTo"/> is carried
+    /// through the OAuth state so that if the user cancels on Discord's consent screen,
+    /// <see cref="Program"/>'s <c>OnRemoteFailure</c> handler can send them back to the
+    /// page they started from instead of a fixed page.
     /// </summary>
     /// <returns>A challenge result targeting the Discord authentication scheme.</returns>
     [HttpGet("signup")]
-    public IActionResult Signup()
+    public IActionResult Signup([FromQuery] string? returnTo = null)
     {
+        var safeReturnTo = returnTo != null && AllowedReturnTargets.Contains(returnTo) ? returnTo : "home";
         var callbackUrl = Url.Action(nameof(SignupCallback), "DiscordAuth", new { version = "1.0" }, Request.Scheme);
-        return Challenge(
-            new AuthenticationProperties { RedirectUri = callbackUrl },
-            DiscordAuthenticationDefaults.AuthenticationScheme);
+        var properties = new AuthenticationProperties { RedirectUri = callbackUrl };
+        properties.Items["returnTo"] = safeReturnTo;
+        return Challenge(properties, DiscordAuthenticationDefaults.AuthenticationScheme);
     }
 
     /// <summary>

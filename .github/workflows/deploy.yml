@@ -29,19 +29,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push :acceptance
+        id: build
         run: |
           IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}
-          docker build -t $IMAGE_NAME:acceptance .
+          MANIFEST_VERSION=$(jq -r '.["."]' .release-please-manifest.json)
+          VERSION="v${MANIFEST_VERSION}-acceptance.${GITHUB_SHA:0:7}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          docker build --build-arg APP_VERSION="$VERSION" -t $IMAGE_NAME:acceptance .
           docker push $IMAGE_NAME:acceptance
 
       - name: Notify Discord (acceptance)
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_ACCEPTANCE_WEBHOOK_URL }}
           FULL_REPO: ${{ github.repository }}
-          SHORT_REPO: ${{ github.event.repository.name }}
           AUTHOR: ${{ github.actor }}
           MESSAGE: ${{ github.event.head_commit.message }}
           COMMIT_URL: ${{ github.event.head_commit.url }}
+          VERSION: ${{ steps.build.outputs.version }}
         run: |
           # First line of the squash commit = the conventional PR title
           DESC=$(echo "$MESSAGE" | head -n 1)
@@ -53,12 +57,32 @@ jobs:
           else
             LINK="$COMMIT_URL"
           fi
+
+          # Conventional commit type → emoji (mirrors release-please-config.json sections)
+          PREFIX=$(echo "$DESC" | grep -oE '^[a-z]+' || true)
+          case "$PREFIX" in
+            feat)     EMOJI="🚀" ;;
+            fix)      EMOJI="🐛" ;;
+            perf)     EMOJI="⚡" ;;
+            refactor) EMOJI="🔧" ;;
+            docs)     EMOJI="📚" ;;
+            test)     EMOJI="✅" ;;
+            build)    EMOJI="📦" ;;
+            ci)       EMOJI="🤖" ;;
+            chore)    EMOJI="🧹" ;;
+            *)        EMOJI="🔹" ;;
+          esac
+
+          # Strip the "type(scope)?: " prefix and trailing " (#NN)" PR reference
+          CLEAN_TITLE=$(echo "$DESC" | sed -E 's/^[a-z]+(\([^)]*\))?!?: //; s/ \(#[0-9]+\)$//')
+          DESCRIPTION="$EMOJI $CLEAN_TITLE"$'\n\n'"Click this notification title to get more detail of the change in PR."
+
           # Name + avatar come from the webhook's own config in Discord
           curl -s -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg title "$SHORT_REPO — $AUTHOR pushed an acceptance update" \
-              --arg desc "$DESC" \
+              --arg title "RaidOps backend — $AUTHOR pushed a new version to acceptance: $VERSION" \
+              --arg desc "$DESCRIPTION" \
               --arg url "$LINK" \
               '{
                 embeds: [{
@@ -66,7 +90,7 @@ jobs:
                   description: $desc,
                   url: $url,
                   color: 3447003,
-                  footer: { text: "Rolling out to acceptance…" }
+                  footer: { text: "Update is on its way to acceptance. Discord will notify when live." }
                 }]
               }')"
 
@@ -93,7 +117,7 @@ jobs:
           VERSION: ${{ github.event.release.tag_name }}
         run: |
           IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}
-          docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:$VERSION .
+          docker build --build-arg APP_VERSION="$VERSION" -t $IMAGE_NAME:latest -t $IMAGE_NAME:$VERSION .
           docker push $IMAGE_NAME:latest
           docker push $IMAGE_NAME:$VERSION
 

@@ -28,6 +28,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 
 WORKDIR /app
 
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 COPY --from=build /app/publish .
 
 RUN addgroup -S raidops && adduser -S raidops -G raidops

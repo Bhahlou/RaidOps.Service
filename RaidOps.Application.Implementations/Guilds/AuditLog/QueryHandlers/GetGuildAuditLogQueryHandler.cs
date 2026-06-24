@@ -3,6 +3,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.AuditLog.Queries;
 using RaidOps.Application.Contracts.Guilds.AuditLog.Responses;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -14,7 +15,7 @@ namespace RaidOps.Application.Implementations.Guilds.AuditLog.QueryHandlers;
 /// of the guild's audit log, enriched with actor display info.
 /// </summary>
 public class GetGuildAuditLogQueryHandler(
-    IUserGuildsRepository userGuildsRepository,
+    IGuildAccessService guildAccessService,
     IGuildAuditLogRepository auditLogRepository,
     IUsersRepository usersRepository) : IQueryHandlerAsync<GetGuildAuditLogQuery, GuildAuditLogPageResponse>
 {
@@ -35,10 +36,8 @@ public class GetGuildAuditLogQueryHandler(
     /// <inheritdoc/>
     public async Task<Result<GuildAuditLogPageResponse>> HandleAsync(GetGuildAuditLogQuery query, CancellationToken cancellationToken)
     {
-        var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(query.RequesterDiscordId, cancellationToken);
-        var membership = userGuilds.FirstOrDefault(g => g.GuildId == query.GuildId);
-
-        if (membership == null || !membership.IsAdmin)
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+        if (accessLevel != GuildAccessLevel.Officer)
             return Result<GuildAuditLogPageResponse>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
 
         var actionTypes = ResolveActionTypeFilter(query);

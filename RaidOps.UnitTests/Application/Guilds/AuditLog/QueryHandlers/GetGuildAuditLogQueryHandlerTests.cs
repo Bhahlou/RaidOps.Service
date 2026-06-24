@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.AuditLog.Queries;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.AuditLog.QueryHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -11,7 +12,7 @@ namespace RaidOps.UnitTests.Application.Guilds.AuditLog.QueryHandlers;
 
 public class GetGuildAuditLogQueryHandlerTests
 {
-    private readonly Mock<IUserGuildsRepository>    _userGuilds = new();
+    private readonly Mock<IGuildAccessService>      _access     = new();
     private readonly Mock<IGuildAuditLogRepository> _auditLog   = new();
     private readonly Mock<IUsersRepository>         _users      = new();
     private readonly GetGuildAuditLogQueryHandler   _sut;
@@ -29,17 +30,17 @@ public class GetGuildAuditLogQueryHandlerTests
 
     public GetGuildAuditLogQueryHandlerTests()
     {
-        _sut = new GetGuildAuditLogQueryHandler(_userGuilds.Object, _auditLog.Object, _users.Object);
+        _sut = new GetGuildAuditLogQueryHandler(_access.Object, _auditLog.Object, _users.Object);
     }
 
     private void SetupAdmin(bool isAdmin = true) =>
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
-            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = isAdmin }]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default))
+            .ReturnsAsync(isAdmin ? GuildAccessLevel.Officer : GuildAccessLevel.Roster);
 
     [Fact]
     public async Task HandleAsync_RequesterNotMember_ReturnsForbidden()
     {
-        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default)).ReturnsAsync([]);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.None);
 
         var result = await _sut.HandleAsync(Query, default);
 

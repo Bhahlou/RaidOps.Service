@@ -20,6 +20,9 @@ internal static class ExternalApplicationsRegistry
         // Discord REST API (OAuth2 user flow)
         services.AddHttpClient<IDiscordApiService, DiscordApiService>();
 
+        // Discord deploy notification (webhook, posted once on startup)
+        services.AddHttpClient<IDiscordDeployNotifier, DiscordDeployNotifier>();
+
         // Battle.net API (OAuth2 + character data)
         services.AddHttpClient<IBnetApiService, BnetApiService>();
 

@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Authentication.Queries;
 using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Authentication.QueryHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -11,8 +12,9 @@ namespace RaidOps.UnitTests.Application.Authentication.QueryHandlers;
 
 public class GetMeQueryHandlerTests
 {
-    private readonly Mock<IUsersRepository> _users = new();
-    private readonly GetMeQueryHandler      _sut;
+    private readonly Mock<IUsersRepository>     _users  = new();
+    private readonly Mock<IGuildAccessService>  _access = new();
+    private readonly GetMeQueryHandler          _sut;
 
     private const string DiscordId = "user-1";
 
@@ -20,7 +22,7 @@ public class GetMeQueryHandlerTests
 
     public GetMeQueryHandlerTests()
     {
-        _sut = new GetMeQueryHandler(_users.Object);
+        _sut = new GetMeQueryHandler(_users.Object, _access.Object);
     }
 
     // ── Guard clause ─────────────────────────────────────────────────────────
@@ -129,6 +131,22 @@ public class GetMeQueryHandlerTests
         guild.IsRegistered.Should().BeTrue();
         guild.IsAdmin.Should().BeTrue();
         guild.IsConfigured.Should().BeTrue();
+    }
+
+    // ── AccessLevel mapping ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_GuildResponse_MapsAccessLevelFromGuildAccessService()
+    {
+        var userGuild = MakeUserGuild("g1", isAdmin: true, isRegistered: true);
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([userGuild]));
+        _access.Setup(a => a.ComputeAccessLevel(userGuild, userGuild.Guild, default))
+            .Returns(GuildAccessLevel.Officer);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Guilds.Single().AccessLevel.Should().Be(GuildAccessLevel.Officer);
     }
 
     // ── IsConfigured mapping ──────────────────────────────────────────────
