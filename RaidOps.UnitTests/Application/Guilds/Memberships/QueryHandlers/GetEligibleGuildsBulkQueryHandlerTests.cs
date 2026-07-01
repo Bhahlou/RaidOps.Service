@@ -99,9 +99,9 @@ public class GetEligibleGuildsBulkQueryHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle(g => g.GuildId == GuildId);
-        result.Value[0].EligibleCharacters.Should().HaveCount(2);
-        result.Value[0].EligibleCharacters.Should().Contain(c => c.Id == Char1Id);
-        result.Value[0].EligibleCharacters.Should().Contain(c => c.Id == Char2Id);
+        result.Value![0].EligibleCharacters.Should().HaveCount(2);
+        result.Value![0].EligibleCharacters.Should().Contain(c => c.Id == Char1Id);
+        result.Value![0].EligibleCharacters.Should().Contain(c => c.Id == Char2Id);
     }
 
     [Fact]
@@ -115,7 +115,8 @@ public class GetEligibleGuildsBulkQueryHandlerTests
 
         var result = await _sut.HandleAsync(Query, default);
 
-        var charDto = result.Value[0].EligibleCharacters[0];
+        result.IsSuccess.Should().BeTrue();
+        var charDto = result.Value![0].EligibleCharacters[0];
         charDto.ClassId.Should().Be(TestClass.Id);
         charDto.ClassName.Should().Be(TestClass.Name);
         charDto.ClassColor.Should().Be($"#{TestClass.Color}");
@@ -137,7 +138,7 @@ public class GetEligibleGuildsBulkQueryHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle();
-        result.Value[0].EligibleCharacters.Should().ContainSingle(c => c.Id == Char2Id);
+        result.Value![0].EligibleCharacters.Should().ContainSingle(c => c.Id == Char2Id);
     }
 
     [Fact]

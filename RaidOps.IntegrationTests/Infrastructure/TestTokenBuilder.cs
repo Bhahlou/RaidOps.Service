@@ -29,6 +29,20 @@ public static class TestTokenBuilder
     }
 
     /// <summary>
+    /// Creates a properly signed token that intentionally omits the <c>sub</c> claim.
+    /// Use to exercise the controller-level <c>discordId == null</c> guard.
+    /// </summary>
+    public static string CreateAccessTokenWithoutSub()
+    {
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Name, "NoSubUser"),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+        return BuildToken(claims, DateTime.UtcNow.AddHours(1));
+    }
+
+    /// <summary>
     /// Creates a valid refresh token for the given Discord user, signed with the test key.
     /// </summary>
     public static string CreateRefreshToken(string discordId)

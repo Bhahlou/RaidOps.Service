@@ -424,6 +424,14 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
     }
 
     [Fact]
+    public async Task GetEligibleGuildsBulk_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var response = await client.GetAsync("/api/v1/characters/eligible-guilds");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetEligibleGuildsBulk_WithNoActiveCharacters_ReturnsEmptyList()
     {
         const string id = "400000000000000090";
