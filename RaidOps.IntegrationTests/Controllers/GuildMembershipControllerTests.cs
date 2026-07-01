@@ -414,13 +414,116 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         }
     }
 
+    // ── GetEligibleGuildsBulk ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/characters/eligible-guilds");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_WithNoActiveCharacters_ReturnsEmptyList()
+    {
+        const string id = "400000000000000090";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/characters/eligible-guilds");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<GuildEligibilityResponse>>();
+        body.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_WithOpenGuildAndMultipleChars_ReturnsGuildWithAllEligibleChars()
+    {
+        const string id      = "400000000000000091";
+        const string guildId = "820000000000000091";
+        var char1Id = await SeedUserWithCharacter(id, bnetCharacterId: 80091, name: "Bhahlou");
+        var char2Id = await SeedUserWithCharacter2ndChar(id, bnetCharacterId: 80092, name: "Bhahlheal");
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Iron Council", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/characters/eligible-guilds");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<GuildEligibilityResponse>>(ApiJsonOptions);
+        body.Should().ContainSingle(g => g.GuildId == guildId);
+        body![0].EligibleCharacters.Should().HaveCount(2);
+        body[0].EligibleCharacters.Should().Contain(c => c.Id == char1Id);
+        body[0].EligibleCharacters.Should().Contain(c => c.Id == char2Id);
+    }
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_WhenOneCharAlreadyMember_ExcludesThemFromGuild()
+    {
+        const string id      = "400000000000000092";
+        const string guildId = "820000000000000092";
+        var char1Id = await SeedUserWithCharacter(id, bnetCharacterId: 80093, name: "MainChar");
+        var char2Id = await SeedUserWithCharacter2ndChar(id, bnetCharacterId: 80094, name: "AltChar");
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = char1Id, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/characters/eligible-guilds");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<GuildEligibilityResponse>>(ApiJsonOptions);
+        body.Should().ContainSingle(g => g.GuildId == guildId);
+        body![0].EligibleCharacters.Should().ContainSingle(c => c.Id == char2Id);
+        body[0].EligibleCharacters.Should().NotContain(c => c.Id == char1Id);
+    }
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_WhenAllCharsAlreadyMembers_GuildExcluded()
+    {
+        const string id      = "400000000000000093";
+        const string guildId = "820000000000000093";
+        var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80095, name: "OnlyChar");
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = charId, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/characters/eligible-guilds");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<GuildEligibilityResponse>>(ApiJsonOptions);
+        body.Should().BeEmpty();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Seeds a user with an active character on an isolated realm slug.
     /// Uses the <paramref name="bnetCharacterId"/> to guarantee unique realm slugs across tests.
     /// </summary>
-    private async Task<int> SeedUserWithCharacter(string discordId, long bnetCharacterId = 80001)
+    private async Task<int> SeedUserWithCharacter(string discordId, long bnetCharacterId = 80001, string name = "TestMage")
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
@@ -432,7 +535,26 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
 
-        var character = TestDataBuilder.CreateCharacter(discordId, realm.Id, isActive: true, bnetCharacterId: bnetCharacterId);
+        var character = TestDataBuilder.CreateCharacter(discordId, realm.Id, isActive: true, bnetCharacterId: bnetCharacterId, name: name);
+        db.Characters.Add(character);
+        await db.SaveChangesAsync();
+
+        return character.Id;
+    }
+
+    /// <summary>
+    /// Seeds a second active character for an existing user (skips user creation to avoid PK conflict).
+    /// </summary>
+    private async Task<int> SeedUserWithCharacter2ndChar(string discordId, long bnetCharacterId, string name = "TestAlt")
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
+
+        var realm = TestDataBuilder.CreateRealm(slug: $"realm-mb-{bnetCharacterId}");
+        db.Realms.Add(realm);
+        await db.SaveChangesAsync();
+
+        var character = TestDataBuilder.CreateCharacter(discordId, realm.Id, isActive: true, bnetCharacterId: bnetCharacterId, name: name);
         db.Characters.Add(character);
         await db.SaveChangesAsync();
 

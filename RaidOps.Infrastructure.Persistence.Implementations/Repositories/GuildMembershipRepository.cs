@@ -21,6 +21,15 @@ public class GuildMembershipRepository(RaidOpsDbContext context) : IGuildMembers
             .ToListAsync(cancellationToken);
 
     /// <summary>
+    /// Returns all roster memberships for the given set of characters in a single query.
+    /// </summary>
+    public async Task<List<GuildMembership>> GetByCharacterIdsAsync(IEnumerable<int> characterIds, CancellationToken cancellationToken = default)
+        => await context.GuildMemberships
+            .Where(m => characterIds.Contains(m.CharacterId))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
     /// Returns all roster memberships for the given guild with character navigation data.
     /// </summary>
     public async Task<List<GuildMembership>> GetByGuildIdAsync(string guildId, CancellationToken cancellationToken = default)

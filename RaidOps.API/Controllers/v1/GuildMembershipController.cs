@@ -21,6 +21,24 @@ public class GuildMembershipController(
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
     /// <summary>
+    /// Returns all registered guilds the user can add at least one of their characters to,
+    /// along with the specific eligible characters for each guild.
+    /// Used by the get-started stepper for a guild-centric link UI (single request).
+    /// </summary>
+    [HttpGet("characters/eligible-guilds")]
+    public async Task<IActionResult> GetEligibleGuildsBulk(CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetEligibleGuildsBulkQuery, List<GuildEligibilityResponse>>(
+            new GetEligibleGuildsBulkQuery { RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
     /// Returns the guilds that a character is eligible to join
     /// (Discord member, configured roster mode grants access, not yet a member).
     /// </summary>
