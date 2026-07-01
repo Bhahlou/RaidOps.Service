@@ -16,6 +16,14 @@ public interface IGuildMembershipRepository
     Task<List<GuildMembership>> GetByCharacterIdAsync(int characterId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns all guild memberships for the given set of characters in a single query.
+    /// Used for bulk eligibility checks to avoid N+1 per-character fetches.
+    /// </summary>
+    /// <param name="characterIds">Internal character IDs to query.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    Task<List<GuildMembership>> GetByCharacterIdsAsync(IEnumerable<int> characterIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns all memberships in the given guild, including Character (with Realm and Class) navigation data.
     /// </summary>
     /// <param name="guildId">Discord snowflake ID of the guild.</param>

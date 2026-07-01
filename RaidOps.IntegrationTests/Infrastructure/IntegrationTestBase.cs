@@ -48,6 +48,18 @@ public abstract class IntegrationTestBase
     }
 
     /// <summary>
+    /// Returns an authenticated HTTP client whose JWT token contains no <c>sub</c> claim.
+    /// Use to exercise controller-level <c>discordId == null</c> guard branches.
+    /// </summary>
+    protected HttpClient CreateClientWithoutSubClaim()
+    {
+        var token = TestTokenBuilder.CreateAccessTokenWithoutSub();
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    /// <summary>
     /// Returns an HTTP client that does NOT follow redirects.
     /// Use when you need to assert 302 status codes or redirect locations.
     /// </summary>

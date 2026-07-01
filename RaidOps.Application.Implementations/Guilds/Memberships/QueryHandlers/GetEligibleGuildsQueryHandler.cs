@@ -2,6 +2,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Queries;
 using RaidOps.Application.Contracts.Guilds.Memberships.Responses;
+using RaidOps.Application.Implementations.Guilds.Memberships.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -49,7 +50,7 @@ public class GetEligibleGuildsQueryHandler(
                 continue;
 
             var isEligible = guild.RosterMode == RosterMode.Open
-                || (guild.MinRosterRoleId != null && HasDiscordRoleAccess(guild.Id, guild.MinRosterRoleId, query.RequesterDiscordId, cancellationToken));
+                || (guild.MinRosterRoleId != null && DiscordRosterAccessHelper.HasDiscordRoleAccess(discordBotService, guild.Id, guild.MinRosterRoleId, query.RequesterDiscordId, cancellationToken));
 
             if (isEligible)
             {
@@ -63,31 +64,5 @@ public class GetEligibleGuildsQueryHandler(
         }
 
         return Result<List<EligibleGuildResponse>>.Ok(eligible);
-    }
-
-    private bool HasDiscordRoleAccess(string guildId, string minRosterRoleId, string requesterDiscordId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var roles = discordBotService.Guilds.GetRoles(guildId, cancellationToken)
-                .ToDictionary(r => r.Id.ToString());
-
-            if (!roles.TryGetValue(minRosterRoleId, out var minRole))
-                return false;
-
-            var guildUser = discordBotService.Guilds.GetUsers(guildId, cancellationToken)
-                .FirstOrDefault(u => u.Id.ToString() == requesterDiscordId);
-
-            if (guildUser == null)
-                return false;
-
-            return guildUser.RoleIds.Any(rid =>
-                roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
-        }
-        catch (InvalidOperationException)
-        {
-            // Bot not in this guild — skip silently
-            return false;
-        }
     }
 }
