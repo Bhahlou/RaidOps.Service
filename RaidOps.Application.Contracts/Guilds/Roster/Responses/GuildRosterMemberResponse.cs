@@ -1,0 +1,49 @@
+using RaidOps.Application.Contracts.Characters.Responses;
+using RaidOps.Domain.Enums;
+
+namespace RaidOps.Application.Contracts.Guilds.Roster.Responses;
+
+/// <summary>
+/// A single character entry on a guild's roster. Returned by <c>GetGuildRosterQuery</c>.
+/// </summary>
+public class GuildRosterMemberResponse
+{
+    /// <summary>Internal character ID.</summary>
+    public required int CharacterId { get; set; }
+
+    /// <summary>Character name.</summary>
+    public required string CharacterName { get; set; }
+
+    /// <summary>FK to the character's class.</summary>
+    public required int ClassId { get; set; }
+
+    /// <summary>Display name of the character's class.</summary>
+    public required string ClassName { get; set; }
+
+    /// <summary>Hex color of the character's class, prefixed with '#'.</summary>
+    public required string ClassColor { get; set; }
+
+    /// <summary>Character level.</summary>
+    public required int Level { get; set; }
+
+    /// <summary>Avatar image URL, or <c>null</c> if not yet synced.</summary>
+    public string? AvatarUrl { get; set; }
+
+    /// <summary>Discord snowflake ID of the player who owns this character.</summary>
+    public required string PlayerDiscordId { get; set; }
+
+    /// <summary>Discord display name of the player, or <c>null</c> if it could not be resolved.</summary>
+    public string? PlayerName { get; set; }
+
+    /// <summary>Discord avatar hash of the player, or <c>null</c> if it could not be resolved.</summary>
+    public string? PlayerAvatarHash { get; set; }
+
+    /// <summary>User-curated raid-viable specs, main spec first. Empty if none have been curated yet.</summary>
+    public required List<CharacterRaidSpecDto> RaidSpecs { get; set; }
+
+    /// <summary>Raid-composition rank of this character on the roster.</summary>
+    public required CharacterRank CharacterRank { get; set; }
+
+    /// <summary>UTC timestamp of when the character joined the roster.</summary>
+    public required DateTime JoinedAt { get; set; }
+}
