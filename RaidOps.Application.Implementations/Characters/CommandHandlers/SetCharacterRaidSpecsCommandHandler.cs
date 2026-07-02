@@ -1,6 +1,8 @@
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Services;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -9,11 +11,14 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 /// <summary>
 /// Handles <see cref="SetCharacterRaidSpecsCommand"/> by validating the requested specs against
 /// the character's class and replacing its raid-viable spec set. Idempotent — also used to edit
-/// a previously set raid spec selection.
+/// a previously set raid spec selection. The requester must own the character or be an officer
+/// of a guild it is a roster member of.
 /// </summary>
 public class SetCharacterRaidSpecsCommandHandler(
     ICharacterRepository characterRepository,
-    ISpecRepository specRepository)
+    ISpecRepository specRepository,
+    IGuildMembershipRepository membershipRepository,
+    IGuildAccessService guildAccessService)
     : ICommandHandlerAsync<SetCharacterRaidSpecsCommand>
 {
     /// <inheritdoc/>
@@ -34,7 +39,12 @@ public class SetCharacterRaidSpecsCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotFound, $"Character '{command.CharacterId}' does not exist.");
 
         if (character.UserDiscordId != command.UserDiscordId)
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOwned, "You do not own this character.");
+        {
+            var accessLevel = await CharacterGuildAccessHelper.GetHighestAccessAsync(
+                character, command.UserDiscordId, membershipRepository, guildAccessService, cancellationToken);
+            if (accessLevel < GuildAccessLevel.Officer)
+                return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of a guild it belongs to.");
+        }
 
         var allSpecs = (await specRepository.GetAllAsync(cancellationToken)).ToDictionary(s => s.Id);
 

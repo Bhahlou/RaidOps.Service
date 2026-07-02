@@ -32,6 +32,35 @@ public class GuildMembershipControllerTests
         };
     }
 
+    // ── GetEligibleGuildsBulk ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.GetEligibleGuildsBulk(default)).Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_QuerySucceeds_ReturnsOk()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetEligibleGuildsBulkQuery, List<GuildEligibilityResponse>>(
+                It.Is<GetEligibleGuildsBulkQuery>(x => x.RequesterDiscordId == DiscordId), default))
+            .ReturnsAsync(Result<List<GuildEligibilityResponse>>.Ok([]));
+
+        (await _sut.GetEligibleGuildsBulk(default)).Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetEligibleGuildsBulk_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetEligibleGuildsBulkQuery, List<GuildEligibilityResponse>>(
+                It.IsAny<GetEligibleGuildsBulkQuery>(), default))
+            .ReturnsAsync(Result<List<GuildEligibilityResponse>>.Fail(ResponseDetail.Forbidden));
+
+        (await _sut.GetEligibleGuildsBulk(default)).Should().BeOfType<BadRequestObjectResult>();
+    }
+
     // ── GetEligibleGuilds ─────────────────────────────────────────────────────
 
     [Fact]

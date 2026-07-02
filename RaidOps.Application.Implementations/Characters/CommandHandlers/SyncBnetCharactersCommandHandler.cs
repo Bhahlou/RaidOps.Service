@@ -41,6 +41,13 @@ public class SyncBnetCharactersCommandHandler(
             profileNamespace,
             cancellationToken);
 
+        // The character-list endpoint above only returns basic info (name, level, race, class,
+        // faction, gender) — no avatar, current guild or item level. Look up what's already in
+        // the DB so those richer fields (populated by activation/resync) aren't wiped below.
+        var existingCharacters = await characterRepository.GetByUserWithDetailsAsync(
+            command.UserDiscordId, activeOnly: false, cancellationToken);
+        var existingByBnetId = existingCharacters.ToDictionary(c => (c.BnetCharacterId, c.BranchId));
+
         var synced = 0;
 
         foreach (var wowAccount in bnetResponse.WowAccounts)
@@ -56,6 +63,8 @@ public class SyncBnetCharactersCommandHandler(
                         BranchId = command.BranchId
                     }, cancellationToken);
 
+                existingByBnetId.TryGetValue((c.Id, command.BranchId), out var existingCharacter);
+
                 var character = await characterRepository.UpsertAsync(new Character
                 {
                     BnetCharacterId = c.Id,
@@ -66,14 +75,19 @@ public class SyncBnetCharactersCommandHandler(
                     BranchId = command.BranchId,
                     RealmId = realm.Id,
                     RaceId = c.PlayableRace.Id,
-                    ClassId = c.PlayableClass.Id
+                    ClassId = c.PlayableClass.Id,
+                    AvatarUrl = existingCharacter?.AvatarUrl,
                 }, cancellationToken);
+
+                var existingState = existingCharacter?.ExpansionStates.FirstOrDefault(s => s.ExpansionId == branch.CurrentExpansionId);
 
                 await characterRepository.UpsertExpansionStateAsync(new CharacterExpansionState
                 {
                     CharacterId = character.Id,
                     ExpansionId = branch.CurrentExpansionId,
                     Level = c.Level,
+                    ItemLevel = existingState?.ItemLevel,
+                    GuildName = existingState?.GuildName,
                     IsActive = true
                 }, cancellationToken);
 

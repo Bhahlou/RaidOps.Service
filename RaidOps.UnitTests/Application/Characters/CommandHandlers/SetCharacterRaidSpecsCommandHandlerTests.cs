@@ -2,8 +2,11 @@ using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Characters.CommandHandlers;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -14,17 +17,21 @@ namespace RaidOps.UnitTests.Application.Characters.CommandHandlers;
 /// </summary>
 public class SetCharacterRaidSpecsCommandHandlerTests
 {
-    private readonly Mock<ICharacterRepository> _characters = new();
-    private readonly Mock<ISpecRepository>      _specs      = new();
+    private readonly Mock<ICharacterRepository>       _characters  = new();
+    private readonly Mock<ISpecRepository>            _specs       = new();
+    private readonly Mock<IGuildMembershipRepository> _memberships = new();
+    private readonly Mock<IGuildAccessService>        _guildAccess = new();
     private readonly SetCharacterRaidSpecsCommandHandler _sut;
 
     private const int    CharacterId = 1;
     private const int    ClassId     = 1; // Warrior
     private const string DiscordId   = "user-1";
+    private const string OwnerId     = "owner-1";
+    private const string GuildId     = "guild-1";
 
     public SetCharacterRaidSpecsCommandHandlerTests()
     {
-        _sut = new SetCharacterRaidSpecsCommandHandler(_characters.Object, _specs.Object);
+        _sut = new SetCharacterRaidSpecsCommandHandler(_characters.Object, _specs.Object, _memberships.Object, _guildAccess.Object);
     }
 
     private static SetCharacterRaidSpecsCommand MakeCommand(int mainSpecId, IEnumerable<int> viableSpecIds) => new()
@@ -57,7 +64,7 @@ public class SetCharacterRaidSpecsCommandHandlerTests
         _characters.Verify(r => r.GetByIdAsync(It.IsAny<int>(), default), Times.Never);
     }
 
-    // ── Ownership ─────────────────────────────────────────────────────────
+    // ── Ownership / officer access ────────────────────────────────────────
 
     [Fact]
     public async Task HandleAsync_CharacterNotFound_ReturnsCharacterNotFound()
@@ -71,15 +78,32 @@ public class SetCharacterRaidSpecsCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_CharacterNotOwned_ReturnsCharacterNotOwned()
+    public async Task HandleAsync_NotOwnerAndNotOfficer_ReturnsForbidden()
     {
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
-            .ReturnsAsync(new Character { Id = CharacterId, ClassId = ClassId, UserDiscordId = "other-user" });
+            .ReturnsAsync(new Character { Id = CharacterId, ClassId = ClassId, UserDiscordId = OwnerId });
+        _memberships.Setup(r => r.GetByCharacterIdAsync(CharacterId, default))
+            .ReturnsAsync([new GuildMembership { CharacterId = CharacterId, GuildId = GuildId }]);
+        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
 
         var result = await _sut.HandleAsync(MakeCommand(71, [71]));
 
         result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.CharacterNotOwned);
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _characters.Verify(r => r.UpsertRaidSpecsAsync(It.IsAny<int>(), It.IsAny<IEnumerable<CharacterRaidSpec>>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NotOwnerAndNoSharedGuild_ReturnsForbidden()
+    {
+        _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
+            .ReturnsAsync(new Character { Id = CharacterId, ClassId = ClassId, UserDiscordId = OwnerId });
+        _memberships.Setup(r => r.GetByCharacterIdAsync(CharacterId, default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand(71, [71]));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.Forbidden);
     }
 
     // ── Spec validation ───────────────────────────────────────────────────
@@ -110,7 +134,7 @@ public class SetCharacterRaidSpecsCommandHandlerTests
         _characters.Verify(r => r.UpsertRaidSpecsAsync(It.IsAny<int>(), It.IsAny<IEnumerable<CharacterRaidSpec>>(), default), Times.Never);
     }
 
-    // ── Success ───────────────────────────────────────────────────────────
+    // ── Success — owner ───────────────────────────────────────────────────
 
     [Fact]
     public async Task HandleAsync_Success_PersistsExactlyOneMainSpec()
@@ -130,6 +154,25 @@ public class SetCharacterRaidSpecsCommandHandlerTests
         persisted.Should().ContainSingle(s => s.IsMain).Which.SpecId.Should().Be(72);
         persisted!.Where(s => !s.IsMain).Select(s => s.SpecId).Should().BeEquivalentTo([71, 73]);
         persisted.Should().OnlyContain(s => s.CharacterId == CharacterId);
+        _memberships.Verify(r => r.GetByCharacterIdAsync(It.IsAny<int>(), default), Times.Never);
+    }
+
+    // ── Success — officer editing someone else's raid specs ──────────────
+
+    [Fact]
+    public async Task HandleAsync_OfficerNotOwner_PersistsSpecs()
+    {
+        _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
+            .ReturnsAsync(new Character { Id = CharacterId, ClassId = ClassId, UserDiscordId = OwnerId });
+        _memberships.Setup(r => r.GetByCharacterIdAsync(CharacterId, default))
+            .ReturnsAsync([new GuildMembership { CharacterId = CharacterId, GuildId = GuildId }]);
+        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _specs.Setup(r => r.GetAllAsync(default)).ReturnsAsync([MakeSpec(71, ClassId)]);
+
+        var result = await _sut.HandleAsync(MakeCommand(71, [71]));
+
+        result.IsSuccess.Should().BeTrue();
+        _characters.Verify(r => r.UpsertRaidSpecsAsync(CharacterId, It.IsAny<IEnumerable<CharacterRaidSpec>>(), default), Times.Once);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

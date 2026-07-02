@@ -30,12 +30,16 @@ public class GuildMembershipRepository(RaidOpsDbContext context) : IGuildMembers
             .ToListAsync(cancellationToken);
 
     /// <summary>
-    /// Returns all roster memberships for the given guild with character navigation data.
+    /// Returns all roster memberships for the given guild with character, class, branch, realm,
+    /// user-curated raid spec and expansion state (for level) navigation data.
     /// </summary>
     public async Task<List<GuildMembership>> GetByGuildIdAsync(string guildId, CancellationToken cancellationToken = default)
         => await context.GuildMemberships
-            .Include(m => m.Character).ThenInclude(c => c.Realm)
             .Include(m => m.Character).ThenInclude(c => c.Class)
+            .Include(m => m.Character).ThenInclude(c => c.Branch)
+            .Include(m => m.Character).ThenInclude(c => c.Realm)
+            .Include(m => m.Character).ThenInclude(c => c.RaidSpecs).ThenInclude(rs => rs.Spec)
+            .Include(m => m.Character).ThenInclude(c => c.ExpansionStates)
             .Where(m => m.GuildId == guildId && m.Character.IsActiveInRaidOps)
             .AsNoTracking()
             .ToListAsync(cancellationToken);

@@ -76,6 +76,13 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task GetCharacter_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/characters/retail/kazzak/arthas");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     // ── Business logic — GetAll / GetSynced ─────────────────────────────────
 
     [Fact]
@@ -413,6 +420,146 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
                 .SingleAsync(rs => rs.CharacterId == charId);
             raidSpec.Character.Id.Should().Be(charId);
         }
+    }
+
+    // ── Business logic — GetCharacter ───────────────────────────────────────
+
+    [Fact]
+    public async Task GetCharacter_Owner_Returns200WithIsOwnerTrue()
+    {
+        const string id = "300000000000000070";
+        var charId = await SeedUserWithActiveCharacter(id, bnetCharacterId: 90070);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/characters/retail/realm-90070/testmage");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<CharacterDetailResponse>(ApiJsonOptions);
+        body!.Character.Id.Should().Be(charId);
+        body.IsOwner.Should().BeTrue();
+        body.CanEditRaidSpecs.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetCharacter_UnknownCharacter_Returns400()
+    {
+        const string id = "300000000000000071";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/characters/retail/nowhere/nobody");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GetCharacter_NotOwnerAndNoSharedGuild_Returns400()
+    {
+        const string ownerId  = "300000000000000072";
+        const string strangerId = "300000000000000172";
+        await SeedUserWithActiveCharacter(ownerId, bnetCharacterId: 90072);
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(strangerId)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: strangerId);
+
+        var response = await client.GetAsync("/api/v1/characters/retail/realm-90072/testmage");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GetCharacter_TeammateWithRosterAccess_Returns200ReadOnly()
+    {
+        const string ownerId    = "300000000000000073";
+        const string teammateId = "300000000000000173";
+        const string guildId    = "400000000000000073";
+        var charId = await SeedUserWithActiveCharacter(ownerId, bnetCharacterId: 90073);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(teammateId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(teammateId, guildId, isAdmin: false));
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: teammateId);
+
+        var response = await client.GetAsync("/api/v1/characters/retail/realm-90073/testmage");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<CharacterDetailResponse>(ApiJsonOptions);
+        body!.IsOwner.Should().BeFalse();
+        body.CanEditRaidSpecs.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetCharacter_OfficerNotOwner_Returns200CanEditRaidSpecsTrue()
+    {
+        const string ownerId   = "300000000000000074";
+        const string officerId = "300000000000000174";
+        const string guildId   = "400000000000000074";
+        var charId = await SeedUserWithActiveCharacter(ownerId, bnetCharacterId: 90074);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(officerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: officerId);
+
+        var response = await client.GetAsync("/api/v1/characters/retail/realm-90074/testmage");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<CharacterDetailResponse>(ApiJsonOptions);
+        body!.IsOwner.Should().BeFalse();
+        body.CanEditRaidSpecs.Should().BeTrue();
+    }
+
+    // ── Business logic — SetRaidSpecs as officer ────────────────────────────
+
+    [Fact]
+    public async Task SetRaidSpecs_OfficerNotOwner_Returns200AndPersists()
+    {
+        const string ownerId   = "300000000000000075";
+        const string officerId = "300000000000000175";
+        const string guildId   = "400000000000000075";
+        var charId = await SeedUserWithActiveCharacter(ownerId, bnetCharacterId: 90075);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(officerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: officerId);
+
+        var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
+            new { mainSpecId = 62, viableSpecIds = SingleViableSpec });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var raidSpecs = db.CharacterRaidSpecs.Where(rs => rs.CharacterId == charId).ToList();
+            raidSpecs.Should().ContainSingle(rs => rs.IsMain && rs.SpecId == 62);
+        }
+    }
+
+    [Fact]
+    public async Task SetRaidSpecs_StrangerNotOwnerNotOfficer_Returns400()
+    {
+        const string ownerId    = "300000000000000076";
+        const string strangerId = "300000000000000176";
+        var charId = await SeedUserWithActiveCharacter(ownerId, bnetCharacterId: 90076);
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(strangerId)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: strangerId);
+
+        var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
+            new { mainSpecId = 62, viableSpecIds = SingleViableSpec });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ── Domain — BnetCharacterSpec relationship ─────────────────────────────

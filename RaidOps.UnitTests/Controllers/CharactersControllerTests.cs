@@ -105,6 +105,66 @@ public class CharactersControllerTests
             .Should().BeOfType<OkObjectResult>();
     }
 
+    // ── GetCharacter ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCharacter_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.GetCharacter("classic-anniversary", "kazzak", "arthas", default))
+            .Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetCharacter_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetCharacterQuery, CharacterDetailResponse>(
+                It.IsAny<GetCharacterQuery>(), default))
+            .ReturnsAsync(Result<CharacterDetailResponse>.Fail(ResponseDetail.NotFound));
+
+        (await _sut.GetCharacter("classic-anniversary", "kazzak", "arthas", default))
+            .Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetCharacter_Success_ReturnsOkWithResponse()
+    {
+        var response = new CharacterDetailResponse
+        {
+            Character = new CharacterDto { Id = 10, Name = "Arthas" },
+            IsOwner = false,
+            CanEditRaidSpecs = true,
+        };
+        _queries.Setup(q => q.DispatchAsync<GetCharacterQuery, CharacterDetailResponse>(
+                It.IsAny<GetCharacterQuery>(), default))
+            .ReturnsAsync(Result<CharacterDetailResponse>.Ok(response));
+
+        var result = await _sut.GetCharacter("classic-anniversary", "kazzak", "arthas", default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(response);
+    }
+
+    [Fact]
+    public async Task GetCharacter_PassesCorrectQueryFields()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetCharacterQuery, CharacterDetailResponse>(
+                It.IsAny<GetCharacterQuery>(), default))
+            .ReturnsAsync(Result<CharacterDetailResponse>.Ok(new CharacterDetailResponse
+            {
+                Character = new CharacterDto { Id = 10, Name = "Arthas" },
+                IsOwner = true,
+                CanEditRaidSpecs = true,
+            }));
+
+        await _sut.GetCharacter("classic-anniversary", "kazzak", "arthas", default);
+
+        _queries.Verify(q => q.DispatchAsync<GetCharacterQuery, CharacterDetailResponse>(
+            It.Is<GetCharacterQuery>(x =>
+                x.BranchSlug == "classic-anniversary" && x.RealmSlug == "kazzak" &&
+                x.CharacterName == "arthas" && x.RequesterDiscordId == DiscordId),
+            default), Times.Once);
+    }
+
     // ── Resync ────────────────────────────────────────────────────────────────
 
     [Fact]
