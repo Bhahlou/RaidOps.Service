@@ -113,8 +113,8 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
         var response = await client.GetAsync($"/api/v1/guilds/{guildId}/roster");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<List<GuildRosterMemberResponse>>(ApiJsonOptions);
-        body!.Select(m => m.CharacterName).Should().Equal("Bob", "Zed", "Aaron");
+        var body = (await response.Content.ReadFromJsonAsync<List<GuildRosterMemberResponse>>(ApiJsonOptions))!;
+        body.Select(m => m.CharacterName).Should().Equal("Bob", "Zed", "Aaron");
         body[0].ClassId.Should().Be(8);
         body[0].RealmSlug.Should().NotBeNullOrEmpty();
         body[0].BranchName.Should().NotBeNullOrEmpty();

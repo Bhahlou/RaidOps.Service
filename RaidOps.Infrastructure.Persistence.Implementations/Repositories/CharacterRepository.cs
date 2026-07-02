@@ -70,7 +70,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         CancellationToken cancellationToken = default)
         => await context.Characters
             .AsNoTracking()
-            .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && c.Name.ToLower() == name.ToLower())
+            .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && EF.Functions.ILike(c.Name, name))
             .Include(c => c.Branch)
             .Include(c => c.Realm)
             .Include(c => c.Class)
