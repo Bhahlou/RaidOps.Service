@@ -67,6 +67,8 @@ public class SyncBnetCharactersCommandHandlerTests
 
         _characters.Setup(r => r.UpsertAsync(It.IsAny<Character>(), default))
             .ReturnsAsync((Character c, CancellationToken _) => c);
+        _characters.Setup(r => r.GetByUserWithDetailsAsync(It.IsAny<string>(), It.IsAny<bool>(), default))
+            .ReturnsAsync([]);
     }
 
     // ── Guard clauses ────────────────────────────────────────────────────────
@@ -175,6 +177,82 @@ public class SyncBnetCharactersCommandHandlerTests
 
         // "dynamic-classic1x" → "profile-classic1x-eu"
         _bnetApi.Verify(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, "profile-classic1x-eu", default), Times.Once);
+    }
+
+    // ── Preserving enrichment data not returned by the character-list endpoint ──
+
+    [Fact]
+    public async Task HandleAsync_ExistingCharacterWithAvatarUrl_PreservesItOnUpsert()
+    {
+        const long bnetCharacterId = 1001;
+        ArrangeHappyPath([BnetChar("kazzak", id: bnetCharacterId)]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default)).ReturnsAsync(ExistingRealm);
+        _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, false, default)).ReturnsAsync(
+        [
+            new Character
+            {
+                Id = 42, BnetCharacterId = bnetCharacterId, BranchId = BranchId,
+                AvatarUrl = "https://cdn/avatar.jpg", ExpansionStates = [],
+            },
+        ]);
+
+        await _sut.HandleAsync(Command);
+
+        _characters.Verify(r => r.UpsertAsync(
+            It.Is<Character>(c => c.BnetCharacterId == bnetCharacterId && c.AvatarUrl == "https://cdn/avatar.jpg"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExistingExpansionState_PreservesGuildNameAndItemLevel()
+    {
+        const long bnetCharacterId = 1001;
+        ArrangeHappyPath([BnetChar("kazzak", id: bnetCharacterId)]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default)).ReturnsAsync(ExistingRealm);
+        _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, false, default)).ReturnsAsync(
+        [
+            new Character
+            {
+                Id = 42, BnetCharacterId = bnetCharacterId, BranchId = BranchId,
+                ExpansionStates =
+                [
+                    new CharacterExpansionState
+                    {
+                        CharacterId = 42, ExpansionId = Branch.CurrentExpansionId,
+                        GuildName = "Existing Guild", ItemLevel = 615,
+                    },
+                ],
+            },
+        ]);
+
+        CharacterExpansionState? upserted = null;
+        _characters.Setup(r => r.UpsertExpansionStateAsync(It.IsAny<CharacterExpansionState>(), default))
+            .Callback<CharacterExpansionState, CancellationToken>((s, _) => upserted = s)
+            .Returns(Task.CompletedTask);
+
+        await _sut.HandleAsync(Command);
+
+        upserted.Should().NotBeNull();
+        upserted!.GuildName.Should().Be("Existing Guild");
+        upserted.ItemLevel.Should().Be(615);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoExistingCharacter_LeavesAvatarGuildNameAndItemLevelNull()
+    {
+        ArrangeHappyPath([BnetChar("kazzak")]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default)).ReturnsAsync(ExistingRealm);
+
+        CharacterExpansionState? upserted = null;
+        _characters.Setup(r => r.UpsertExpansionStateAsync(It.IsAny<CharacterExpansionState>(), default))
+            .Callback<CharacterExpansionState, CancellationToken>((s, _) => upserted = s)
+            .Returns(Task.CompletedTask);
+
+        await _sut.HandleAsync(Command);
+
+        _characters.Verify(r => r.UpsertAsync(It.Is<Character>(c => c.AvatarUrl == null), default), Times.Once);
+        upserted!.GuildName.Should().BeNull();
+        upserted.ItemLevel.Should().BeNull();
     }
 
     // ── Faction & gender mapping ─────────────────────────────────────────────

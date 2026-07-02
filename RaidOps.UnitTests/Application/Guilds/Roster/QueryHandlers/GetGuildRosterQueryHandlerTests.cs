@@ -20,6 +20,7 @@ public class GetGuildRosterQueryHandlerTests
     private readonly Mock<IGuildsRepository>          _guilds      = new();
     private readonly Mock<IGuildAccessService>        _access      = new();
     private readonly Mock<IGuildMembershipRepository> _memberships = new();
+    private readonly Mock<IUsersRepository>           _users       = new();
     private readonly GetGuildRosterQueryHandler       _sut;
 
     private const string GuildId     = "guild-1";
@@ -33,7 +34,9 @@ public class GetGuildRosterQueryHandlerTests
 
     public GetGuildRosterQueryHandlerTests()
     {
-        _sut = new GetGuildRosterQueryHandler(_guilds.Object, _access.Object, _memberships.Object);
+        _sut = new GetGuildRosterQueryHandler(_guilds.Object, _access.Object, _memberships.Object, _users.Object);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([]);
     }
 
     [Fact]
@@ -92,15 +95,18 @@ public class GetGuildRosterQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Success_MapsCharacterAndMainSpecFields()
+    public async Task HandleAsync_Success_MapsCharacterAndPlayerFields()
     {
+        const string ownerId = "owner-1";
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
         [
-            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Split),
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Split, ownerId: ownerId),
         ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = ownerId, Name = "Bhahlou", AvatarHash = "hash123" }]);
 
         var result = await _sut.HandleAsync(Query, default);
 
@@ -109,14 +115,17 @@ public class GetGuildRosterQueryHandlerTests
         member.CharacterId.Should().Be(1);
         member.ClassName.Should().Be("Death Knight");
         member.ClassColor.Should().Be("#C41F3B");
-        member.RealmName.Should().Be("Kazzak");
+        member.BranchName.Should().Be("Classic Anniversary");
+        member.RealmSlug.Should().Be("kazzak");
         member.Level.Should().Be(80);
-        member.ItemLevel.Should().Be(620);
-        member.MainSpecName.Should().Be("Frost");
+        member.RaidSpecs.Should().ContainSingle(s => s.Name == "Frost" && s.IsMain);
+        member.PlayerDiscordId.Should().Be(ownerId);
+        member.PlayerName.Should().Be("Bhahlou");
+        member.PlayerAvatarHash.Should().Be("hash123");
         member.CharacterRank.Should().Be(CharacterRank.Split);
     }
 
-    private static GuildMembership BuildMembership(int id, string name, CharacterRank rank)
+    private static GuildMembership BuildMembership(int id, string name, CharacterRank rank, string ownerId = "owner-1")
     {
         var frostSpec = new Spec { Id = 1, Name = "Frost" };
         return new GuildMembership
@@ -127,13 +136,16 @@ public class GetGuildRosterQueryHandlerTests
             JoinedAt      = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             Character = new Character
             {
-                Id       = id,
-                Name     = name,
-                ClassId  = 6,
-                Class    = new WowClass { Id = 6, Name = "Death Knight", Color = "C41F3B" },
-                RealmId  = 1,
-                Realm    = new Realm { Id = 1, Name = "Kazzak", Slug = "kazzak", Region = "eu" },
-                RaidSpecs = [new CharacterRaidSpec { CharacterId = id, SpecId = 1, IsMain = true, Spec = frostSpec }],
+                Id            = id,
+                Name          = name,
+                UserDiscordId = ownerId,
+                ClassId       = 6,
+                Class         = new WowClass { Id = 6, Name = "Death Knight", Color = "C41F3B" },
+                RealmId       = 1,
+                Realm         = new Realm { Id = 1, Name = "Kazzak", Slug = "kazzak", Region = "eu" },
+                BranchId      = 1,
+                Branch        = new Branch { Id = 1, Name = "Classic Anniversary" },
+                RaidSpecs     = [new CharacterRaidSpec { CharacterId = id, SpecId = 1, IsMain = true, Spec = frostSpec }],
                 ExpansionStates =
                 [
                     new CharacterExpansionState

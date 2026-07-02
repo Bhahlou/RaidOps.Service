@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.Guilds.Roster.Responses;
 using RaidOps.Domain.Enums;
@@ -13,14 +13,14 @@ namespace RaidOps.IntegrationTests.Controllers;
 /// <summary>
 /// Integration tests for <see cref="RaidOps.API.Controllers.v1.GuildRosterController"/>.
 /// Uses a shared Testcontainers PostgreSQL instance via <see cref="RaidOpsWebApplicationFactory"/>.
-/// All Discord IDs are in the 600… range and guild IDs in the 940… range to avoid primary-key
+/// All Discord IDs are in the 970... range and guild IDs in the 940... range to avoid primary-key
 /// conflicts with other test classes.
 /// </summary>
 [Collection("Integration")]
 public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {
-    // ── Auth enforcement ────────────────────────────────────────────────────
+    // â”€â”€ Auth enforcement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetRoster_WithoutToken_Returns401()
@@ -30,12 +30,12 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // ── Business logic ──────────────────────────────────────────────────────
+    // â”€â”€ Business logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetRoster_WhenGuildNotRegistered_Returns400()
     {
-        const string id      = "600000000000000001";
+        const string id      = "970000000000000001";
         const string guildId = "940000000000000001";
         await SeedAsync(db =>
         {
@@ -53,7 +53,7 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task GetRoster_WhenRequesterNotDiscordMember_Returns400()
     {
-        const string id      = "600000000000000002";
+        const string id      = "970000000000000002";
         const string guildId = "940000000000000002";
         await SeedAsync(db =>
         {
@@ -71,7 +71,7 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task GetRoster_WhenRosterModeClosedWithoutRequiredRole_Returns400()
     {
-        const string id      = "600000000000000003";
+        const string id      = "970000000000000003";
         const string guildId = "940000000000000003";
         await SeedAsync(db =>
         {
@@ -94,7 +94,7 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task GetRoster_WhenRosterAccessGranted_Returns200WithMembersOrderedByRankThenName()
     {
-        const string id      = "600000000000000004";
+        const string id      = "970000000000000004";
         const string guildId = "940000000000000004";
         var mainZed = await SeedActiveCharacter(id, bnetCharacterId: 90004001, name: "Zed");
         var mainBob = await SeedActiveCharacter(id, bnetCharacterId: 90004002, name: "Bob");
@@ -116,13 +116,15 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
         var body = await response.Content.ReadFromJsonAsync<List<GuildRosterMemberResponse>>(ApiJsonOptions);
         body!.Select(m => m.CharacterName).Should().Equal("Bob", "Zed", "Aaron");
         body[0].ClassId.Should().Be(8);
-        body[0].RealmName.Should().NotBeNullOrEmpty();
+        body[0].RealmSlug.Should().NotBeNullOrEmpty();
+        body[0].BranchName.Should().NotBeNullOrEmpty();
+        body[0].PlayerDiscordId.Should().Be(id);
     }
 
     [Fact]
     public async Task GetRoster_ExcludesInactiveCharacters()
     {
-        const string id      = "600000000000000005";
+        const string id      = "970000000000000005";
         const string guildId = "940000000000000005";
         var activeChar = await SeedActiveCharacter(id, bnetCharacterId: 90005001, name: "Active");
         var inactiveChar = await SeedActiveCharacter(id, bnetCharacterId: 90005002, name: "Inactive", isActive: false);
@@ -143,7 +145,33 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
         body.Should().ContainSingle(m => m.CharacterName == "Active");
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    [Fact]
+    public async Task GetRoster_ResolvesOwningPlayerDiscordDisplayInfo()
+    {
+        const string viewerId = "970000000000000006";
+        const string ownerId  = "970000000000000106";
+        const string guildId  = "940000000000000006";
+        var charId = await SeedActiveCharacter(ownerId, bnetCharacterId: 90006001, name: "Jaina");
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(viewerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(viewerId, guildId));
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: viewerId);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/roster");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<GuildRosterMemberResponse>>(ApiJsonOptions);
+        var member = body.Should().ContainSingle(m => m.CharacterName == "Jaina").Which;
+        member.PlayerDiscordId.Should().Be(ownerId);
+        member.PlayerName.Should().Be("TestUser");
+    }
+
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Seeds a user (if not already present) with an active character on an isolated realm slug.

@@ -271,6 +271,66 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         }
     }
 
+    [Fact]
+    public async Task UpdateCharacterRank_OfficerNotOwner_Returns200AndUpdatesRank()
+    {
+        const string ownerId   = "400000000000000052";
+        const string officerId = "400000000000000152";
+        const string guildId   = "820000000000000052";
+        var charId = await SeedUserWithCharacter(ownerId, bnetCharacterId: 80052);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(officerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = charId, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: officerId);
+
+        var body = JsonContent.Create(new { characterRank = (int)CharacterRank.Alt });
+        var response = await client.PatchAsync($"/api/v1/characters/{charId}/memberships/{guildId}", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var membership = await db.GuildMemberships.FindAsync(charId, guildId);
+            membership!.CharacterRank.Should().Be(CharacterRank.Alt);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateCharacterRank_StrangerNotOwnerNotOfficer_Returns400()
+    {
+        const string ownerId    = "400000000000000053";
+        const string strangerId = "400000000000000153";
+        const string guildId    = "820000000000000053";
+        var charId = await SeedUserWithCharacter(ownerId, bnetCharacterId: 80053);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(strangerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(strangerId, guildId, isAdmin: false));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = charId, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: strangerId);
+
+        var body = JsonContent.Create(new { characterRank = (int)CharacterRank.Alt });
+        var response = await client.PatchAsync($"/api/v1/characters/{charId}/memberships/{guildId}", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     // ── LeaveGuild ────────────────────────────────────────────────────────
 
     [Fact]
@@ -317,6 +377,75 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         {
             var membership = await db.GuildMemberships.FindAsync(charId, guildId);
             membership.Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public async Task LeaveGuild_OfficerKickingSomeoneElse_Returns200RemovesMembershipAndLogsMemberExcluded()
+    {
+        const string ownerId   = "400000000000000062";
+        const string officerId = "400000000000000162";
+        const string guildId   = "820000000000000062";
+        var charId = await SeedUserWithCharacter(ownerId, bnetCharacterId: 80062);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(officerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = charId, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: officerId);
+
+        var response = await client.DeleteAsync($"/api/v1/characters/{charId}/memberships/{guildId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var membership = await db.GuildMemberships.FindAsync(charId, guildId);
+            membership.Should().BeNull();
+
+            var log = await db.GuildAuditLogs.FirstOrDefaultAsync(l =>
+                l.GuildId == guildId && l.ActionType == GuildAuditAction.MemberExcluded);
+            log.Should().NotBeNull();
+            log!.ActorDiscordId.Should().Be(officerId);
+        }
+    }
+
+    [Fact]
+    public async Task LeaveGuild_StrangerNotOwnerNotOfficer_Returns400()
+    {
+        const string ownerId    = "400000000000000063";
+        const string strangerId = "400000000000000163";
+        const string guildId    = "820000000000000063";
+        var charId = await SeedUserWithCharacter(ownerId, bnetCharacterId: 80063);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(strangerId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(strangerId, guildId, isAdmin: false));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = charId, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: strangerId);
+
+        var response = await client.DeleteAsync($"/api/v1/characters/{charId}/memberships/{guildId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var membership = await db.GuildMemberships.FindAsync(charId, guildId);
+            membership.Should().NotBeNull();
         }
     }
 
