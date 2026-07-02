@@ -24,6 +24,7 @@ internal static class PersistenceRegistry
         services.AddScoped<ICharacterRepository, CharacterRepository>();
         services.AddScoped<IGuildMembershipRepository, GuildMembershipRepository>();
         services.AddScoped<IGuildAuditLogRepository, GuildAuditLogRepository>();
+        services.AddScoped<INotificationDismissalRepository, NotificationDismissalRepository>();
 
         return services;
     }

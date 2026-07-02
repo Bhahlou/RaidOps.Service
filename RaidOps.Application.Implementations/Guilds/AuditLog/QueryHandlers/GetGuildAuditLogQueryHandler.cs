@@ -31,6 +31,7 @@ public class GetGuildAuditLogQueryHandler(
         [GuildAuditAction.MemberLeft] = GuildAuditCategory.Roster,
         [GuildAuditAction.MemberExcluded] = GuildAuditCategory.Roster,
         [GuildAuditAction.MemberRankUpdated] = GuildAuditCategory.Roster,
+        [GuildAuditAction.OfficerThresholdUpdated] = GuildAuditCategory.Settings,
     };
 
     /// <inheritdoc/>

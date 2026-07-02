@@ -29,6 +29,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="GuildAuditLog"/> table recording guild action history.</summary>
     public DbSet<GuildAuditLog> GuildAuditLogs => Set<GuildAuditLog>();
 
+    /// <summary>Gets the <see cref="NotificationDismissal"/> table tracking dismissed in-app notifications.</summary>
+    public DbSet<NotificationDismissal> NotificationDismissals => Set<NotificationDismissal>();
+
     // ── Static reference data ─────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="Expansion"/> lookup table.</summary>
@@ -192,6 +195,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<GuildAuditLog>()
             .HasIndex(l => new { l.GuildId, l.OccurredAt });
+
+        // NotificationDismissal — composite PK (UserDiscordId, Type, GuildId)
+        modelBuilder.Entity<NotificationDismissal>()
+            .HasKey(nd => new { nd.UserDiscordId, nd.Type, nd.GuildId });
+
+        modelBuilder.Entity<NotificationDismissal>()
+            .HasOne(nd => nd.User)
+            .WithMany()
+            .HasForeignKey(nd => nd.UserDiscordId);
 
         // Realm — unique (Slug, Region, BranchId), FK to Branch
         modelBuilder.Entity<Realm>()

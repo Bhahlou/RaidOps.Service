@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Application.Implementations.Guilds.Access;
+using RaidOps.Application.Implementations.Notifications.Services;
 using RaidOps.Application.Implementations.Services;
 
 namespace RaidOps.Registry;
@@ -16,6 +17,7 @@ internal static class ApplicationRegistry
         services.AddScoped<ISpecResolverService, SpecResolverService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IGuildAccessService, GuildAccessService>();
+        services.AddScoped<IUserNotificationService, UserNotificationService>();
         return services;
     }
 }

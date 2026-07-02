@@ -101,4 +101,17 @@ public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <summary>
+    /// Updates only <see cref="Guild.MinOfficerRoleId"/>, leaving every other setting untouched.
+    /// </summary>
+    public async Task<bool> UpdateOfficerThresholdAsync(string guildId, string minOfficerRoleId, CancellationToken cancellationToken = default)
+    {
+        var guild = await context.Guilds.FindAsync([guildId], cancellationToken);
+        if (guild == null) return false;
+
+        guild.MinOfficerRoleId = minOfficerRoleId;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
 }

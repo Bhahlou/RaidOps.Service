@@ -1,3 +1,5 @@
+using RaidOps.Application.Contracts.Notifications.Responses;
+
 namespace RaidOps.Application.Contracts.Authentication.Responses;
 
 /// <summary>
@@ -27,4 +29,10 @@ public class UserResponse
     /// along with each guild's RaidOps registration status and the user's admin flag.
     /// </summary>
     public List<UserGuildResponse> Guilds { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the derived in-app notifications currently active for this user
+    /// (not already dismissed).
+    /// </summary>
+    public List<NotificationResponse> Notifications { get; set; } = [];
 }
