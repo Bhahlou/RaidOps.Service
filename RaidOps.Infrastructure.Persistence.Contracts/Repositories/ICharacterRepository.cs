@@ -26,6 +26,13 @@ public interface ICharacterRepository
     Task<IEnumerable<Character>> GetByIdsWithDetailsAsync(IEnumerable<int> ids, string userDiscordId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the character on the given branch/realm with the given name (case-insensitive),
+    /// regardless of owner, including the same navigation data as <see cref="GetByUserWithDetailsAsync"/>.
+    /// Used to view any character's detail page, not just the requester's own.
+    /// </summary>
+    Task<Character?> GetByBranchRealmAndNameAsync(int branchId, string realmSlug, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns the spec matching the given name and class, or <c>null</c> if not found.
     /// </summary>
     Task<Spec?> GetSpecByNameAndClassAsync(string name, int classId, CancellationToken cancellationToken = default);

@@ -8,12 +8,14 @@ using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 namespace RaidOps.Application.Implementations.Guilds.Memberships.CommandHandlers;
 
 /// <summary>
-/// Handles <see cref="UpdateCharacterRankCommand"/> by verifying character ownership and
-/// updating the raid-composition rank of an existing roster membership.
+/// Handles <see cref="UpdateCharacterRankCommand"/> by verifying the requester owns the
+/// character or is an officer of the guild, then updating the raid-composition rank of an
+/// existing roster membership.
 /// </summary>
 public class UpdateCharacterRankCommandHandler(
     ICharacterRepository characterRepository,
     IGuildMembershipRepository membershipRepository,
+    IGuildAccessService guildAccessService,
     IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateCharacterRankCommand>
 {
     /// <inheritdoc/>
@@ -24,7 +26,11 @@ public class UpdateCharacterRankCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotFound, $"Character '{command.CharacterId}' does not exist.");
 
         if (character.UserDiscordId != command.RequesterDiscordId)
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOwned, "You do not own this character.");
+        {
+            var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+            if (accessLevel < GuildAccessLevel.Officer)
+                return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of this guild.");
+        }
 
         var membership = await membershipRepository.GetAsync(command.CharacterId, command.GuildId, cancellationToken);
         if (membership == null)

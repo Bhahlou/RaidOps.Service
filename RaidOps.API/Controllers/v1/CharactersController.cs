@@ -98,6 +98,30 @@ public class CharactersController(
     }
 
     /// <summary>
+    /// Returns a single character's detail by branch/realm/name, regardless of owner — the
+    /// requester must own the character or have at least Roster access to a guild it belongs to.
+    /// </summary>
+    [HttpGet("{branchSlug}/{realmSlug}/{name}")]
+    public async Task<IActionResult> GetCharacter(
+        string branchSlug, string realmSlug, string name, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetCharacterQuery, CharacterDetailResponse>(
+            new GetCharacterQuery
+            {
+                BranchSlug = branchSlug,
+                RealmSlug = realmSlug,
+                CharacterName = name,
+                RequesterDiscordId = discordId,
+            },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
     /// Re-fetches the character's data from Battle.net and returns the updated character.
     /// The character must be active and belong to the authenticated user.
     /// </summary>

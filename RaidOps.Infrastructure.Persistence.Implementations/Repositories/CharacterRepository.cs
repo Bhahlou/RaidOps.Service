@@ -63,6 +63,28 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
     }
 
     /// <inheritdoc/>
+    public async Task<Character?> GetByBranchRealmAndNameAsync(
+        int branchId,
+        string realmSlug,
+        string name,
+        CancellationToken cancellationToken = default)
+        => await context.Characters
+            .AsNoTracking()
+            .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && c.Name.ToLower() == name.ToLower())
+            .Include(c => c.Branch)
+            .Include(c => c.Realm)
+            .Include(c => c.Class)
+            .Include(c => c.Race)
+            .Include(c => c.ExpansionStates)
+                .ThenInclude(s => s.Specs)
+                    .ThenInclude(cs => cs.Spec)
+            .Include(c => c.RaidSpecs)
+                .ThenInclude(rs => rs.Spec)
+            .Include(c => c.GuildMemberships)
+                .ThenInclude(m => m.Guild)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <inheritdoc/>
     public async Task<Spec?> GetSpecByIdAsync(int specId, CancellationToken cancellationToken = default)
     {
         return await context.Specs

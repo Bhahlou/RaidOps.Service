@@ -26,6 +26,12 @@ public class GuildRosterMemberResponse
     /// <summary>Character level.</summary>
     public required int Level { get; set; }
 
+    /// <summary>Display name of the game branch (e.g. "Classic Anniversary"). Used to build the character detail link.</summary>
+    public required string BranchName { get; set; }
+
+    /// <summary>Realm slug (e.g. "kazzak"). Used to build the character detail link.</summary>
+    public required string RealmSlug { get; set; }
+
     /// <summary>Avatar image URL, or <c>null</c> if not yet synced.</summary>
     public string? AvatarUrl { get; set; }
 

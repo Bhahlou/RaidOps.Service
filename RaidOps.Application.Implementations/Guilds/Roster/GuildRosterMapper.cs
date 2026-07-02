@@ -29,6 +29,8 @@ internal static class GuildRosterMapper
             ClassName        = character.Class.Name,
             ClassColor       = "#" + character.Class.Color,
             Level            = activeState?.Level ?? 0,
+            BranchName       = character.Branch.Name,
+            RealmSlug        = character.Realm.Slug,
             AvatarUrl        = character.AvatarUrl,
             PlayerDiscordId  = character.UserDiscordId,
             PlayerName       = player?.Name,
