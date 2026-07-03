@@ -50,11 +50,32 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task GetOfficerThreshold_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/123456789012345678/officer-threshold");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task UpdateOfficerThreshold_WithoutToken_Returns401()
     {
         var body = JsonContent.Create(new { minOfficerRoleId = (string?)null });
 
         var response = await Client.PatchAsync("/api/v1/guilds/123456789012345678/officer-threshold", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateOfficerThreshold_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var body = JsonContent.Create(new { minOfficerRoleId = "999000000000000001" });
+
+        var response = await client.PatchAsync("/api/v1/guilds/123456789012345678/officer-threshold", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

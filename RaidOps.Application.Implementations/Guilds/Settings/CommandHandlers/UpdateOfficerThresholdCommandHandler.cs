@@ -1,8 +1,8 @@
-using NetCord;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Guilds.Settings.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -41,11 +41,11 @@ public class UpdateOfficerThresholdCommandHandler(
 
         if (oldMinOfficerRoleId != command.MinOfficerRoleId)
         {
-            var roles = TryGetRoles(command.GuildId, cancellationToken);
+            var roles = RoleChangeAuditHelper.TryGetRoles(discordBotService, command.GuildId, cancellationToken);
             var variables = new Dictionary<string, string> { ["changedFields"] = "minOfficerRoleId" };
             if (oldMinOfficerRoleId != null)
-                AddRoleVariables(variables, "old", roles, oldMinOfficerRoleId);
-            AddRoleVariables(variables, "new", roles, command.MinOfficerRoleId);
+                RoleChangeAuditHelper.AddRoleVariables(variables, "old", "MinOfficerRole", roles, oldMinOfficerRoleId);
+            RoleChangeAuditHelper.AddRoleVariables(variables, "new", "MinOfficerRole", roles, command.MinOfficerRoleId);
 
             await auditLogService.LogAsync(
                 command.GuildId,
@@ -56,42 +56,5 @@ public class UpdateOfficerThresholdCommandHandler(
         }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Officer threshold updated successfully."));
-    }
-
-    /// <summary>
-    /// Fetches the guild's Discord roles from the bot's Gateway cache, or null if the bot isn't
-    /// in the guild — callers fall back to a placeholder rather than failing the update.
-    /// </summary>
-    private List<Role>? TryGetRoles(string guildId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return [.. discordBotService.Guilds.GetRoles(guildId, cancellationToken)];
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Resolves a Discord role's display info (name, color, icon) and adds it to
-    /// <paramref name="variables"/> under the given prefix — a raw role ID means nothing to a
-    /// human reading the audit log.
-    /// </summary>
-    private static void AddRoleVariables(Dictionary<string, string> variables, string prefix, List<Role>? roles, string roleId)
-    {
-        var role = roles?.FirstOrDefault(r => r.Id.ToString() == roleId);
-        if (role == null)
-            return;
-
-        variables[$"{prefix}MinOfficerRoleName"] = role.Name;
-
-        var color = role.Colors?.PrimaryColor.RawValue ?? 0;
-        if (color != 0)
-            variables[$"{prefix}MinOfficerRoleColor"] = color.ToString();
-
-        if (role.IconHash != null)
-            variables[$"{prefix}MinOfficerRoleIconUrl"] = $"https://cdn.discordapp.com/role-icons/{role.Id}/{role.IconHash}.webp?size=32";
     }
 }

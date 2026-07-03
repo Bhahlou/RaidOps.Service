@@ -22,6 +22,17 @@ public class NotificationsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Dismiss_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var body = JsonContent.Create(new { type = "OfficerThresholdNotConfigured", guildId = "910000000000000020" });
+
+        var response = await client.PostAsync("/api/v1/notifications/dismiss", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Dismiss_Success_Returns200AndPersistsDismissal()
     {
         const string id      = "510000000000000020";

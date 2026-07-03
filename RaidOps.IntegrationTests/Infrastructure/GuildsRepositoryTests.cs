@@ -149,4 +149,41 @@ public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
             guild!.MinRosterRoleId.Should().BeNull();
         }
     }
+
+    [Fact]
+    public async Task UpdateOfficerThresholdAsync_GuildNotFound_ReturnsFalse()
+    {
+        const string guildId = "800000000000000008";
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            var result = await repo.UpdateOfficerThresholdAsync(guildId, "role-123");
+
+            result.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateOfficerThresholdAsync_ExistingGuild_SetsMinOfficerRoleId()
+    {
+        const string guildId = "800000000000000009";
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Guild", IsRegistered = true, MinOfficerRoleId = "role-old" });
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            var result = await repo.UpdateOfficerThresholdAsync(guildId, "role-new");
+
+            result.Should().BeTrue();
+            var guild = await db.Guilds.FindAsync(guildId);
+            guild!.MinOfficerRoleId.Should().Be("role-new");
+        }
+    }
 }

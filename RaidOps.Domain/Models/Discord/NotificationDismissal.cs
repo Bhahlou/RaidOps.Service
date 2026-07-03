@@ -23,9 +23,4 @@ public class NotificationDismissal
 
     /// <summary>UTC timestamp of when the notification was dismissed.</summary>
     public DateTime DismissedAt { get; set; }
-
-    // ── Navigation ────────────────────────────────────────────────────────
-
-    /// <summary>The user who dismissed the notification.</summary>
-    public virtual User User { get; set; } = null!;
 }

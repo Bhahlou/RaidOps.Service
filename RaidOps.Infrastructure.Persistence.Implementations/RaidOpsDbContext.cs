@@ -201,7 +201,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasKey(nd => new { nd.UserDiscordId, nd.Type, nd.GuildId });
 
         modelBuilder.Entity<NotificationDismissal>()
-            .HasOne(nd => nd.User)
+            .HasOne<User>()
             .WithMany()
             .HasForeignKey(nd => nd.UserDiscordId);
 

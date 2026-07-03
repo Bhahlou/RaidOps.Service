@@ -1,6 +1,7 @@
 using FluentAssertions;
 using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
@@ -164,6 +165,37 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync(Url);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
+        body!.Notifications.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetMe_AdminDismissedNotification_NoNotification()
+    {
+        const string id = "200000000000000008";
+        const string guildId = "850000000000000007";
+        await SeedAsync(db =>
+        {
+            var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
+            guild.Timezone = "Europe/Paris";
+            guild.RosterMode = RosterMode.Open;
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(guild);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            db.NotificationDismissals.Add(new NotificationDismissal
+            {
+                UserDiscordId = id,
+                Type = NotificationType.OfficerThresholdNotConfigured,
+                GuildId = guildId,
+                DismissedAt = DateTime.UtcNow,
+            });
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
