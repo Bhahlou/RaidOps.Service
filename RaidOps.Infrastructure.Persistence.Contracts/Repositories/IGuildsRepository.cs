@@ -58,4 +58,18 @@ public interface IGuildsRepository
         RosterMode rosterMode,
         string? minRosterRoleId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates only <see cref="Guild.MinOfficerRoleId"/> for the specified guild, leaving every
+    /// other setting untouched — a dedicated partial update so the Officer threshold can be saved
+    /// independently of the rest of guild settings (e.g. from its own settings tab).
+    /// </summary>
+    /// <param name="guildId">The Discord snowflake ID of the guild to update.</param>
+    /// <param name="minOfficerRoleId">Discord snowflake ID of the minimum role that grants Officer access.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    /// <returns><c>true</c> if the guild was found and updated; <c>false</c> if no matching guild exists.</returns>
+    Task<bool> UpdateOfficerThresholdAsync(
+        string guildId,
+        string minOfficerRoleId,
+        CancellationToken cancellationToken = default);
 }

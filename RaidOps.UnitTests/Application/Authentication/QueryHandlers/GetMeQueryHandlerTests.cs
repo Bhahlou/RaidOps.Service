@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Authentication.Queries;
 using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.Notifications.Responses;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Authentication.QueryHandlers;
 using RaidOps.Domain.Enums;
@@ -12,9 +13,10 @@ namespace RaidOps.UnitTests.Application.Authentication.QueryHandlers;
 
 public class GetMeQueryHandlerTests
 {
-    private readonly Mock<IUsersRepository>     _users  = new();
-    private readonly Mock<IGuildAccessService>  _access = new();
-    private readonly GetMeQueryHandler          _sut;
+    private readonly Mock<IUsersRepository>          _users               = new();
+    private readonly Mock<IGuildAccessService>       _access              = new();
+    private readonly Mock<IUserNotificationService>  _userNotifications   = new();
+    private readonly GetMeQueryHandler               _sut;
 
     private const string DiscordId = "user-1";
 
@@ -22,7 +24,14 @@ public class GetMeQueryHandlerTests
 
     public GetMeQueryHandlerTests()
     {
-        _sut = new GetMeQueryHandler(_users.Object, _access.Object);
+        // No active notifications by default — individual tests opt in.
+        // Notification derivation rules themselves are owned by IUserNotificationService's
+        // registered INotificationSignalProvider implementations (e.g. RoleMappingNotificationProvider),
+        // not by this handler — GetMeQueryHandler only needs to prove it forwards the result.
+        _userNotifications.Setup(n => n.GetActiveNotificationsAsync(
+                It.IsAny<string>(), It.IsAny<IReadOnlyList<UserGuild>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object);
     }
 
     // ── Guard clause ─────────────────────────────────────────────────────────
@@ -185,6 +194,30 @@ public class GetMeQueryHandlerTests
         var result = await _sut.HandleAsync(Query, default);
 
         result.Value!.Guilds.Single().IsConfigured.Should().BeFalse();
+    }
+
+    // ── Notifications ──────────────────────────────────────────────────────
+    // Derivation rules (role mapping, onboarding exclusion, dismissal, admin-only) now live in
+    // IUserNotificationService/INotificationSignalProvider implementations — this handler only
+    // needs to prove it forwards the eligible guilds in and the result out untouched.
+
+    [Fact]
+    public async Task HandleAsync_ForwardsEligibleGuildsToUserNotificationServiceAndReturnsItsResult()
+    {
+        var userGuild = MakeUserGuild("g1", isAdmin: true, isRegistered: true, name: "RaidOps");
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([userGuild]));
+        var expected = new List<NotificationResponse>
+        {
+            new() { Type = NotificationType.OfficerThresholdNotConfigured, GuildId = "g1", GuildName = "RaidOps" },
+        };
+        _userNotifications.Setup(n => n.GetActiveNotificationsAsync(
+                DiscordId, It.Is<IReadOnlyList<UserGuild>>(g => g.Count == 1 && g[0] == userGuild), default))
+            .ReturnsAsync(expected);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Notifications.Should().BeEquivalentTo(expected);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

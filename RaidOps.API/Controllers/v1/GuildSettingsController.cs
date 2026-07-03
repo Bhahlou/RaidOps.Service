@@ -11,7 +11,8 @@ using System.IdentityModel.Tokens.Jwt;
 namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
-/// Exposes guild settings endpoints: read and write settings, fetch Discord roles.
+/// Exposes guild settings endpoints: read and write settings, fetch Discord roles,
+/// read and write the Officer role threshold.
 /// </summary>
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/guilds")]
@@ -61,6 +62,44 @@ public class GuildSettingsController(
     public async Task<IActionResult> UpdateSettings(
         string guildId,
         [FromBody] UpdateGuildSettingsCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Returns the current Officer role threshold of the specified guild.
+    /// </summary>
+    [HttpGet("{guildId}/officer-threshold")]
+    public async Task<IActionResult> GetOfficerThreshold(string guildId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetOfficerThresholdQuery, OfficerThresholdResponse>(
+            new GetOfficerThresholdQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Persists the Officer role threshold for the specified guild, independently of the rest
+    /// of guild settings.
+    /// </summary>
+    [HttpPatch("{guildId}/officer-threshold")]
+    public async Task<IActionResult> UpdateOfficerThreshold(
+        string guildId,
+        [FromBody] UpdateOfficerThresholdCommand command,
         CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;

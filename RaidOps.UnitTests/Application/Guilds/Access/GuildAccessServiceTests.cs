@@ -28,6 +28,8 @@ public class GuildAccessServiceTests
     private const ulong  DiscordUlong = 200000000000000001UL;
     private const string MinRoleId    = "100000000000000001";
     private const ulong  MinRoleUlong = 100000000000000001UL;
+    private const string OfficerRoleId = "400000000000000001";
+    private const ulong  OfficerRoleUlong = 400000000000000001UL;
 
     public GuildAccessServiceTests()
     {
@@ -269,6 +271,104 @@ public class GuildAccessServiceTests
     {
         var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
         var guild = new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = true, RosterMode = RosterMode.Open };
+
+        var result = _sut.ComputeAccessLevel(membership, guild, default);
+
+        result.Should().Be(GuildAccessLevel.Roster);
+    }
+
+    // ── ComputeAccessLevel — Officer threshold ────────────────────────────────
+
+    [Fact]
+    public void ComputeAccessLevel_OfficerThresholdMatch_ReturnsOfficer()
+    {
+        var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
+        var guild = new DiscordGuild
+        {
+            Id = GuildId, Name = "RaidOps", IsRegistered = true,
+            RosterMode = RosterMode.Open, MinOfficerRoleId = OfficerRoleId,
+        };
+        var officerRole = NetCordTestHelpers.MakeJsonRole(OfficerRoleUlong, (Permissions)0, position: 5);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [officerRole]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [OfficerRoleUlong]);
+        _guildService.Setup(g => g.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = _sut.ComputeAccessLevel(membership, guild, default);
+
+        result.Should().Be(GuildAccessLevel.Officer);
+    }
+
+    [Fact]
+    public void ComputeAccessLevel_OfficerThresholdUserHasHigherRole_ReturnsOfficer()
+    {
+        var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
+        var guild = new DiscordGuild
+        {
+            Id = GuildId, Name = "RaidOps", IsRegistered = true,
+            RosterMode = RosterMode.Open, MinOfficerRoleId = OfficerRoleId,
+        };
+        const ulong higherRoleUlong = 500000000000000001UL;
+        var officerRole = NetCordTestHelpers.MakeJsonRole(OfficerRoleUlong, (Permissions)0, position: 5);
+        var higherRole = NetCordTestHelpers.MakeJsonRole(higherRoleUlong, (Permissions)0, position: 8);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [officerRole, higherRole]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [higherRoleUlong]);
+        _guildService.Setup(g => g.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = _sut.ComputeAccessLevel(membership, guild, default);
+
+        result.Should().Be(GuildAccessLevel.Officer);
+    }
+
+    [Fact]
+    public void ComputeAccessLevel_OfficerThresholdUserHasLowerRole_FallsThroughToRoster()
+    {
+        var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
+        var guild = new DiscordGuild
+        {
+            Id = GuildId, Name = "RaidOps", IsRegistered = true,
+            RosterMode = RosterMode.Open, MinOfficerRoleId = OfficerRoleId,
+        };
+        const ulong lowerRoleUlong = 600000000000000001UL;
+        var officerRole = NetCordTestHelpers.MakeJsonRole(OfficerRoleUlong, (Permissions)0, position: 5);
+        var lowerRole = NetCordTestHelpers.MakeJsonRole(lowerRoleUlong, (Permissions)0, position: 2);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [officerRole, lowerRole]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [lowerRoleUlong]);
+        _guildService.Setup(g => g.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = _sut.ComputeAccessLevel(membership, guild, default);
+
+        result.Should().Be(GuildAccessLevel.Roster);
+    }
+
+    [Fact]
+    public void ComputeAccessLevel_MinOfficerRoleIdNull_SkipsBotCallForOfficerCheck()
+    {
+        var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
+        var guild = new DiscordGuild
+        {
+            Id = GuildId, Name = "RaidOps", IsRegistered = true,
+            RosterMode = RosterMode.Open, MinOfficerRoleId = null,
+        };
+
+        var result = _sut.ComputeAccessLevel(membership, guild, default);
+
+        result.Should().Be(GuildAccessLevel.Roster);
+        _guildService.Verify(g => g.GetRoles(It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public void ComputeAccessLevel_OfficerThresholdBotNotPresent_FallsThroughToRoster()
+    {
+        var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
+        var guild = new DiscordGuild
+        {
+            Id = GuildId, Name = "RaidOps", IsRegistered = true,
+            RosterMode = RosterMode.Open, MinOfficerRoleId = OfficerRoleId,
+        };
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Throws<InvalidOperationException>();
 
         var result = _sut.ComputeAccessLevel(membership, guild, default);
 

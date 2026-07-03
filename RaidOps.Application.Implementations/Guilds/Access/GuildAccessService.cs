@@ -43,6 +43,9 @@ public class GuildAccessService(
         if (!guild.IsRegistered)
             return GuildAccessLevel.None;
 
+        if (HasRequiredDiscordRole(guild.Id, guild.MinOfficerRoleId, membership.UserDiscordId, cancellationToken))
+            return GuildAccessLevel.Officer;
+
         var hasRosterAccess = guild.RosterMode switch
         {
             RosterMode.Open => true,
@@ -54,13 +57,15 @@ public class GuildAccessService(
     }
 
     /// <summary>
-    /// Checks whether the requester holds a Discord role at or above <paramref name="minRosterRoleId"/>'s
-    /// position. Silently denies access if the bot isn't in the guild or the role/member can't be found —
-    /// callers that need to distinguish those failure modes should not rely on this method.
+    /// Checks whether the requester holds a Discord role at or above <paramref name="minRoleId"/>'s
+    /// position. Used for both the roster threshold and the Officer threshold — same "this role or
+    /// anything higher in the hierarchy" semantics either way. Silently denies access if the bot
+    /// isn't in the guild or the role/member can't be found — callers that need to distinguish
+    /// those failure modes should not rely on this method.
     /// </summary>
-    private bool HasRequiredDiscordRole(string guildId, string? minRosterRoleId, string discordId, CancellationToken cancellationToken)
+    private bool HasRequiredDiscordRole(string guildId, string? minRoleId, string discordId, CancellationToken cancellationToken)
     {
-        if (minRosterRoleId == null)
+        if (minRoleId == null)
             return false;
 
         try
@@ -68,7 +73,7 @@ public class GuildAccessService(
             var roles = discordBotService.Guilds.GetRoles(guildId, cancellationToken)
                 .ToDictionary(r => r.Id.ToString());
 
-            if (!roles.TryGetValue(minRosterRoleId, out var minRole))
+            if (!roles.TryGetValue(minRoleId, out var minRole))
                 return false;
 
             var guildUser = discordBotService.Guilds.GetUsers(guildId, cancellationToken)
@@ -82,7 +87,7 @@ public class GuildAccessService(
         }
         catch (InvalidOperationException)
         {
-            // Bot not in this guild — no roster access to grant.
+            // Bot not in this guild — no threshold-based access to grant.
             return false;
         }
     }

@@ -22,4 +22,7 @@ public enum GuildAuditAction
 
     /// <summary>A character's raid-composition rank was changed.</summary>
     MemberRankUpdated = 6,
+
+    /// <summary>The guild's Officer role threshold was updated.</summary>
+    OfficerThresholdUpdated = 7,
 }

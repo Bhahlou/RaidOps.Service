@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Dispatching;
 using Scrutor;
 using System.Reflection;
@@ -13,7 +14,7 @@ namespace RaidOps.Registry
         {
             var assemblies = GetAssemblies();
 
-            services.ScanHandlers(assemblies);
+            services.ScanHandlersAndProviders(assemblies);
             services.AddDispatchers();
 
             services.SetupApplicationRegistry();
@@ -23,13 +24,17 @@ namespace RaidOps.Registry
             return services;
         }
 
-        private static void ScanHandlers(this IServiceCollection services, Assembly[] assemblies)
+        // Also scans INotificationSignalProvider implementations: each domain drops in its own
+        // provider class and it's picked up automatically, exactly like a new CQRS handler —
+        // callers (IUserNotificationService) never need to know which domains exist.
+        private static void ScanHandlersAndProviders(this IServiceCollection services, Assembly[] assemblies)
         {
             services.Scan(scan => scan
                 .FromAssemblies(assemblies)
                 .AddClasses(filter => filter.AssignableToAny(
                     typeof(ICommandHandlerAsync<>),
-                    typeof(IQueryHandlerAsync<,>)))
+                    typeof(IQueryHandlerAsync<,>),
+                    typeof(INotificationSignalProvider)))
                 .UsingRegistrationStrategy(RegistrationStrategy.Append)
                 .AsImplementedInterfaces()
                 .WithScopedLifetime());

@@ -47,6 +47,15 @@ public class Guild
     /// </summary>
     public string? MinRosterRoleId { get; set; }
 
+    /// <summary>
+    /// Discord snowflake ID of the minimum role that grants Officer access in RaidOps.
+    /// Members with this role <em>or any role with a higher position</em> are granted Officer
+    /// access, independently of <see cref="RosterMode"/>. Null until the admin explicitly saves
+    /// a choice — every guild is expected to designate one (the Discord Administrator/owner
+    /// safety net always applies on top, so this can never lock an admin out).
+    /// </summary>
+    public string? MinOfficerRoleId { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>Discord user memberships associated with this guild.</summary>
