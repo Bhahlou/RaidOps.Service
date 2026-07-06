@@ -1,8 +1,11 @@
-name: Release Please
+name: Release Please (dev)
 
+# This is the primary release lane: every feature merge into dev accumulates
+# a cumulative Release PR here. Merging it tags + publishes a GitHub Release
+# on dev, which promote-to-next.yml then fast-forwards to next automatically.
 on:
   push:
-    branches: [master]
+    branches: [dev]
 
 permissions:
   contents: write
@@ -16,8 +19,9 @@ jobs:
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
+          target-branch: dev
           # PAT (not GITHUB_TOKEN): a bot-created PR/release with GITHUB_TOKEN does NOT
           # trigger other workflows (GitHub loop protection). The PAT makes:
           #   - the Release PR trigger tests.yml (fast Sonar scan → required checks green)
-          #   - the published release trigger deploy.yml (prod deploy)
+          #   - the published release trigger promote-to-next.yml
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}

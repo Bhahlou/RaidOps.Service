@@ -1,0 +1,81 @@
+name: Deploy (prod, promotion lane)
+
+# A next → master promotion PR merging is the signal to deploy the
+# already-tagged content it carries. No SHA/tag matching needed: by the time
+# this PR merges, the release was already published when cut on dev — we
+# just look it up by version.
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+jobs:
+  prod-from-promotion:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'next'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: master
+
+      - name: Look up the release matching the promoted version
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MANIFEST_VERSION=$(jq -r '.["."]' .release-please-manifest.json)
+          TAG="v${MANIFEST_VERSION}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "url=$(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<RELEASE_BODY_EOF"
+            gh release view "$TAG" --json body -q .body
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push :latest + version tag
+        env:
+          VERSION: ${{ steps.check.outputs.tag }}
+        run: |
+          IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}
+          docker build --build-arg APP_VERSION="$VERSION" -t $IMAGE_NAME:latest -t $IMAGE_NAME:$VERSION .
+          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:$VERSION
+
+      - name: Notify Discord (production)
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_PROD_WEBHOOK_URL }}
+          SHORT_REPO: ${{ github.event.repository.name }}
+          TAG: ${{ steps.check.outputs.tag }}
+          AUTHOR: ${{ github.actor }}
+          BODY: ${{ steps.check.outputs.body }}
+          URL: ${{ steps.check.outputs.url }}
+        run: |
+          # release-please HTML-escapes commit messages when building the
+          # changelog (e.g. "->" becomes "-&gt;") — Discord doesn't decode
+          # HTML entities, so undo that before sending.
+          DESC=$(echo "$BODY" | head -c 4000 | sed -e 's/&gt;/>/g' -e 's/&lt;/</g' -e 's/&amp;/\&/g' -e "s/&#39;/'/g" -e 's/&quot;/"/g')
+          curl -s -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg title "🚀 $SHORT_REPO — $AUTHOR pushed release $TAG" \
+              --arg desc "$DESC" \
+              --arg url "$URL" \
+              '{
+                embeds: [{
+                  title: $title,
+                  description: $desc,
+                  url: $url,
+                  color: 16750848,
+                  footer: { text: "Rolling out to production…" }
+                }]
+              }')"

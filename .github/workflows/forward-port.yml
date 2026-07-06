@@ -1,0 +1,56 @@
+name: Forward-port master
+
+# Keeps next and dev in sync with anything that lands directly on master
+# (hotfix commits, and the version-bump commit from the master hotfix
+# release-please lane) so it isn't lost or reverted at the next promotion.
+on:
+  push:
+    branches: [master]
+
+jobs:
+  forward-port:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [next, dev]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ matrix.target }}
+          fetch-depth: 0
+          # PAT so the forward-port PR triggers tests.yml.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - name: Merge master and open forward-port PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin master
+
+          if [ "$(git rev-list --count HEAD..origin/master)" -eq 0 ]; then
+            echo "$TARGET already contains master, nothing to forward-port."
+            exit 0
+          fi
+
+          if ! git merge origin/master --no-edit; then
+            echo "::error::Merge conflict forward-porting master into $TARGET — resolve manually."
+            exit 1
+          fi
+
+          BRANCH="forward-port/master-into-${TARGET}-$(git rev-parse --short origin/master)"
+          git push origin "HEAD:refs/heads/$BRANCH"
+
+          PR_URL=$(gh pr list --head "$BRANCH" --base "$TARGET" --state open --json url -q '.[0].url')
+          if [ -z "$PR_URL" ]; then
+            gh pr create --base "$TARGET" --head "$BRANCH" \
+              --title "chore: forward-port master into $TARGET" \
+              --body "Automated forward-port of the latest master push into \`$TARGET\`, so hotfix content isn't lost at the next promotion."
+          fi

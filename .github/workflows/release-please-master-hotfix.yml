@@ -1,0 +1,26 @@
+name: Release Please (master hotfix)
+
+# Hotfix-only lane: master normally only receives already-tagged promotions
+# from next (nothing new for release-please to bump). This instance only
+# activates when a fix: commit lands directly on master via a hotfix/* PR,
+# bypassing dev/next.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          target-branch: master
+          # PAT so the Release PR triggers tests.yml and the published release
+          # triggers deploy-prod-hotfix.yml.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}

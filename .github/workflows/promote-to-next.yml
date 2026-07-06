@@ -1,0 +1,84 @@
+name: Promote to next
+
+# Automatic dev → next promotion: the moment a release is cut on dev (Release
+# PR merged), fast-forward next to that exact, already-tagged commit. No
+# manual PR click — the only human decision is merging the Release PR on dev.
+on:
+  release:
+    types: [published]
+
+jobs:
+  # release.target_commitish is the raw commit SHA, not a branch name — ask
+  # GitHub which branch(es) currently have that SHA as their tip. Split into
+  # its own job so "promote" below shows as a clean Skipped (not a Succeeded
+  # job full of no-op steps) whenever this release wasn't cut on dev.
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      is_dev: ${{ steps.check.outputs.is_dev }}
+    steps:
+      - name: Check this release was cut on dev
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.release.target_commitish }}
+        run: |
+          BRANCHES=$(gh api "repos/${{ github.repository }}/commits/$SHA/branches-where-head" --jq '.[].name')
+          if echo "$BRANCHES" | grep -qx "dev"; then
+            echo "is_dev=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_dev=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  promote:
+    needs: detect
+    if: needs.detect.outputs.is_dev == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          # PAT so the promotion PR triggers tests.yml and can be auto-merged.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - name: Build a conflict-free promotion commit and open/merge the PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin dev next
+
+          if [ "$(git rev-list --count origin/next..origin/dev)" -eq 0 ]; then
+            echo "next is already up to date with dev, nothing to promote."
+            exit 0
+          fi
+
+          # Repo is squash-only, so next's history gets flattened on every
+          # promotion — GitHub then has no clean merge-base to diff dev
+          # against next next time, and reports spurious conflicts on
+          # release-please's own bookkeeping files (manifest, CHANGELOG).
+          # dev always wins wholesale here (next never carries independent
+          # changes), so resolve that locally before ever asking GitHub to
+          # compute the PR diff.
+          BRANCH="promote/${TAG}"
+          git checkout -B "$BRANCH" origin/next
+          git merge --no-commit -X theirs origin/dev || true
+          git checkout --theirs -- . 2>/dev/null || true
+          git add -A
+          git commit -m "chore: promote ${TAG} to next" --allow-empty
+          git push origin "$BRANCH" --force-with-lease
+
+          PR_URL=$(gh pr list --head "$BRANCH" --base next --state open --json url -q '.[0].url')
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr create --base next --head "$BRANCH" \
+              --title "chore: promote ${TAG} to next" \
+              --body "Automated promotion of the release cut on \`dev\` (${TAG}) to \`next\` for acceptance testing.")
+          fi
+          # Repo is squash-only — a plain merge commit is rejected.
+          gh pr merge "$PR_URL" --auto --squash

@@ -1,0 +1,88 @@
+name: Deploy (prod, hotfix lane)
+
+# A published release from the master hotfix lane deploys to production.
+# release events have no branch filter in `on:`, so a small detect job checks
+# which branch the tag actually belongs to before the real job runs.
+on:
+  release:
+    types: [published]
+
+jobs:
+  # release.target_commitish is the raw commit SHA, not a branch name — ask
+  # GitHub which branch(es) currently have that SHA as their tip. Kept as its
+  # own job so prod-from-hotfix-release shows as a clean Skipped (not a
+  # Succeeded job full of no-op steps) for releases cut elsewhere (dev).
+  detect-master-release:
+    runs-on: ubuntu-latest
+    outputs:
+      is_master: ${{ steps.check.outputs.is_master }}
+    steps:
+      - name: Check this release was cut on master
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.release.target_commitish }}
+        run: |
+          BRANCHES=$(gh api "repos/${{ github.repository }}/commits/$SHA/branches-where-head" --jq '.[].name')
+          if echo "$BRANCHES" | grep -qx "master"; then
+            echo "is_master=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_master=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  prod-from-hotfix-release:
+    needs: detect-master-release
+    # Bracket notation required: dot-notation would parse the hyphens as subtraction.
+    if: needs['detect-master-release'].outputs.is_master == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout released tag
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Log in to GHCR
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push :latest + version tag
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}
+          docker build --build-arg APP_VERSION="$VERSION" -t $IMAGE_NAME:latest -t $IMAGE_NAME:$VERSION .
+          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:$VERSION
+
+      - name: Notify Discord (production)
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_PROD_WEBHOOK_URL }}
+          SHORT_REPO: ${{ github.event.repository.name }}
+          TAG: ${{ github.event.release.tag_name }}
+          AUTHOR: ${{ github.actor }}
+          BODY: ${{ github.event.release.body }}
+          URL: ${{ github.event.release.html_url }}
+        run: |
+          # release-please HTML-escapes commit messages when building the
+          # changelog (e.g. "->" becomes "-&gt;") — Discord doesn't decode
+          # HTML entities, so undo that before sending.
+          DESC=$(echo "$BODY" | head -c 4000 | sed -e 's/&gt;/>/g' -e 's/&lt;/</g' -e 's/&amp;/\&/g' -e "s/&#39;/'/g" -e 's/&quot;/"/g')
+          curl -s -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg title "🚀 $SHORT_REPO — $AUTHOR pushed release $TAG" \
+              --arg desc "$DESC" \
+              --arg url "$URL" \
+              '{
+                embeds: [{
+                  title: $title,
+                  description: $desc,
+                  url: $url,
+                  color: 16750848,
+                  footer: { text: "Rolling out to production…" }
+                }]
+              }')"
