@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v0.2.1...v1.0.0) (2026-07-06)
+
+
+### 🚀 Features
+
+* add per-guild Officer access threshold and in-app notification … ([#32](https://github.com/Bhahlou/RaidOps.Service/issues/32)) ([432d0ef](https://github.com/Bhahlou/RaidOps.Service/commit/432d0ef13a3de3805b5fd90a1388c9625b4b6857))
+* Expose bulk eligible guilds ([#30](https://github.com/Bhahlou/RaidOps.Service/issues/30)) ([bf8c5c2](https://github.com/Bhahlou/RaidOps.Service/commit/bf8c5c2480afdb168dc197be5e7cf2faad4ac164))
+* Implement character viable specs selection ([#26](https://github.com/Bhahlou/RaidOps.Service/issues/26)) ([4852b1d](https://github.com/Bhahlou/RaidOps.Service/commit/4852b1d41084be8cc42c347f841d7e0bd4f4ed83))
+* implement get started ([#28](https://github.com/Bhahlou/RaidOps.Service/issues/28)) ([f5e5e39](https://github.com/Bhahlou/RaidOps.Service/commit/f5e5e396c5f1a7d23b2892c7750bf7dd1b2aad96))
+* implement guild action log and guild membership ([#25](https://github.com/Bhahlou/RaidOps.Service/issues/25)) ([1f2f642](https://github.com/Bhahlou/RaidOps.Service/commit/1f2f64236ceef1d3b4fa1bd06bf4c36bfe89d63f))
+* Implement guild audit log viewer ([8218402](https://github.com/Bhahlou/RaidOps.Service/commit/8218402bee10c7d7bd294496b5baa1c4855fd9b5))
+* implement guild onboarding ([#23](https://github.com/Bhahlou/RaidOps.Service/issues/23)) ([edf5fac](https://github.com/Bhahlou/RaidOps.Service/commit/edf5fac42bbe1a8026c860696841b3397b3522e2))
+* implement roster list ([#31](https://github.com/Bhahlou/RaidOps.Service/issues/31)) ([5c89262](https://github.com/Bhahlou/RaidOps.Service/commit/5c89262cf5bd3eff018201fae78c91b6c44ce921))
+
+
+### 🐛 Bug Fixes
+
+* repair spec icons ([#29](https://github.com/Bhahlou/RaidOps.Service/issues/29)) ([1519bf9](https://github.com/Bhahlou/RaidOps.Service/commit/1519bf98df5c9aaa1601fe1fd7db351220db4900))
+
+
+### 🧹 Chores
+
+* mark next release as 1.0.0 ([#34](https://github.com/Bhahlou/RaidOps.Service/issues/34)) ([2b0f07a](https://github.com/Bhahlou/RaidOps.Service/commit/2b0f07a3d70282a5cd5bd47472019b281754d04a))
+
 ## [0.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v0.2.0...v0.2.1) (2026-06-06)
 
 
