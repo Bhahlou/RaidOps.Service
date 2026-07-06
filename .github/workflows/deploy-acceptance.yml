@@ -1,0 +1,81 @@
+name: Deploy (acceptance)
+
+# Every push to next is an already-tagged snapshot promoted from dev (see
+# promote-to-next.yml) — always safe to (re)build the acceptance image.
+on:
+  push:
+    branches: [next]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - '.release-please-manifest.json'
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Log in to GHCR
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push :acceptance
+        id: build
+        run: |
+          IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}
+          MANIFEST_VERSION=$(jq -r '.["."]' .release-please-manifest.json)
+          # No sha suffix: next only ever receives whole, already-tagged cuts
+          # from dev, so this version string is always distinct and exact.
+          VERSION="v${MANIFEST_VERSION}-acceptance"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          docker build --build-arg APP_VERSION="$VERSION" -t $IMAGE_NAME:acceptance .
+          docker push $IMAGE_NAME:acceptance
+
+      # The pushed commit here is the dev→next promotion PR's squash commit
+      # ("chore: promote vX.Y.Z to next"), not the actual release changelog —
+      # look up the real release notes for this version instead.
+      - name: Look up the release matching this version
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MANIFEST_VERSION=$(jq -r '.["."]' .release-please-manifest.json)
+          TAG="v${MANIFEST_VERSION}"
+          echo "url=$(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<RELEASE_BODY_EOF"
+            gh release view "$TAG" --json body -q .body
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify Discord (acceptance)
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_ACCEPTANCE_WEBHOOK_URL }}
+          VERSION: ${{ steps.build.outputs.version }}
+          BODY: ${{ steps.release.outputs.body }}
+          URL: ${{ steps.release.outputs.url }}
+        run: |
+          # release-please HTML-escapes commit messages when building the
+          # changelog (e.g. "->" becomes "-&gt;") — Discord doesn't decode
+          # HTML entities, so undo that before sending.
+          DESC=$(echo "$BODY" | head -c 4000 | sed -e 's/&gt;/>/g' -e 's/&lt;/</g' -e 's/&amp;/\&/g' -e "s/&#39;/'/g" -e 's/&quot;/"/g')
+          curl -s -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg title "RaidOps backend — new version pushed to acceptance: $VERSION" \
+              --arg desc "$DESC" \
+              --arg url "$URL" \
+              '{
+                embeds: [{
+                  title: $title,
+                  description: $desc,
+                  url: $url,
+                  color: 3447003,
+                  footer: { text: "Update is on its way to acceptance. Discord will notify when live." }
+                }]
+              }')"

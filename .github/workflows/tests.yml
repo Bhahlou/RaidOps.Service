@@ -51,8 +51,9 @@ jobs:
         run: |
           # The release-please PR only changes CHANGELOG + version (0 code).
           # We still run the Sonar scan (so the required checks report green) but skip
-          # the tests: no point re-testing code already validated on master.
-          $isReleasePr = "$env:HEAD_REF" -eq "release-please--branches--master"
+          # the tests: no point re-testing code already validated. Two release-please
+          # lanes now exist (dev = primary, master = hotfix-only).
+          $isReleasePr = "$env:HEAD_REF" -eq "release-please--branches--master" -or "$env:HEAD_REF" -eq "release-please--branches--dev"
 
           & "${{ runner.temp }}/scanner/dotnet-sonarscanner" begin /k:"Bhahlou_RaidOps.Service" /o:"bhahlou" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" /d:sonar.exclusions="**/Migrations/**"
 

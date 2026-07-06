@@ -1,0 +1,38 @@
+name: Branch flow guard
+
+# Enforces the intended dev → next → master flow at the CI level, since
+# GitHub branch protection can't natively restrict a PR's source branch.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [master, next]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source branch for this target
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          case "$BASE" in
+            master)
+              case "$HEAD" in
+                next|hotfix/*|forward-port/master-into-master-*|release-please--*)
+                  echo "OK: '$HEAD' → master is an allowed promotion/hotfix/forward-port/release source."
+                  exit 0
+                  ;;
+              esac
+              ;;
+            next)
+              case "$HEAD" in
+                dev|promote/*|forward-port/master-into-next-*)
+                  echo "OK: '$HEAD' → next is an allowed promotion/forward-port source."
+                  exit 0
+                  ;;
+              esac
+              ;;
+          esac
+          echo "::error::PRs into '$BASE' must follow the dev→next→master flow (or hotfix/*), not '$HEAD'."
+          exit 1
