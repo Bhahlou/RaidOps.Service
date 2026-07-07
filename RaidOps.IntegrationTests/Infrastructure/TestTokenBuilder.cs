@@ -24,6 +24,7 @@ public static class TestTokenBuilder
             new Claim(JwtRegisteredClaimNames.Sub, discordId),
             new Claim(JwtRegisteredClaimNames.Name, username),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("typ", "access"),
         };
         return BuildToken(claims, DateTime.UtcNow.AddHours(1));
     }
@@ -38,6 +39,7 @@ public static class TestTokenBuilder
         {
             new Claim(JwtRegisteredClaimNames.Name, "NoSubUser"),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("typ", "access"),
         };
         return BuildToken(claims, DateTime.UtcNow.AddHours(1));
     }
@@ -51,6 +53,7 @@ public static class TestTokenBuilder
         {
             new Claim(JwtRegisteredClaimNames.Sub, discordId),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("typ", "refresh"),
         };
         return BuildToken(claims, DateTime.UtcNow.AddDays(30));
     }
@@ -66,6 +69,7 @@ public static class TestTokenBuilder
             new Claim(JwtRegisteredClaimNames.Sub, discordId),
             new Claim("rgn", region),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("typ", "state_bnet"),
         };
         return BuildToken(claims, DateTime.UtcNow.AddMinutes(10));
     }
@@ -81,6 +85,7 @@ public static class TestTokenBuilder
             new(JwtRegisteredClaimNames.Sub, discordId),
             new("gld", guildId),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new("typ", "state_guild_reg"),
         };
         if (returnTo != null)
             claims.Add(new Claim("rtn", returnTo));
