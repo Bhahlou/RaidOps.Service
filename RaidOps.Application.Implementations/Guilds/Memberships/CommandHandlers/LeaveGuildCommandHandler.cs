@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Commands;
@@ -15,7 +16,8 @@ public class LeaveGuildCommandHandler(
     ICharacterRepository characterRepository,
     IGuildMembershipRepository membershipRepository,
     IGuildAccessService guildAccessService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<LeaveGuildCommand>
+    IAuditLogService auditLogService,
+    ILogger<LeaveGuildCommandHandler> logger) : ICommandHandlerAsync<LeaveGuildCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(LeaveGuildCommand command, CancellationToken cancellationToken = default)
@@ -46,6 +48,10 @@ public class LeaveGuildCommandHandler(
                 ["characterClassId"] = character.ClassId.ToString(),
             },
             cancellationToken);
+
+        logger.LogInformation(
+            "Character {CharacterId} ({CharacterName}) removed from guild {GuildId} roster, requested by discord user {DiscordId} ({Action})",
+            character.Id, character.Name, command.GuildId, command.RequesterDiscordId, isOwner ? "left" : "excluded");
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character removed from the guild roster."));
     }

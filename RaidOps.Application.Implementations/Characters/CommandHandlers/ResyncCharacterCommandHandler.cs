@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Characters.Responses;
 using RaidOps.Application.Contracts.Common;
@@ -19,7 +20,8 @@ public class ResyncCharacterCommandHandler(
     ICharacterRepository characterRepository,
     IBnetAccountRepository bnetAccountRepository,
     IBnetApiService bnetApiService,
-    ISpecResolverService specResolver)
+    ISpecResolverService specResolver,
+    ILogger<ResyncCharacterCommandHandler> logger)
     : ICommandHandlerAsync<ResyncCharacterCommand>
 {
     /// <inheritdoc/>
@@ -32,7 +34,12 @@ public class ResyncCharacterCommandHandler(
         var character = characters.FirstOrDefault(c => c.Id == command.CharacterId);
 
         if (character is null)
+        {
+            logger.LogWarning(
+                "Resync failed for discord user {DiscordId}: character {CharacterId} not found",
+                command.UserDiscordId, command.CharacterId);
             return Result<CommandResponse>.Fail(ResponseDetail.NotFound);
+        }
 
         var bnetAccount = await bnetAccountRepository.GetByDiscordIdAsync(command.UserDiscordId, cancellationToken);
 
@@ -42,13 +49,20 @@ public class ResyncCharacterCommandHandler(
             var realmSlug = character.Realm.Slug;
             var name = character.Name;
 
+            logger.LogInformation(
+                "Resyncing character {CharacterId} ({CharacterName}) for discord user {DiscordId}, branch {BranchId}, namespace {Namespace}, realm {RealmSlug}",
+                character.Id, name, command.UserDiscordId, character.BranchId, profileNamespace, realmSlug);
+
             string appToken;
             try
             {
                 appToken = await bnetApiService.GetAppTokenAsync(bnetAccount.Region, cancellationToken);
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
+                logger.LogError(ex,
+                    "Resync failed for character {CharacterId} ({CharacterName}), discord user {DiscordId}: could not obtain BNet app token for region {Region}",
+                    character.Id, name, command.UserDiscordId, bnetAccount.Region);
                 return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
             }
 
@@ -60,8 +74,11 @@ public class ResyncCharacterCommandHandler(
             {
                 await Task.WhenAll(detailTask, mediaTask, specsTask);
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
+                logger.LogError(ex,
+                    "Resync failed for character {CharacterId} ({CharacterName}), discord user {DiscordId}: BNet API call failed for namespace {Namespace}, realm {RealmSlug}",
+                    character.Id, name, command.UserDiscordId, profileNamespace, realmSlug);
                 return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
             }
 

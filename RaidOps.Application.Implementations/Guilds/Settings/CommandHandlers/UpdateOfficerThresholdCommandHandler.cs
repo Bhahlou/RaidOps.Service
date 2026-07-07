@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
@@ -19,7 +20,8 @@ public class UpdateOfficerThresholdCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildsRepository guildsRepository,
     IDiscordBotService discordBotService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateOfficerThresholdCommand>
+    IAuditLogService auditLogService,
+    ILogger<UpdateOfficerThresholdCommandHandler> logger) : ICommandHandlerAsync<UpdateOfficerThresholdCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateOfficerThresholdCommand command, CancellationToken cancellationToken = default)
@@ -54,6 +56,10 @@ public class UpdateOfficerThresholdCommandHandler(
                 variables,
                 cancellationToken);
         }
+
+        logger.LogInformation(
+            "Guild {GuildId} officer threshold updated by discord user {DiscordId}: {OldRoleId} -> {NewRoleId}",
+            command.GuildId, command.RequesterDiscordId, oldMinOfficerRoleId, command.MinOfficerRoleId);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Officer threshold updated successfully."));
     }

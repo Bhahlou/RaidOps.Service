@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Commands;
@@ -16,7 +17,8 @@ public class UpdateCharacterRankCommandHandler(
     ICharacterRepository characterRepository,
     IGuildMembershipRepository membershipRepository,
     IGuildAccessService guildAccessService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateCharacterRankCommand>
+    IAuditLogService auditLogService,
+    ILogger<UpdateCharacterRankCommandHandler> logger) : ICommandHandlerAsync<UpdateCharacterRankCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateCharacterRankCommand command, CancellationToken cancellationToken = default)
@@ -54,6 +56,10 @@ public class UpdateCharacterRankCommandHandler(
                 ["newRank"] = command.CharacterRank.ToString(),
             },
             cancellationToken);
+
+        logger.LogInformation(
+            "Character {CharacterId} ({CharacterName}) rank updated from {OldRank} to {NewRank} in guild {GuildId}, requested by discord user {DiscordId}",
+            character.Id, character.Name, oldRank, command.CharacterRank, command.GuildId, command.RequesterDiscordId);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character rank updated."));
     }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -16,7 +17,8 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 public class HandleBnetCallbackCommandHandler(
     IJwtService jwtService,
     IBnetApiService bnetApiService,
-    IBnetAccountRepository bnetAccountRepository)
+    IBnetAccountRepository bnetAccountRepository,
+    ILogger<HandleBnetCallbackCommandHandler> logger)
     : ICommandHandlerAsync<HandleBnetCallbackCommand>
 {
     /// <inheritdoc/>
@@ -27,10 +29,20 @@ public class HandleBnetCallbackCommandHandler(
         // 1. Validate the CSRF state token
         var stateData = jwtService.ValidateBnetStateToken(command.State);
         if (stateData is null)
+        {
+            logger.LogWarning(
+                "BNet callback failed for discord user {DiscordId}: invalid or expired state token",
+                command.DiscordId);
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidState);
+        }
 
         if (stateData.Value.DiscordId != command.DiscordId)
+        {
+            logger.LogWarning(
+                "BNet callback failed: state token discord id {StateDiscordId} does not match request discord id {DiscordId}",
+                stateData.Value.DiscordId, command.DiscordId);
             return Result<CommandResponse>.Fail(ResponseDetail.StateMismatch);
+        }
 
         var region = stateData.Value.Region;
 
@@ -53,9 +65,16 @@ public class HandleBnetCallbackCommandHandler(
                 TokenExpiry = DateTimeOffset.UtcNow.AddSeconds(tokenResponse.ExpiresIn),
                 Region = region
             }, cancellationToken);
+
+            logger.LogInformation(
+                "BNet account linked for discord user {DiscordId}: bnetId {BnetId}, region {Region}",
+                command.DiscordId, userInfo.Id, region);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
+            logger.LogError(ex,
+                "BNet callback failed for discord user {DiscordId}: BNet API call failed for region {Region}",
+                command.DiscordId, region);
             return Result<CommandResponse>.Fail(ResponseDetail.BnetApiError);
         }
 

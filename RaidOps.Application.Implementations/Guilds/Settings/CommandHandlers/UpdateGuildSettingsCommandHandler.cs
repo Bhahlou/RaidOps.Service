@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
@@ -17,7 +18,8 @@ public class UpdateGuildSettingsCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildsRepository guildsRepository,
     IDiscordBotService discordBotService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
+    IAuditLogService auditLogService,
+    ILogger<UpdateGuildSettingsCommandHandler> logger) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateGuildSettingsCommand command, CancellationToken cancellationToken = default)
@@ -65,6 +67,10 @@ public class UpdateGuildSettingsCommandHandler(
                 variables,
                 cancellationToken);
         }
+
+        logger.LogInformation(
+            "Guild {GuildId} settings updated by discord user {DiscordId}: fields [{ChangedFields}]",
+            command.GuildId, command.RequesterDiscordId, string.Join(", ", changedFields));
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild settings updated successfully."));
     }

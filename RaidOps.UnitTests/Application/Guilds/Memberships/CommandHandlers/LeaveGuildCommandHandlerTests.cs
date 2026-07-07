@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Memberships.Commands;
@@ -35,7 +36,7 @@ public class LeaveGuildCommandHandlerTests
 
     public LeaveGuildCommandHandlerTests()
     {
-        _sut = new LeaveGuildCommandHandler(_characters.Object, _memberships.Object, _guildAccess.Object, _auditLog.Object);
+        _sut = new LeaveGuildCommandHandler(_characters.Object, _memberships.Object, _guildAccess.Object, _auditLog.Object, NullLogger<LeaveGuildCommandHandler>.Instance);
     }
 
     // ── CharacterNotFound ─────────────────────────────────────────────────
