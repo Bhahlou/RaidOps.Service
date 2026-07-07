@@ -132,7 +132,10 @@ public class DiscordAuthController(
 
     /// <summary>
     /// Writes the access and refresh tokens from <paramref name="authResp"/> into
-    /// HttpOnly, Secure, SameSite=None cookies with the appropriate expiry times.
+    /// HttpOnly, Secure, SameSite=Lax cookies with the appropriate expiry times.
+    /// Lax (not None) since the front end and API are always same-site (subdomains of the
+    /// same registrable domain in every environment) — this blocks cross-site "simple request"
+    /// CSRF (e.g. a forged auto-submitting form POST) without affecting legitimate same-site calls.
     /// </summary>
     /// <param name="authResp">The authentication response containing tokens and their expiry times.</param>
     private void AppendAuthCookies(AuthenticationResponse authResp)
@@ -141,14 +144,14 @@ public class DiscordAuthController(
         {
             HttpOnly = true,
             Secure   = true,
-            SameSite = SameSiteMode.None,
+            SameSite = SameSiteMode.Lax,
             Expires  = authResp.AccessTokenExpiration,
         });
         Response.Cookies.Append(REFRESH_TOKEN, authResp.RefreshToken, new CookieOptions
         {
             HttpOnly = true,
             Secure   = true,
-            SameSite = SameSiteMode.None,
+            SameSite = SameSiteMode.Lax,
             Expires  = authResp.RefreshTokenExpiration,
         });
     }
