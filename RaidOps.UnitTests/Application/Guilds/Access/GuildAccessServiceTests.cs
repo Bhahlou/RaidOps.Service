@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NetCord;
 using NetCord.Gateway;
@@ -34,7 +35,7 @@ public class GuildAccessServiceTests
     public GuildAccessServiceTests()
     {
         _bot.Setup(b => b.Guilds).Returns(_guildService.Object);
-        _sut = new GuildAccessService(_userGuilds.Object, _guilds.Object, _bot.Object);
+        _sut = new GuildAccessService(_userGuilds.Object, _guilds.Object, _bot.Object, NullLogger<GuildAccessService>.Instance);
     }
 
     // ── GetAccessLevelAsync ──────────────────────────────────────────────────

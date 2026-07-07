@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NetCord;
 using RaidOps.Application.Contracts.Common;
@@ -37,7 +38,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     public UpdateGuildSettingsCommandHandlerTests()
     {
         _discordBot.Setup(b => b.Guilds).Returns(_guildService.Object);
-        _sut = new UpdateGuildSettingsCommandHandler(_access.Object, _guilds.Object, _discordBot.Object, _auditLog.Object);
+        _sut = new UpdateGuildSettingsCommandHandler(_access.Object, _guilds.Object, _discordBot.Object, _auditLog.Object, NullLogger<UpdateGuildSettingsCommandHandler>.Instance);
     }
 
     [Fact]

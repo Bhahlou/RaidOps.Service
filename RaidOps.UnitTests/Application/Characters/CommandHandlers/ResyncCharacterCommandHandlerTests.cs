@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -45,7 +46,8 @@ public class ResyncCharacterCommandHandlerTests
             _characters.Object,
             _bnetAccounts.Object,
             _bnetApi.Object,
-            _specResolver.Object);
+            _specResolver.Object,
+            NullLogger<ResyncCharacterCommandHandler>.Instance);
 
         _specResolver.Setup(s => s.ResolveAsync(
                 It.IsAny<BnetCharacterSpecializationsResponse>(),

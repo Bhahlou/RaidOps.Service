@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -10,7 +11,9 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 /// <c>IsActiveInRaidOps = false</c> for the given character.
 /// Returns a failure if the character does not exist or does not belong to the requesting user.
 /// </summary>
-public class DeactivateCharacterCommandHandler(ICharacterRepository characterRepository)
+public class DeactivateCharacterCommandHandler(
+    ICharacterRepository characterRepository,
+    ILogger<DeactivateCharacterCommandHandler> logger)
     : ICommandHandlerAsync<DeactivateCharacterCommand>
 {
     /// <inheritdoc/>
@@ -21,8 +24,21 @@ public class DeactivateCharacterCommandHandler(ICharacterRepository characterRep
         var deactivated = await characterRepository.DeactivateAsync(
             command.CharacterId, command.UserDiscordId, cancellationToken);
 
-        return deactivated
-            ? Result<CommandResponse>.Ok(new CommandResponse("Character deactivated successfully."))
-            : Result<CommandResponse>.Fail(ResponseDetail.NotFound);
+        if (!deactivated)
+        {
+            logger.LogWarning(
+                "Deactivation failed for discord user {DiscordId}: character {CharacterId} not found",
+                command.UserDiscordId, command.CharacterId);
+            return Result<CommandResponse>.Fail(ResponseDetail.NotFound);
+        }
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} deactivated for discord user {DiscordId}",
+                command.CharacterId, command.UserDiscordId);
+        }
+
+        return Result<CommandResponse>.Ok(new CommandResponse("Character deactivated successfully."));
     }
 }

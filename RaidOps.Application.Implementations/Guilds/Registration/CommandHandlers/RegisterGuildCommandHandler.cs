@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
@@ -16,7 +17,8 @@ public class RegisterGuildCommandHandler(
     IUserGuildsRepository userGuildsRepository,
     IGuildsRepository guildsRepository,
     IDiscordBotService discordBotService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<RegisterGuildCommand>
+    IAuditLogService auditLogService,
+    ILogger<RegisterGuildCommandHandler> logger) : ICommandHandlerAsync<RegisterGuildCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(RegisterGuildCommand command, CancellationToken cancellationToken = default)
@@ -31,8 +33,11 @@ public class RegisterGuildCommandHandler(
         {
             discordBotService.Guilds.Get(command.GuildId, cancellationToken);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            logger.LogWarning(ex,
+                "Register guild {GuildId} failed for discord user {RequesterDiscordId}: RaidOps bot is not present in this guild",
+                command.GuildId, command.RequesterDiscordId);
             return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild. Please complete the bot invite before registering.");
         }
 
@@ -51,6 +56,12 @@ public class RegisterGuildCommandHandler(
             variables,
             cancellationToken);
 
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Guild {GuildId} ({GuildName}) registered by discord user {DiscordId}",
+                command.GuildId, guild.Name, command.RequesterDiscordId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild registered successfully."));
     }

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -63,7 +64,8 @@ public class SyncBnetCharactersCommandHandlerTests
             _branches.Object,
             _realms.Object,
             _characters.Object,
-            _bnetApi.Object);
+            _bnetApi.Object,
+            NullLogger<SyncBnetCharactersCommandHandler>.Instance);
 
         _characters.Setup(r => r.UpsertAsync(It.IsAny<Character>(), default))
             .ReturnsAsync((Character c, CancellationToken _) => c);

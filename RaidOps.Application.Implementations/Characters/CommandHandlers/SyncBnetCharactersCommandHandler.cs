@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -17,7 +18,8 @@ public class SyncBnetCharactersCommandHandler(
     IBranchRepository branchRepository,
     IRealmRepository realmRepository,
     ICharacterRepository characterRepository,
-    IBnetApiService bnetApiService)
+    IBnetApiService bnetApiService,
+    ILogger<SyncBnetCharactersCommandHandler> logger)
     : ICommandHandlerAsync<SyncBnetCharactersCommand>
 {
     /// <inheritdoc/>
@@ -27,13 +29,30 @@ public class SyncBnetCharactersCommandHandler(
     {
         var account = await bnetAccountRepository.GetByDiscordIdAsync(command.UserDiscordId, cancellationToken);
         if (account is null)
+        {
+            logger.LogWarning(
+                "BNet sync failed for discord user {DiscordId}: no linked BNet account",
+                command.UserDiscordId);
             return Result<CommandResponse>.Fail(ResponseDetail.BnetNotLinked);
+        }
 
         var branch = await branchRepository.GetByIdAsync(command.BranchId, cancellationToken);
         if (branch is null)
+        {
+            logger.LogWarning(
+                "BNet sync failed for discord user {DiscordId}: branch {BranchId} not found",
+                command.UserDiscordId, command.BranchId);
             return Result<CommandResponse>.Fail(ResponseDetail.BranchNotFound);
+        }
 
         var profileNamespace = branch.BnetNamespacePrefix.Replace("dynamic", "profile") + "-" + account.Region;
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Syncing BNet characters for discord user {DiscordId}, branch {BranchId}, namespace {Namespace}, region {Region}",
+                command.UserDiscordId, command.BranchId, profileNamespace, account.Region);
+        }
 
         var bnetResponse = await bnetApiService.GetWowCharactersAsync(
             account.AccessToken,
@@ -93,6 +112,13 @@ public class SyncBnetCharactersCommandHandler(
 
                 synced++;
             }
+        }
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "BNet sync completed for discord user {DiscordId}, branch {BranchId}: {SyncedCount} character(s) synced",
+                command.UserDiscordId, command.BranchId, synced);
         }
 
         return Result<CommandResponse>.Ok(new CommandResponse($"{synced} character(s) synced successfully."));

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -22,7 +23,8 @@ public class ActivateCharactersCommandHandler(
     ICharacterRepository characterRepository,
     IBnetAccountRepository bnetAccountRepository,
     IBnetApiService bnetApiService,
-    ISpecResolverService specResolver)
+    ISpecResolverService specResolver,
+    ILogger<ActivateCharactersCommandHandler> logger)
     : ICommandHandlerAsync<ActivateCharactersCommand>
 {
     /// <inheritdoc/>
@@ -38,7 +40,12 @@ public class ActivateCharactersCommandHandler(
         if (bnetAccount is not null)
         {
             try { appToken = await bnetApiService.GetAppTokenAsync(bnetAccount.Region, cancellationToken); }
-            catch (HttpRequestException) { /* enrichment skipped below if appToken is null */ }
+            catch (HttpRequestException ex)
+            {
+                logger.LogWarning(ex,
+                    "Activation enrichment skipped for discord user {DiscordId}: could not obtain BNet app token for region {Region}",
+                    command.UserDiscordId, bnetAccount.Region);
+            }
         }
 
         // Fetch BNet data for all characters in parallel (pure HTTP, no DbContext).
@@ -50,6 +57,13 @@ public class ActivateCharactersCommandHandler(
             await PersistEnrichmentAsync(characters[i], enrichments[i], cancellationToken);
 
         await characterRepository.ActivateAsync(command.CharacterIds, command.UserDiscordId, cancellationToken);
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Activated {CharacterCount} character(s) for discord user {DiscordId} ({EnrichedCount} enriched from BNet)",
+                characters.Count, command.UserDiscordId, enrichments.Count(e => e is not null));
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Characters activated successfully."));
     }
@@ -76,8 +90,11 @@ public class ActivateCharactersCommandHandler(
 
             return new CharacterEnrichment(detailTask.Result, mediaTask.Result, specsTask.Result);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
+            logger.LogWarning(ex,
+                "Activation enrichment skipped for character {CharacterId} ({CharacterName}): BNet API call failed",
+                character.Id, character.Name);
             return null;
         }
     }

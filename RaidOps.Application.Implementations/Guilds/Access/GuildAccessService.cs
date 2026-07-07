@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -14,7 +15,8 @@ namespace RaidOps.Application.Implementations.Guilds.Access;
 public class GuildAccessService(
     IUserGuildsRepository userGuildsRepository,
     IGuildsRepository guildsRepository,
-    IDiscordBotService discordBotService) : IGuildAccessService
+    IDiscordBotService discordBotService,
+    ILogger<GuildAccessService> logger) : IGuildAccessService
 {
     /// <inheritdoc/>
     public async Task<GuildAccessLevel> GetAccessLevelAsync(string discordId, string guildId, CancellationToken cancellationToken = default)
@@ -85,9 +87,12 @@ public class GuildAccessService(
             return guildUser.RoleIds.Any(rid =>
                 roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
             // Bot not in this guild — no threshold-based access to grant.
+            logger.LogWarning(ex,
+                "Discord role access check failed for discord user {DiscordId} in guild {GuildId}: RaidOps bot is not present in this guild",
+                discordId, guildId);
             return false;
         }
     }

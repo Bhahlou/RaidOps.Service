@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Authentication.Commands;
 using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Application.Contracts.Common;
@@ -12,7 +13,8 @@ namespace RaidOps.Application.Implementations.Services;
 /// </summary>
 public class RaidOpsAuthService(
     IDiscordSyncService discordSyncService,
-    IJwtService jwtService) : IRaidOpsAuthService
+    IJwtService jwtService,
+    ILogger<RaidOpsAuthService> logger) : IRaidOpsAuthService
 {
     /// <summary>
     /// Handles the Discord OAuth2 sign-up flow: syncs the user's profile and guilds
@@ -34,10 +36,20 @@ public class RaidOpsAuthService(
                 command.DiscordRefreshToken,
                 cancellationToken);
 
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Signup completed for discord user {DiscordId}: {GuildCount} guild(s) synced",
+                    user.DiscordId, user.UserGuilds.Count);
+            }
+
             return Result<AuthenticationResponse>.Ok(GenerateTokens(user.DiscordId, user.Name));
         }
         catch (Exception ex)
         {
+            logger.LogError(ex,
+                "Signup failed for discord user {DiscordId}: Discord sync threw an exception",
+                command.DiscordId);
             return Result<AuthenticationResponse>.Fail(ex.Message);
         }
     }
@@ -56,20 +68,36 @@ public class RaidOpsAuthService(
     {
         var principal = jwtService.ValidateRefreshToken(command.RefreshToken);
         if (principal == null)
+        {
+            logger.LogWarning("Token refresh failed: invalid or expired refresh token");
             return Result<AuthenticationResponse>.Fail(ResponseDetail.InvalidRefreshToken);
+        }
 
         var discordId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
+        {
+            logger.LogWarning("Token refresh failed: refresh token is missing the subject claim");
             return Result<AuthenticationResponse>.Fail(ResponseDetail.InvalidTokenClaims);
+        }
 
         try
         {
             var user = await discordSyncService.SyncUserAndGuildsAsync(discordId, cancellationToken);
 
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Token refreshed for discord user {DiscordId}: {GuildCount} guild(s) re-synced",
+                    user.DiscordId, user.UserGuilds.Count);
+            }
+
             return Result<AuthenticationResponse>.Ok(GenerateTokens(user.DiscordId, user.Name));
         }
         catch (Exception ex)
         {
+            logger.LogError(ex,
+                "Token refresh failed for discord user {DiscordId}: Discord sync threw an exception",
+                discordId);
             return Result<AuthenticationResponse>.Fail(ex.Message);
         }
     }

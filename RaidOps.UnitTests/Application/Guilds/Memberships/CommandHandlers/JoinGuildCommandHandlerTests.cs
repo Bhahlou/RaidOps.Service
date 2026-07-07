@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NetCord;
 using NetCord.Gateway;
@@ -55,7 +56,8 @@ public class JoinGuildCommandHandlerTests
             _userGuilds.Object,
             _memberships.Object,
             _bot.Object,
-            _auditLog.Object);
+            _auditLog.Object,
+            NullLogger<JoinGuildCommandHandler>.Instance);
     }
 
     // ── CharacterNotFound ─────────────────────────────────────────────────

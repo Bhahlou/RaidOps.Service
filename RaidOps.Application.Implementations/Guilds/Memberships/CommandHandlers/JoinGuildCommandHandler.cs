@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Commands;
@@ -19,7 +20,8 @@ public class JoinGuildCommandHandler(
     IUserGuildsRepository userGuildsRepository,
     IGuildMembershipRepository membershipRepository,
     IDiscordBotService discordBotService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<JoinGuildCommand>
+    IAuditLogService auditLogService,
+    ILogger<JoinGuildCommandHandler> logger) : ICommandHandlerAsync<JoinGuildCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(JoinGuildCommand command, CancellationToken cancellationToken = default)
@@ -84,6 +86,13 @@ public class JoinGuildCommandHandler(
             },
             cancellationToken);
 
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} ({CharacterName}) joined guild {GuildId} roster, requested by discord user {DiscordId}",
+                character.Id, character.Name, command.GuildId, command.RequesterDiscordId);
+        }
+
         return Result<CommandResponse>.Ok(new CommandResponse("Character added to the guild roster."));
     }
 
@@ -112,8 +121,11 @@ public class JoinGuildCommandHandler(
             if (!hasAccess)
                 return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You do not have the required Discord role to join this roster.");
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            logger.LogWarning(ex,
+                "Join guild {GuildId} failed for discord user {RequesterDiscordId}: RaidOps bot is not present in this guild",
+                guildId, requesterDiscordId);
             return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild.");
         }
 
