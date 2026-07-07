@@ -15,6 +15,12 @@ namespace RaidOps.Application.Implementations.Services;
 /// </summary>
 public class JwtService(IOptions<JwtSettings> options) : IJwtService
 {
+    private const string TypeClaim = "typ";
+    private const string AccessTokenType = "access";
+    private const string RefreshTokenType = "refresh";
+    private const string GuildRegStateTokenType = "state_guild_reg";
+    private const string BnetStateTokenType = "state_bnet";
+
     private readonly JwtSettings _settings = options.Value;
 
     /// <summary>
@@ -32,7 +38,8 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
         {
             new Claim(JwtRegisteredClaimNames.Sub, discordId),
             new Claim(JwtRegisteredClaimNames.Name, username),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(TypeClaim, AccessTokenType)
         };
         return (BuildToken(claims, expiry), expiry);
     }
@@ -50,21 +57,24 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, discordId),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(TypeClaim, RefreshTokenType)
         };
         return (BuildToken(claims, expiry), expiry);
     }
 
     /// <summary>
     /// Validates a refresh token against the configured signing key, issuer, audience,
-    /// and lifetime. A clock skew of 30 seconds is applied.
+    /// lifetime, and expected <c>typ</c> claim. A clock skew of 30 seconds is applied.
+    /// Rejects tokens of any other RaidOps-issued type (access, state), even if otherwise
+    /// validly signed, to prevent cross-purpose token replay.
     /// </summary>
     /// <param name="token">The JWT string to validate.</param>
     /// <returns>
     /// The <see cref="ClaimsPrincipal"/> if validation succeeds, or <c>null</c> if the token
-    /// is invalid, expired, or tampered with.
+    /// is invalid, expired, tampered with, or not a refresh token.
     /// </returns>
-    public ClaimsPrincipal? ValidateRefreshToken(string token) => TryValidate(token);
+    public ClaimsPrincipal? ValidateRefreshToken(string token) => TryValidate(token, RefreshTokenType);
 
     /// <summary>
     /// Generates a short-lived CSRF state token for the Discord bot OAuth2 registration flow.
@@ -81,7 +91,8 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
         {
             new(JwtRegisteredClaimNames.Sub, discordId),
             new("gld", guildId),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(TypeClaim, GuildRegStateTokenType)
         };
         if (returnTo != null)
             claims.Add(new Claim("rtn", returnTo));
@@ -99,7 +110,7 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// </returns>
     public (string GuildId, string DiscordId, string? ReturnTo)? ValidateStateToken(string token)
     {
-        var principal = TryValidate(token);
+        var principal = TryValidate(token, GuildRegStateTokenType);
         var discordId = principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         var guildId   = principal?.FindFirst("gld")?.Value;
         var returnTo  = principal?.FindFirst("rtn")?.Value;
@@ -120,7 +131,8 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
         [
             new(JwtRegisteredClaimNames.Sub, discordId),
             new("rgn", region),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(TypeClaim, BnetStateTokenType)
         ];
         return BuildToken(claims, expiry);
     }
@@ -135,18 +147,22 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
     /// </returns>
     public (string DiscordId, string Region)? ValidateBnetStateToken(string token)
     {
-        var principal = TryValidate(token);
+        var principal = TryValidate(token, BnetStateTokenType);
         var discordId = principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         var region    = principal?.FindFirst("rgn")?.Value;
         return discordId is null || region is null ? null : (discordId, region);
     }
 
     /// <summary>
-    /// Validates a JWT against the configured key, issuer, audience, and lifetime.
+    /// Validates a JWT against the configured key, issuer, audience, and lifetime, then checks
+    /// that its <c>typ</c> claim matches <paramref name="expectedType"/>. All RaidOps-issued
+    /// tokens (access, refresh, state) share the same signing key/issuer/audience, so the
+    /// <c>typ</c> claim is what prevents one token purpose from being replayed as another
+    /// (e.g. a leaked OAuth <c>state</c> token being used as a refresh token).
     /// Preserves short claim names (e.g. "sub") by clearing the inbound claim type map.
-    /// Returns <c>null</c> if validation fails for any reason.
+    /// Returns <c>null</c> if validation fails for any reason, including a <c>typ</c> mismatch.
     /// </summary>
-    private ClaimsPrincipal? TryValidate(string token)
+    private ClaimsPrincipal? TryValidate(string token, string expectedType)
     {
         var handler = new JwtSecurityTokenHandler();
         handler.InboundClaimTypeMap.Clear();
@@ -161,7 +177,12 @@ public class JwtService(IOptions<JwtSettings> options) : IJwtService
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key)),
             ClockSkew                = TimeSpan.FromSeconds(30)
         };
-        try { return handler.ValidateToken(token, parameters, out _); }
+        try
+        {
+            var principal = handler.ValidateToken(token, parameters, out _);
+            var type = principal.FindFirst(TypeClaim)?.Value;
+            return type == expectedType ? principal : null;
+        }
         catch { return null; }
     }
 

@@ -154,6 +154,18 @@ namespace RaidOps.API
                         {
                             context.Token = context.Request.Cookies["access_token"];
                             return Task.CompletedTask;
+                        },
+                        // All RaidOps-issued JWTs (access, refresh, OAuth state tokens) share the
+                        // same signing key/issuer/audience, so without this check a leaked refresh
+                        // or state token could be replayed as an access token via the cookie above.
+                        OnTokenValidated = context =>
+                        {
+                            var type = context.Principal?.FindFirst("typ")?.Value;
+                            if (type != "access")
+                            {
+                                context.Fail("Token is not an access token.");
+                            }
+                            return Task.CompletedTask;
                         }
                     };
                 });
