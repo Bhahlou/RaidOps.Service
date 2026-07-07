@@ -57,9 +57,12 @@ public class UpdateCharacterRankCommandHandler(
             },
             cancellationToken);
 
-        logger.LogInformation(
-            "Character {CharacterId} ({CharacterName}) rank updated from {OldRank} to {NewRank} in guild {GuildId}, requested by discord user {DiscordId}",
-            character.Id, character.Name, oldRank, command.CharacterRank, command.GuildId, command.RequesterDiscordId);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} ({CharacterName}) rank updated from {OldRank} to {NewRank} in guild {GuildId}, requested by discord user {DiscordId}",
+                character.Id, character.Name, oldRank, command.CharacterRank, command.GuildId, command.RequesterDiscordId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character rank updated."));
     }

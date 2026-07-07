@@ -57,9 +57,12 @@ public class UpdateOfficerThresholdCommandHandler(
                 cancellationToken);
         }
 
-        logger.LogInformation(
-            "Guild {GuildId} officer threshold updated by discord user {DiscordId}: {OldRoleId} -> {NewRoleId}",
-            command.GuildId, command.RequesterDiscordId, oldMinOfficerRoleId, command.MinOfficerRoleId);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Guild {GuildId} officer threshold updated by discord user {DiscordId}: {OldRoleId} -> {NewRoleId}",
+                command.GuildId, command.RequesterDiscordId, oldMinOfficerRoleId, command.MinOfficerRoleId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Officer threshold updated successfully."));
     }

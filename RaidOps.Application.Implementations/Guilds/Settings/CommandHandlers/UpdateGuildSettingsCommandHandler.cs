@@ -68,9 +68,12 @@ public class UpdateGuildSettingsCommandHandler(
                 cancellationToken);
         }
 
-        logger.LogInformation(
-            "Guild {GuildId} settings updated by discord user {DiscordId}: fields [{ChangedFields}]",
-            command.GuildId, command.RequesterDiscordId, string.Join(", ", changedFields));
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Guild {GuildId} settings updated by discord user {DiscordId}: fields [{ChangedFields}]",
+                command.GuildId, command.RequesterDiscordId, string.Join(", ", changedFields));
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild settings updated successfully."));
     }

@@ -34,7 +34,7 @@ namespace RaidOps.API
             catch (Exception ex)
             {
                 Log.Fatal(ex, "RaidOps.API terminated unexpectedly");
-                throw;
+                Environment.ExitCode = 1;
             }
             finally
             {

@@ -47,9 +47,12 @@ public class SyncBnetCharactersCommandHandler(
 
         var profileNamespace = branch.BnetNamespacePrefix.Replace("dynamic", "profile") + "-" + account.Region;
 
-        logger.LogInformation(
-            "Syncing BNet characters for discord user {DiscordId}, branch {BranchId}, namespace {Namespace}, region {Region}",
-            command.UserDiscordId, command.BranchId, profileNamespace, account.Region);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Syncing BNet characters for discord user {DiscordId}, branch {BranchId}, namespace {Namespace}, region {Region}",
+                command.UserDiscordId, command.BranchId, profileNamespace, account.Region);
+        }
 
         var bnetResponse = await bnetApiService.GetWowCharactersAsync(
             account.AccessToken,
@@ -111,9 +114,12 @@ public class SyncBnetCharactersCommandHandler(
             }
         }
 
-        logger.LogInformation(
-            "BNet sync completed for discord user {DiscordId}, branch {BranchId}: {SyncedCount} character(s) synced",
-            command.UserDiscordId, command.BranchId, synced);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "BNet sync completed for discord user {DiscordId}, branch {BranchId}: {SyncedCount} character(s) synced",
+                command.UserDiscordId, command.BranchId, synced);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse($"{synced} character(s) synced successfully."));
     }

@@ -86,9 +86,12 @@ public class JoinGuildCommandHandler(
             },
             cancellationToken);
 
-        logger.LogInformation(
-            "Character {CharacterId} ({CharacterName}) joined guild {GuildId} roster, requested by discord user {DiscordId}",
-            character.Id, character.Name, command.GuildId, command.RequesterDiscordId);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} ({CharacterName}) joined guild {GuildId} roster, requested by discord user {DiscordId}",
+                character.Id, character.Name, command.GuildId, command.RequesterDiscordId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character added to the guild roster."));
     }

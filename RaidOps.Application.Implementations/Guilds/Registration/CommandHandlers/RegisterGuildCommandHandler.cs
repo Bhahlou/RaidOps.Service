@@ -56,9 +56,12 @@ public class RegisterGuildCommandHandler(
             variables,
             cancellationToken);
 
-        logger.LogInformation(
-            "Guild {GuildId} ({GuildName}) registered by discord user {DiscordId}",
-            command.GuildId, guild.Name, command.RequesterDiscordId);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Guild {GuildId} ({GuildName}) registered by discord user {DiscordId}",
+                command.GuildId, guild.Name, command.RequesterDiscordId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild registered successfully."));
     }

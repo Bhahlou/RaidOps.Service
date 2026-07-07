@@ -49,9 +49,12 @@ public class LeaveGuildCommandHandler(
             },
             cancellationToken);
 
-        logger.LogInformation(
-            "Character {CharacterId} ({CharacterName}) removed from guild {GuildId} roster, requested by discord user {DiscordId} ({Action})",
-            character.Id, character.Name, command.GuildId, command.RequesterDiscordId, isOwner ? "left" : "excluded");
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} ({CharacterName}) removed from guild {GuildId} roster, requested by discord user {DiscordId} ({Action})",
+                character.Id, character.Name, command.GuildId, command.RequesterDiscordId, isOwner ? "left" : "excluded");
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character removed from the guild roster."));
     }

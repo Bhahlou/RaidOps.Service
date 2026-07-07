@@ -19,7 +19,8 @@ public class UnregisterGuildCommandHandler(
     {
         await guildsRepository.UnregisterAsync(command.GuildId, cancellationToken);
 
-        logger.LogInformation("Guild {GuildId} unregistered", command.GuildId);
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("Guild {GuildId} unregistered", command.GuildId);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild unregistered."));
     }

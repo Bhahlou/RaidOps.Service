@@ -75,9 +75,12 @@ public class SetCharacterRaidSpecsCommandHandler(
 
         await characterRepository.UpsertRaidSpecsAsync(command.CharacterId, raidSpecs, cancellationToken);
 
-        logger.LogInformation(
-            "Raid specs updated for character {CharacterId} by discord user {DiscordId}: main spec {MainSpecId}, viable specs [{ViableSpecIds}]",
-            command.CharacterId, command.UserDiscordId, command.MainSpecId, string.Join(", ", viableIds));
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Raid specs updated for character {CharacterId} by discord user {DiscordId}: main spec {MainSpecId}, viable specs [{ViableSpecIds}]",
+                command.CharacterId, command.UserDiscordId, command.MainSpecId, string.Join(", ", viableIds));
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid specs updated successfully."));
     }

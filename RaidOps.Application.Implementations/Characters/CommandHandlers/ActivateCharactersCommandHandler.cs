@@ -58,9 +58,12 @@ public class ActivateCharactersCommandHandler(
 
         await characterRepository.ActivateAsync(command.CharacterIds, command.UserDiscordId, cancellationToken);
 
-        logger.LogInformation(
-            "Activated {CharacterCount} character(s) for discord user {DiscordId} ({EnrichedCount} enriched from BNet)",
-            characters.Count, command.UserDiscordId, enrichments.Count(e => e is not null));
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Activated {CharacterCount} character(s) for discord user {DiscordId} ({EnrichedCount} enriched from BNet)",
+                characters.Count, command.UserDiscordId, enrichments.Count(e => e is not null));
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Characters activated successfully."));
     }

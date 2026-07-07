@@ -32,9 +32,12 @@ public class DeactivateCharacterCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.NotFound);
         }
 
-        logger.LogInformation(
-            "Character {CharacterId} deactivated for discord user {DiscordId}",
-            command.CharacterId, command.UserDiscordId);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} deactivated for discord user {DiscordId}",
+                command.CharacterId, command.UserDiscordId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character deactivated successfully."));
     }

@@ -36,9 +36,12 @@ public class RaidOpsAuthService(
                 command.DiscordRefreshToken,
                 cancellationToken);
 
-            logger.LogInformation(
-                "Signup completed for discord user {DiscordId}: {GuildCount} guild(s) synced",
-                user.DiscordId, user.UserGuilds.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Signup completed for discord user {DiscordId}: {GuildCount} guild(s) synced",
+                    user.DiscordId, user.UserGuilds.Count);
+            }
 
             return Result<AuthenticationResponse>.Ok(GenerateTokens(user.DiscordId, user.Name));
         }
@@ -81,9 +84,12 @@ public class RaidOpsAuthService(
         {
             var user = await discordSyncService.SyncUserAndGuildsAsync(discordId, cancellationToken);
 
-            logger.LogInformation(
-                "Token refreshed for discord user {DiscordId}: {GuildCount} guild(s) re-synced",
-                user.DiscordId, user.UserGuilds.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Token refreshed for discord user {DiscordId}: {GuildCount} guild(s) re-synced",
+                    user.DiscordId, user.UserGuilds.Count);
+            }
 
             return Result<AuthenticationResponse>.Ok(GenerateTokens(user.DiscordId, user.Name));
         }

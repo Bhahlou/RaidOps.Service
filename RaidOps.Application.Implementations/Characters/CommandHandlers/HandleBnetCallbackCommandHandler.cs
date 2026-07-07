@@ -66,9 +66,12 @@ public class HandleBnetCallbackCommandHandler(
                 Region = region
             }, cancellationToken);
 
-            logger.LogInformation(
-                "BNet account linked for discord user {DiscordId}: bnetId {BnetId}, region {Region}",
-                command.DiscordId, userInfo.Id, region);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "BNet account linked for discord user {DiscordId}: bnetId {BnetId}, region {Region}",
+                    command.DiscordId, userInfo.Id, region);
+            }
         }
         catch (HttpRequestException ex)
         {
