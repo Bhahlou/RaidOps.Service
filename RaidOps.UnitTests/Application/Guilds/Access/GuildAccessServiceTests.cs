@@ -305,6 +305,30 @@ public class GuildAccessServiceTests
     }
 
     [Fact]
+    public void ComputeAccessLevel_OfficerThresholdUserHasStaleRoleAndMatchingRole_ReturnsOfficer()
+    {
+        // The user holds a stale role id no longer present in the roles dictionary (deleted from
+        // the Discord server) alongside their real matching role — .Any() must skip the unresolved
+        // id via TryGetValue and keep evaluating instead of short-circuiting to false.
+        var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
+        var guild = new DiscordGuild
+        {
+            Id = GuildId, Name = "RaidOps", IsRegistered = true,
+            RosterMode = RosterMode.Open, MinOfficerRoleId = OfficerRoleId,
+        };
+        const ulong staleRoleUlong = 700000000000000001UL;
+        var officerRole = NetCordTestHelpers.MakeJsonRole(OfficerRoleUlong, (Permissions)0, position: 5);
+        var netcordGuild = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [officerRole]);
+        _guildService.Setup(g => g.GetRoles(GuildId, default)).Returns(netcordGuild.Roles.Values);
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [staleRoleUlong, OfficerRoleUlong]);
+        _guildService.Setup(g => g.GetUsers(GuildId, default)).Returns([guildUser]);
+
+        var result = _sut.ComputeAccessLevel(membership, guild, default);
+
+        result.Should().Be(GuildAccessLevel.Officer);
+    }
+
+    [Fact]
     public void ComputeAccessLevel_OfficerThresholdUserHasHigherRole_ReturnsOfficer()
     {
         var membership = new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false };
@@ -404,6 +428,35 @@ public class GuildAccessServiceTests
         var result = await _sut.OutranksAsync(GuildId, DiscordId, TargetDiscordId, default);
 
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task OutranksAsync_RequesterHasNoMembershipRow_FallsThroughToRoleComparison()
+    {
+        // No UserGuilds row at all for the requester (e.g. never synced) — the `?.IsAdmin == true`
+        // null-conditional must resolve to false (not throw, not short-circuit as admin) and fall
+        // through to the role-position comparison.
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(DiscordId, default)).ReturnsAsync([]);
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(TargetDiscordId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = TargetDiscordId, IsAdmin = false }]);
+        SetupRoles(requesterPosition: 10, targetPosition: 5);
+
+        var result = await _sut.OutranksAsync(GuildId, DiscordId, TargetDiscordId, default);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OutranksAsync_TargetHasNoMembershipRow_FallsThroughToRoleComparison()
+    {
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(DiscordId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId, IsAdmin = false }]);
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(TargetDiscordId, default)).ReturnsAsync([]);
+        SetupRoles(requesterPosition: 10, targetPosition: 5);
+
+        var result = await _sut.OutranksAsync(GuildId, DiscordId, TargetDiscordId, default);
+
+        result.Should().BeTrue();
     }
 
     [Fact]
