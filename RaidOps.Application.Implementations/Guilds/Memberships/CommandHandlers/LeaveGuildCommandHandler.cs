@@ -32,6 +32,10 @@ public class LeaveGuildCommandHandler(
             var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
             if (accessLevel < GuildAccessLevel.Officer)
                 return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of this guild.");
+
+            var outranksTarget = await guildAccessService.OutranksAsync(command.GuildId, command.RequesterDiscordId, character.UserDiscordId, cancellationToken);
+            if (!outranksTarget)
+                return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You cannot exclude a member with an equal or higher role than yours.");
         }
 
         var removed = await membershipRepository.DeleteAsync(command.CharacterId, command.GuildId, cancellationToken);

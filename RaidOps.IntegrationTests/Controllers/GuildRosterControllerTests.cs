@@ -171,6 +171,55 @@ public class GuildRosterControllerTests(RaidOpsWebApplicationFactory factory)
         member.PlayerName.Should().Be("TestUser");
     }
 
+    // â”€â”€ CanExclude â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    [Fact]
+    public async Task GetRoster_AdminRequester_MarksOthersRowAndOwnRowCanExcludeTrue()
+    {
+        const string adminId  = "970000000000000007";
+        const string ownerId  = "970000000000000107";
+        const string guildId  = "940000000000000007";
+        var adminChar = await SeedActiveCharacter(adminId, bnetCharacterId: 90007001, name: "AdminChar");
+        var otherChar = await SeedActiveCharacter(ownerId, bnetCharacterId: 90007002, name: "OtherChar");
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(adminId, guildId, isAdmin: true));
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = adminChar, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = otherChar, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: adminId);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/roster");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = (await response.Content.ReadFromJsonAsync<List<GuildRosterMemberResponse>>(ApiJsonOptions))!;
+        body.Should().OnlyContain(m => m.CanExclude);
+    }
+
+    [Fact]
+    public async Task GetRoster_RosterOnlyRequester_MarksAllRowsCanExcludeFalse()
+    {
+        const string id      = "970000000000000008";
+        const string guildId = "940000000000000008";
+        var ownChar = await SeedActiveCharacter(id, bnetCharacterId: 90008001, name: "OwnChar");
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = ownChar, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/roster");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = (await response.Content.ReadFromJsonAsync<List<GuildRosterMemberResponse>>(ApiJsonOptions))!;
+        body.Should().OnlyContain(m => !m.CanExclude);
+    }
+
     // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>

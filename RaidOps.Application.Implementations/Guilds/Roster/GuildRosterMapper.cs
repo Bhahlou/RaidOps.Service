@@ -13,7 +13,7 @@ internal static class GuildRosterMapper
     /// Maps a <see cref="GuildMembership"/> to a <see cref="GuildRosterMemberResponse"/>, enriched
     /// with the owning player's Discord display info from <paramref name="usersById"/>.
     /// </summary>
-    internal static GuildRosterMemberResponse ToDto(GuildMembership membership, Dictionary<string, User> usersById)
+    internal static GuildRosterMemberResponse ToDto(GuildMembership membership, Dictionary<string, User> usersById, bool canExclude)
     {
         var character = membership.Character;
         usersById.TryGetValue(character.UserDiscordId, out var player);
@@ -47,6 +47,7 @@ internal static class GuildRosterMapper
                 .ToList(),
             CharacterRank    = membership.CharacterRank,
             JoinedAt         = membership.JoinedAt,
+            CanExclude       = canExclude,
         };
     }
 }

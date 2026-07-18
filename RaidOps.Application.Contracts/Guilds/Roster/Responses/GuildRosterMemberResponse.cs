@@ -52,4 +52,11 @@ public class GuildRosterMemberResponse
 
     /// <summary>UTC timestamp of when the character joined the roster.</summary>
     public required DateTime JoinedAt { get; set; }
+
+    /// <summary>
+    /// Whether the requester is allowed to exclude this character from the roster: they must be an
+    /// Officer, and (unless this is the requester's own character) outrank the character's owner in
+    /// the guild's Discord role hierarchy.
+    /// </summary>
+    public required bool CanExclude { get; set; }
 }

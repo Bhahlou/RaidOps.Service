@@ -125,6 +125,80 @@ public class GetGuildRosterQueryHandlerTests
         member.CharacterRank.Should().Be(CharacterRank.Split);
     }
 
+    // ── CanExclude ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_OfficerRequester_OutranksTarget_SetsCanExcludeTrue()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _access.Setup(a => a.OutranksAsync(GuildId, RequesterId, ownerId, default)).ReturnsAsync(true);
+        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().CanExclude.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_OfficerRequester_DoesNotOutrankTarget_SetsCanExcludeFalse()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _access.Setup(a => a.OutranksAsync(GuildId, RequesterId, ownerId, default)).ReturnsAsync(false);
+        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().CanExclude.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HandleAsync_OfficerRequester_OwnRow_SetsCanExcludeTrueWithoutCallingOutranks()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: RequesterId),
+        ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().CanExclude.Should().BeTrue();
+        _access.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RosterOnlyRequester_SetsCanExcludeFalseForAllRows()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: RequesterId),
+            BuildMembership(id: 2, name: "Jaina", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Should().OnlyContain(m => !m.CanExclude);
+        _access.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+    }
+
     private static GuildMembership BuildMembership(int id, string name, CharacterRank rank, string ownerId = "owner-1")
     {
         var frostSpec = new Spec { Id = 1, Name = "Frost" };
