@@ -99,6 +99,7 @@ public class LeaveGuildCommandHandlerTests
             It.Is<Dictionary<string, string>>(v => v["characterName"] == "Arthas" && v["characterClassId"] == "5"),
             default), Times.Once);
         _guildAccess.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _guildAccess.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
 
     // ── Success — officer kicking someone else ───────────────────────────
@@ -109,6 +110,7 @@ public class LeaveGuildCommandHandlerTests
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
             .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = OwnerId, ClassId = 5 });
         _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guildAccess.Setup(a => a.OutranksAsync(GuildId, DiscordId, OwnerId, default)).ReturnsAsync(true);
         _memberships.Setup(r => r.DeleteAsync(CharacterId, GuildId, default)).ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(Command);
@@ -119,6 +121,23 @@ public class LeaveGuildCommandHandlerTests
             GuildId, DiscordId, GuildAuditAction.MemberExcluded,
             It.Is<Dictionary<string, string>>(v => v["characterName"] == "Arthas" && v["characterClassId"] == "5"),
             default), Times.Once);
+    }
+
+    // ── Forbidden — officer does not outrank target ──────────────────────
+
+    [Fact]
+    public async Task HandleAsync_OfficerNotOwner_DoesNotOutrankTarget_ReturnsForbidden()
+    {
+        _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
+            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = OwnerId, ClassId = 5 });
+        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guildAccess.Setup(a => a.OutranksAsync(GuildId, DiscordId, OwnerId, default)).ReturnsAsync(false);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _memberships.Verify(r => r.DeleteAsync(It.IsAny<int>(), It.IsAny<string>(), default), Times.Never);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

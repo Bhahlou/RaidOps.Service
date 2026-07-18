@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using RaidOps.API.Controllers.v1;
+using RaidOps.Application.Contracts.Characters.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Roster.Queries;
@@ -58,10 +59,19 @@ public class GuildRosterControllerTests
         {
             new()
             {
-                CharacterId = 1, CharacterName = "Arthas", ClassId = 6, ClassName = "Death Knight",
-                ClassColor = "#C41F3B", Level = 80, BranchName = "Classic Anniversary", RealmSlug = "kazzak",
-                PlayerDiscordId = DiscordId, RaidSpecs = [], CharacterRank = CharacterRank.Main,
-                JoinedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                CharacterId = 1,
+                CharacterName = "Arthas",
+                ClassId = 6,
+                ClassName = "Death Knight",
+                ClassColor = "#C41F3B",
+                Level = 80,
+                BranchName = "Classic Anniversary",
+                RealmSlug = "kazzak",
+                PlayerDiscordId = DiscordId,
+                RaidSpecs = [],
+                CharacterRank = CharacterRank.Main,
+                JoinedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), 
+                CanExclude = true
             },
         };
         _queries.Setup(q => q.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
@@ -78,7 +88,7 @@ public class GuildRosterControllerTests
     {
         _queries.Setup(q => q.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
                 It.IsAny<GetGuildRosterQuery>(), default))
-            .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok([]));
+            .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok([])); // remplacer [] par new List<...>()
 
         await _sut.GetRoster(GuildId, default);
 

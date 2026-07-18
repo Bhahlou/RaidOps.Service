@@ -418,6 +418,41 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
     }
 
     [Fact]
+    public async Task LeaveGuild_AdminKickingAnotherAdmin_Returns200()
+    {
+        // Discord admins bypass the role hierarchy entirely — an admin can exclude anyone,
+        // including another admin.
+        const string ownerId   = "400000000000000064";
+        const string adminId   = "400000000000000164";
+        const string guildId   = "820000000000000064";
+        var charId = await SeedUserWithCharacter(ownerId, bnetCharacterId: 80064);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(adminId));
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(ownerId, guildId, isAdmin: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(adminId, guildId, isAdmin: true));
+            db.GuildMemberships.Add(new GuildMembership
+            {
+                CharacterId = charId, GuildId = guildId,
+                CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+            });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: adminId);
+
+        var response = await client.DeleteAsync($"/api/v1/characters/{charId}/memberships/{guildId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var membership = await db.GuildMemberships.FindAsync(charId, guildId);
+            membership.Should().BeNull();
+        }
+    }
+
+    [Fact]
     public async Task LeaveGuild_StrangerNotOwnerNotOfficer_Returns400()
     {
         const string ownerId    = "400000000000000063";

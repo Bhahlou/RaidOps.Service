@@ -35,12 +35,23 @@ public class GetGuildRosterQueryHandler(
         var players = await usersRepository.FindAsync(u => playerIds.Contains(u.DiscordId), cancellationToken);
         var playersById = players.ToDictionary(u => u.DiscordId);
 
-        var roster = memberships
-            .Select(m => GuildRosterMapper.ToDto(m, playersById))
+        var isOfficerOrAbove = accessLevel >= GuildAccessLevel.Officer;
+
+        var roster = new List<GuildRosterMemberResponse>();
+        foreach (var membership in memberships)
+        {
+            var isOwnRow = membership.Character.UserDiscordId == query.RequesterDiscordId;
+            var canExclude = isOfficerOrAbove
+                && (isOwnRow || await guildAccessService.OutranksAsync(query.GuildId, query.RequesterDiscordId, membership.Character.UserDiscordId, cancellationToken));
+
+            roster.Add(GuildRosterMapper.ToDto(membership, playersById, canExclude));
+        }
+
+        var sortedRoster = roster
             .OrderBy(m => m.CharacterRank)
             .ThenBy(m => m.CharacterName)
             .ToList();
 
-        return Result<List<GuildRosterMemberResponse>>.Ok(roster);
+        return Result<List<GuildRosterMemberResponse>>.Ok(sortedRoster);
     }
 }
