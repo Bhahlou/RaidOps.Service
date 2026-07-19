@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -11,9 +12,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260718151808_AddMultiBnetAccountSupport")]
+    partial class AddMultiBnetAccountSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1326,7 +1329,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasOne("RaidOps.Domain.Models.Character.BattleNetAccount", null)
                         .WithMany()
                         .HasForeignKey("UserDiscordId", "SourceBnetId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Branch");
 

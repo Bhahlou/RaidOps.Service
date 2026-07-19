@@ -37,6 +37,14 @@ public class Character
     [Required]
     public string UserDiscordId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// <see cref="BattleNetAccount.BnetId"/> of the linked BNet account this character was
+    /// synced from, or <c>null</c> if it predates account tracking.
+    /// This character is hard-deleted (cascade) when its source account is unlinked.
+    /// </summary>
+    [MaxLength(32)]
+    public string? SourceBnetId { get; set; }
+
     /// <summary>FK to the branch this character belongs to.</summary>
     public int BranchId { get; set; }
 

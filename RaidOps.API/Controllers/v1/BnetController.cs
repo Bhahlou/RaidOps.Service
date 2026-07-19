@@ -31,21 +31,34 @@ public class BnetController(
     private string CallbackUrl => _callbackUrl;
 
     /// <summary>
-    /// Returns the Battle.net account linked to the authenticated user, or 404 if not linked.
+    /// Returns all Battle.net accounts linked to the authenticated user (empty array if none).
     /// </summary>
-    [HttpGet("account")]
-    public async Task<IActionResult> GetAccount(CancellationToken cancellationToken)
+    [HttpGet("accounts")]
+    public async Task<IActionResult> GetAccounts(CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null) return Unauthorized();
 
-        var result = await QueryDispatcher.DispatchAsync<GetBnetAccountQuery, BnetAccountResponse>(
-            new GetBnetAccountQuery { UserDiscordId = discordId }, cancellationToken);
+        var result = await QueryDispatcher.DispatchAsync<GetBnetAccountsQuery, List<BnetAccountResponse>>(
+            new GetBnetAccountsQuery { UserDiscordId = discordId }, cancellationToken);
 
-        if (result.IsFailed)
-            return result.Error == ResponseDetail.NotFound ? NotFound() : BadRequest(new { error = result.Error });
+        return ToActionResult(result);
+    }
 
-        return Ok(result.Value);
+    /// <summary>
+    /// Unlinks a Battle.net account from the authenticated user and permanently deletes every
+    /// character that was sourced from it (right to erasure), along with their guild memberships.
+    /// </summary>
+    [HttpDelete("accounts/{bnetId}")]
+    public async Task<IActionResult> Unlink(string bnetId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null) return Unauthorized();
+
+        var result = await CommandDispatcher.DispatchAsync(
+            new UnlinkBnetAccountCommand { UserDiscordId = discordId, BnetId = bnetId }, cancellationToken);
+
+        return ToActionResult(result);
     }
 
     /// <summary>

@@ -13,7 +13,9 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 /// <summary>
 /// Handles <see cref="ActivateCharactersCommand"/> by marking the given characters as active
 /// in RaidOps and enriching them with data pulled from the Battle.net API
-/// (avatar URL, guild name, active specs).
+/// (avatar URL, guild name, active specs). Uses an app-level token (client credentials, public
+/// data only) per distinct <see cref="Realm.Region"/> among the given characters — independent
+/// of which BNet accounts the user currently has linked.
 /// BNet API calls are made in parallel; DB writes are sequential to respect EF Core's
 /// single-threaded DbContext constraint.
 /// If the BNet API is unreachable for a given character, activation still proceeds
@@ -21,7 +23,6 @@ namespace RaidOps.Application.Implementations.Characters.CommandHandlers;
 /// </summary>
 public class ActivateCharactersCommandHandler(
     ICharacterRepository characterRepository,
-    IBnetAccountRepository bnetAccountRepository,
     IBnetApiService bnetApiService,
     ISpecResolverService specResolver,
     ILogger<ActivateCharactersCommandHandler> logger)
@@ -32,24 +33,28 @@ public class ActivateCharactersCommandHandler(
         ActivateCharactersCommand command,
         CancellationToken cancellationToken = default)
     {
-        var bnetAccount = await bnetAccountRepository.GetByDiscordIdAsync(command.UserDiscordId, cancellationToken);
         var characters = (await characterRepository.GetByIdsWithDetailsAsync(
             command.CharacterIds, command.UserDiscordId, cancellationToken)).ToList();
 
-        string? appToken = null;
-        if (bnetAccount is not null)
+        var appTokensByRegion = new Dictionary<string, string>();
+        foreach (var region in characters.Select(c => c.Realm.Region).Distinct())
         {
-            try { appToken = await bnetApiService.GetAppTokenAsync(bnetAccount.Region, cancellationToken); }
+            try { appTokensByRegion[region] = await bnetApiService.GetAppTokenAsync(region, cancellationToken); }
             catch (HttpRequestException ex)
             {
                 logger.LogWarning(ex,
                     "Activation enrichment skipped for discord user {DiscordId}: could not obtain BNet app token for region {Region}",
-                    command.UserDiscordId, bnetAccount.Region);
+                    command.UserDiscordId, region);
             }
         }
 
         // Fetch BNet data for all characters in parallel (pure HTTP, no DbContext).
-        var fetchTasks = characters.Select(c => FetchEnrichmentAsync(c, appToken, bnetAccount?.Region, cancellationToken));
+        var fetchTasks = characters.Select(c =>
+        {
+            var region = c.Realm.Region;
+            appTokensByRegion.TryGetValue(region, out var appToken);
+            return FetchEnrichmentAsync(c, appToken, region, cancellationToken);
+        });
         var enrichments = await Task.WhenAll(fetchTasks);
 
         // Persist sequentially — DbContext is not thread-safe.
