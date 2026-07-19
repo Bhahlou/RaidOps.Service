@@ -1,5 +1,7 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Characters.Responses;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
@@ -15,9 +17,16 @@ public class BnetControllerTests(RaidOpsWebApplicationFactory factory)
     // ── Auth enforcement ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAccount_WithoutToken_Returns401()
+    public async Task GetAccounts_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/bnet/account");
+        var response = await Client.GetAsync("/api/v1/bnet/accounts");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Unlink_WithoutToken_Returns401()
+    {
+        var response = await Client.DeleteAsync("/api/v1/bnet/accounts/987654321");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -36,22 +45,24 @@ public class BnetControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // ── Business logic ──────────────────────────────────────────────────────
+    // ── GetAccounts ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAccount_WhenNoAccountLinked_Returns404()
+    public async Task GetAccounts_WhenNoAccountLinked_ReturnsEmptyArray()
     {
         const string id = "400000000000000002";
         await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.GetAsync("/api/v1/bnet/account");
+        var response = await client.GetAsync("/api/v1/bnet/accounts");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<BnetAccountResponse>>();
+        body.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task GetAccount_WhenAccountLinked_ReturnsAccountData()
+    public async Task GetAccounts_WhenOneAccountLinked_ReturnsIt()
     {
         const string id = "400000000000000003";
         await SeedAsync(db =>
@@ -62,13 +73,148 @@ public class BnetControllerTests(RaidOpsWebApplicationFactory factory)
         });
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.GetAsync("/api/v1/bnet/account");
+        var response = await client.GetAsync("/api/v1/bnet/accounts");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<BnetAccountResponse>();
-        body!.BattleTag.Should().Be("Bhahlou#1234");
-        body.Region.Should().Be("eu");
+        var body = await response.Content.ReadFromJsonAsync<List<BnetAccountResponse>>();
+        body.Should().ContainSingle();
+        body![0].BattleTag.Should().Be("Bhahlou#1234");
+        body[0].Region.Should().Be("eu");
     }
+
+    [Fact]
+    public async Task GetAccounts_WhenMultipleAccountsLinked_ReturnsAllOfThem()
+    {
+        const string id = "400000000000000009";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, "Bhahlou#1234", bnetId: "111"));
+            db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, "Bhahlou#5678", bnetId: "222"));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync("/api/v1/bnet/accounts");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<BnetAccountResponse>>();
+        body.Should().HaveCount(2);
+        body!.Select(a => a.BattleTag).Should().BeEquivalentTo(["Bhahlou#1234", "Bhahlou#5678"]);
+    }
+
+    // ── Unlink ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Unlink_ExistingAccount_ReturnsOkAndRemovesIt()
+    {
+        const string id = "400000000000000010";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, bnetId: "111"));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.DeleteAsync("/api/v1/bnet/accounts/111");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var remaining = await db.BattleNetAccounts.Where(a => a.UserDiscordId == id).ToListAsync();
+            remaining.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Unlink_NonExistentAccount_StillReturnsOk()
+    {
+        const string id = "400000000000000011";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.DeleteAsync("/api/v1/bnet/accounts/does-not-exist");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Unlink_HardDeletesCharactersSourcedFromThatAccountOnly()
+    {
+        const string id = "400000000000000012";
+        await SeedAsync(async db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, bnetId: "111"));
+            db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, "Kept#0001", bnetId: "222"));
+            var realm = TestDataBuilder.CreateRealm(slug: "unlink-test-realm");
+            db.Realms.Add(realm);
+            await db.SaveChangesAsync();
+
+            var toDelete = TestDataBuilder.CreateCharacter(
+                id, realm.Id, isActive: true, name: "ToDelete", bnetCharacterId: 91001, sourceBnetId: "111");
+            var toKeep = TestDataBuilder.CreateCharacter(
+                id, realm.Id, isActive: true, name: "ToKeep", bnetCharacterId: 91002, sourceBnetId: "222");
+            db.Characters.Add(toDelete);
+            db.Characters.Add(toKeep);
+            await db.SaveChangesAsync();
+        });
+
+        var client = CreateAuthenticatedClient(discordId: id);
+        var response = await client.DeleteAsync("/api/v1/bnet/accounts/111");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var remaining = await db.Characters.Where(c => c.UserDiscordId == id).ToListAsync();
+            remaining.Should().ContainSingle();
+            remaining[0].Name.Should().Be("ToKeep");
+        }
+    }
+
+    [Fact]
+    public async Task Unlink_CharacterInAGuild_LogsMemberLeftAuditEntry()
+    {
+        const string id = "400000000000000013";
+        const string guildId = "500000000000000001";
+        await SeedAsync(async db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, bnetId: "111"));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(id: guildId, name: "Test Guild", isRegistered: true));
+            var realm = TestDataBuilder.CreateRealm(slug: "unlink-audit-realm");
+            db.Realms.Add(realm);
+            await db.SaveChangesAsync();
+
+            var character = TestDataBuilder.CreateCharacter(
+                id, realm.Id, isActive: true, name: "Arthas", bnetCharacterId: 91003, sourceBnetId: "111");
+            db.Characters.Add(character);
+            await db.SaveChangesAsync();
+
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = character.Id, GuildId = guildId, JoinedAt = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        });
+
+        var client = CreateAuthenticatedClient(discordId: id);
+        var response = await client.DeleteAsync("/api/v1/bnet/accounts/111");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var auditEntries = await db.GuildAuditLogs.Where(l => l.GuildId == guildId).ToListAsync();
+            auditEntries.Should().ContainSingle();
+            auditEntries[0].ActorDiscordId.Should().Be(id);
+        }
+    }
+
+    // ── Initiate / Callback (unchanged behavior) ─────────────────────────────
 
     [Fact]
     public async Task Initiate_WithInvalidRegion_Returns400()

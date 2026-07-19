@@ -96,17 +96,31 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .WithMany(g => g.UserGuilds)
             .HasForeignKey(ug => ug.GuildId);
 
-        // BattleNetAccount — 1:1 with User (no back-nav on User side)
+        // BattleNetAccount — composite PK (UserDiscordId, BnetId), many per User (no back-nav on User side)
+        modelBuilder.Entity<BattleNetAccount>()
+            .HasKey(b => new { b.UserDiscordId, b.BnetId });
+
         modelBuilder.Entity<BattleNetAccount>()
             .HasOne(b => b.User)
-            .WithOne()
-            .HasForeignKey<BattleNetAccount>(b => b.UserDiscordId);
+            .WithMany()
+            .HasForeignKey(b => b.UserDiscordId);
 
         // Character — FK to User, Realm, Race, WowClass
         modelBuilder.Entity<Character>()
             .HasOne(c => c.User)
             .WithMany()
             .HasForeignKey(c => c.UserDiscordId);
+
+        // Character.SourceBnetId — nullable composite FK to the BNet account it was synced from.
+        // Cascade: unlinking a BNet account deletes every character sourced from it (and, via the
+        // existing cascades below, their expansion states/specs/raid specs/guild memberships) —
+        // a deliberate hard delete, not a deactivation, per GDPR "right to erasure" on unlink.
+        modelBuilder.Entity<Character>()
+            .HasOne<BattleNetAccount>()
+            .WithMany()
+            .HasForeignKey(c => new { c.UserDiscordId, c.SourceBnetId })
+            .HasPrincipalKey(b => new { b.UserDiscordId, b.BnetId })
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Character>()
             .HasOne(c => c.Realm)

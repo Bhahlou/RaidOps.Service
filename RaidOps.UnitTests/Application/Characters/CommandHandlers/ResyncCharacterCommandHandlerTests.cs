@@ -17,7 +17,6 @@ namespace RaidOps.UnitTests.Application.Characters.CommandHandlers;
 public class ResyncCharacterCommandHandlerTests
 {
     private readonly Mock<ICharacterRepository>   _characters   = new();
-    private readonly Mock<IBnetAccountRepository>  _bnetAccounts = new();
     private readonly Mock<IBnetApiService>         _bnetApi      = new();
     private readonly Mock<ISpecResolverService>    _specResolver = new();
     private readonly ResyncCharacterCommandHandler _sut;
@@ -31,20 +30,10 @@ public class ResyncCharacterCommandHandlerTests
         CharacterId   = CharacterId,
     };
 
-    private static readonly BattleNetAccount Account = new()
-    {
-        UserDiscordId = DiscordId,
-        BnetId        = "bnet-1",
-        AccessToken   = "tok",
-        Region        = "eu",
-        BattleTag     = "Player#1234",
-    };
-
     public ResyncCharacterCommandHandlerTests()
     {
         _sut = new ResyncCharacterCommandHandler(
             _characters.Object,
-            _bnetAccounts.Object,
             _bnetApi.Object,
             _specResolver.Object,
             NullLogger<ResyncCharacterCommandHandler>.Instance);
@@ -58,6 +47,13 @@ public class ResyncCharacterCommandHandlerTests
 
         _characters.Setup(r => r.UpsertAsync(It.IsAny<Character>(), default))
             .ReturnsAsync((Character c, CancellationToken _) => c);
+
+        _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 600 });
+        _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterMediaResponse());
+        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
     }
 
     // ── Guard clause ─────────────────────────────────────────────────────────
@@ -74,22 +70,20 @@ public class ResyncCharacterCommandHandlerTests
         result.Error.Should().Be(ResponseDetail.NotFound);
     }
 
-    // ── No BNet account ───────────────────────────────────────────────────────
+    // ── Region resolution (from the character's own realm, not a linked account) ─
 
     [Fact]
-    public async Task HandleAsync_NoBnetAccount_ReturnsOkWithoutEnrichment()
+    public async Task HandleAsync_UsesCharacterRealmRegion_NotAnyLinkedBnetAccount()
     {
         var character = MakeCharacter();
+        character.Realm = new Realm { Id = 1, Name = "Ravencrest", Slug = "ravencrest", Region = "kr", BranchId = 1 };
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([character]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default))
-            .ReturnsAsync((BattleNetAccount?)null);
 
-        var result = await _sut.HandleAsync(Command);
+        await _sut.HandleAsync(Command);
 
-        result.IsSuccess.Should().BeTrue();
-        _bnetApi.Verify(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
-        _characters.Verify(r => r.UpsertAsync(It.IsAny<Character>(), default), Times.Never);
+        _bnetApi.Verify(b => b.GetAppTokenAsync("kr", default), Times.Once);
+        _bnetApi.Verify(b => b.GetCharacterAsync(It.IsAny<string>(), "kr", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Once);
     }
 
     // ── BNet API throws ───────────────────────────────────────────────────────
@@ -99,7 +93,6 @@ public class ResyncCharacterCommandHandlerTests
     {
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([MakeCharacter()]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
 
         _bnetApi.Setup(b => b.GetAppTokenAsync(It.IsAny<string>(), default))
             .ThrowsAsync(new HttpRequestException("BNet unreachable"));
@@ -116,7 +109,6 @@ public class ResyncCharacterCommandHandlerTests
     {
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([MakeCharacter()]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
 
         _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
             .ThrowsAsync(new HttpRequestException("BNet unreachable"));
@@ -135,14 +127,9 @@ public class ResyncCharacterCommandHandlerTests
         var character = MakeCharacter();
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([character]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
 
-        _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 600 });
         _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
             .ReturnsAsync(new BnetCharacterMediaResponse { Assets = [new BnetMediaAssetDto { Key = "avatar", Value = "https://cdn/avatar.jpg" }] });
-        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
 
         var result = await _sut.HandleAsync(Command);
 
@@ -159,14 +146,9 @@ public class ResyncCharacterCommandHandlerTests
     {
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([MakeCharacter()]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
 
         _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
             .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 0 });
-        _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterMediaResponse());
-        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
 
         await _sut.HandleAsync(Command);
 
@@ -182,14 +164,9 @@ public class ResyncCharacterCommandHandlerTests
 
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([character]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
 
         _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
             .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 600, Guild = new BnetGuildRefDto { Name = "RaidOps" } });
-        _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterMediaResponse());
-        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
 
         await _sut.HandleAsync(Command);
 
@@ -213,16 +190,10 @@ public class ResyncCharacterCommandHandlerTests
 
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default))
             .ReturnsAsync([character]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
 
-        _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 600 });
-        _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterMediaResponse());
-        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
+        var result = await _sut.HandleAsync(Command);
 
-        await _sut.HandleAsync(Command);
+        result.IsSuccess.Should().BeTrue();
 
         // Existing state (Id 55) is reused, not replaced by a new one
         _characters.Verify(r => r.UpsertExpansionStateAsync(

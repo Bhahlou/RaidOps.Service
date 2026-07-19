@@ -10,14 +10,14 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 public class BnetAccountRepository(RaidOpsDbContext context) : IBnetAccountRepository
 {
     /// <summary>
-    /// Inserts or updates the Battle.net account linked to a user.
-    /// Uses EF Core's change tracker: adds the entity if it doesn't exist,
-    /// or updates its properties if it already does.
+    /// Inserts or updates a Battle.net account linked to a user.
+    /// Uses EF Core's change tracker: adds the entity if it doesn't exist for this
+    /// (UserDiscordId, BnetId) pair, or updates its properties if it already does.
     /// </summary>
     public async Task UpsertAsync(BattleNetAccount account, CancellationToken cancellationToken = default)
     {
         var existing = await context.BattleNetAccounts
-            .FindAsync([account.UserDiscordId], cancellationToken);
+            .FindAsync([account.UserDiscordId, account.BnetId], cancellationToken);
 
         if (existing == null)
         {
@@ -25,7 +25,6 @@ public class BnetAccountRepository(RaidOpsDbContext context) : IBnetAccountRepos
         }
         else
         {
-            existing.BnetId = account.BnetId;
             existing.BattleTag = account.BattleTag;
             existing.AccessToken = account.AccessToken;
             existing.RefreshToken = account.RefreshToken;
@@ -37,10 +36,24 @@ public class BnetAccountRepository(RaidOpsDbContext context) : IBnetAccountRepos
     }
 
     /// <summary>
-    /// Returns the <see cref="BattleNetAccount"/> linked to the user with the given Discord ID,
-    /// or <c>null</c> if the user has not yet linked a BNet account.
+    /// Returns all <see cref="BattleNetAccount"/>s linked to the user with the given Discord ID.
     /// </summary>
-    public async Task<BattleNetAccount?> GetByDiscordIdAsync(string discordId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<BattleNetAccount>> GetAllByDiscordIdAsync(string discordId, CancellationToken cancellationToken = default)
         => await context.BattleNetAccounts
-            .FirstOrDefaultAsync(a => a.UserDiscordId == discordId, cancellationToken);
+            .Where(a => a.UserDiscordId == discordId)
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Deletes the Battle.net account matching the given user and BNet ID, if it exists.
+    /// </summary>
+    public async Task DeleteAsync(string discordId, string bnetId, CancellationToken cancellationToken = default)
+    {
+        var existing = await context.BattleNetAccounts
+            .FindAsync([discordId, bnetId], cancellationToken);
+
+        if (existing is null) return;
+
+        context.BattleNetAccounts.Remove(existing);
+        await context.SaveChangesAsync(cancellationToken);
+    }
 }
