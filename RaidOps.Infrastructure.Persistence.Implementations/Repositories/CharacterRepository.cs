@@ -137,6 +137,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
             existing.RaceId = character.RaceId;
             existing.ClassId = character.ClassId;
             existing.AvatarUrl = character.AvatarUrl;
+            existing.SourceBnetId = character.SourceBnetId;
             // IsActiveInRaidOps is intentionally not updated here — use ActivateAsync.
             character = existing;
         }

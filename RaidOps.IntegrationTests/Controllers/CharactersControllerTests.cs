@@ -96,7 +96,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<GetCharactersResponse>();
-        body!.BnetAccount.Should().BeNull();
+        body!.BnetAccounts.Should().BeEmpty();
         body.Characters.Should().BeEmpty();
     }
 
@@ -139,8 +139,8 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<GetCharactersResponse>(ApiJsonOptions);
-        body!.BnetAccount.Should().NotBeNull();
-        body.BnetAccount!.BattleTag.Should().Be("TestUser#1234");
+        body!.BnetAccounts.Should().ContainSingle();
+        body.BnetAccounts[0].BattleTag.Should().Be("TestUser#1234");
 
         var character = body.Characters.Single(c => c.Id == charId);
         character.GuildMemberships.Should().ContainSingle(m =>

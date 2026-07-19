@@ -10,6 +10,8 @@ using RaidOps.Application.Contracts.Configuration;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Registry;
+using Serilog;
+using Serilog.Enrichers.ShortTypeName;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -21,7 +23,34 @@ namespace RaidOps.API
     {
         private static async Task Main(string[] args)
         {
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.Console()
+                .CreateBootstrapLogger();
+
+            try
+            {
+                await RunAsync(args);
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "RaidOps.API terminated unexpectedly");
+                Environment.ExitCode = 1;
+            }
+            finally
+            {
+                await Log.CloseAndFlushAsync();
+            }
+        }
+
+        private static async Task RunAsync(string[] args)
+        {
             var builder = WebApplication.CreateBuilder(args);
+
+            builder.Host.UseSerilog((context, services, configuration) => configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext()
+                .Enrich.WithShortTypeName());
 
             var frontendUrl = builder.Configuration["FrontendUrl"] ?? string.Empty;
 
@@ -125,6 +154,18 @@ namespace RaidOps.API
                         {
                             context.Token = context.Request.Cookies["access_token"];
                             return Task.CompletedTask;
+                        },
+                        // All RaidOps-issued JWTs (access, refresh, OAuth state tokens) share the
+                        // same signing key/issuer/audience, so without this check a leaked refresh
+                        // or state token could be replayed as an access token via the cookie above.
+                        OnTokenValidated = context =>
+                        {
+                            var type = context.Principal?.FindFirst("typ")?.Value;
+                            if (type != "access")
+                            {
+                                context.Fail("Token is not an access token.");
+                            }
+                            return Task.CompletedTask;
                         }
                     };
                 });
@@ -139,6 +180,8 @@ namespace RaidOps.API
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
             });
+
+            app.UseSerilogRequestLogging();
 
             using (var scope = app.Services.CreateScope())
             {

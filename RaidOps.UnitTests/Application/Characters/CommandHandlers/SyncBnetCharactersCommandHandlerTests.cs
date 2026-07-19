@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -33,6 +34,15 @@ public class SyncBnetCharactersCommandHandlerTests
         Region        = "eu",
     };
 
+    private static readonly BattleNetAccount SecondAccount = new()
+    {
+        UserDiscordId = DiscordId,
+        BnetId        = "bnet-2",
+        BattleTag     = "Player#5678",
+        AccessToken   = "tok-2",
+        Region        = "us",
+    };
+
     private static readonly Branch Branch = new()
     {
         Id                  = BranchId,
@@ -63,21 +73,24 @@ public class SyncBnetCharactersCommandHandlerTests
             _branches.Object,
             _realms.Object,
             _characters.Object,
-            _bnetApi.Object);
+            _bnetApi.Object,
+            NullLogger<SyncBnetCharactersCommandHandler>.Instance);
 
         _characters.Setup(r => r.UpsertAsync(It.IsAny<Character>(), default))
             .ReturnsAsync((Character c, CancellationToken _) => c);
         _characters.Setup(r => r.GetByUserWithDetailsAsync(It.IsAny<string>(), It.IsAny<bool>(), default))
             .ReturnsAsync([]);
+        _realms.Setup(r => r.GetBySlugAndBranchAsync(It.IsAny<string>(), BranchId, default))
+            .ReturnsAsync(ExistingRealm);
     }
 
     // ── Guard clauses ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task HandleAsync_NoBnetAccount_ReturnsBnetNotLinked()
+    public async Task HandleAsync_NoLinkedBnetAccounts_ReturnsBnetNotLinked()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default))
-            .ReturnsAsync((BattleNetAccount?)null);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default))
+            .ReturnsAsync((IReadOnlyList<BattleNetAccount>)[]);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -88,7 +101,7 @@ public class SyncBnetCharactersCommandHandlerTests
     [Fact]
     public async Task HandleAsync_BranchNotFound_ReturnsBranchNotFound()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account]);
         _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync((Branch?)null);
 
         var result = await _sut.HandleAsync(Command);
@@ -103,8 +116,6 @@ public class SyncBnetCharactersCommandHandlerTests
     public async Task HandleAsync_ExistingRealm_SkipsRealmCreation()
     {
         ArrangeHappyPath([BnetChar("kazzak")]);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
-            .ReturnsAsync(ExistingRealm);
 
         await _sut.HandleAsync(Command);
 
@@ -132,10 +143,8 @@ public class SyncBnetCharactersCommandHandlerTests
     [Fact]
     public async Task HandleAsync_MultipleCharactersAcrossWowAccounts_ReturnsCorrectCount()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account]);
         _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync(It.IsAny<string>(), BranchId, default))
-            .ReturnsAsync(ExistingRealm);
         _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
             .ReturnsAsync(new BnetWowAccountsResponse
             {
@@ -168,7 +177,7 @@ public class SyncBnetCharactersCommandHandlerTests
     public async Task HandleAsync_ClassicBranch_BuildsCorrectProfileNamespace()
     {
         var classicBranch = new Branch { Id = BranchId, Name = "Classic Era", BnetNamespacePrefix = "dynamic-classic1x", CurrentExpansionId = 2 };
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account]);
         _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(classicBranch);
         _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
             .ReturnsAsync(new BnetWowAccountsResponse { WowAccounts = [] });
@@ -179,6 +188,68 @@ public class SyncBnetCharactersCommandHandlerTests
         _bnetApi.Verify(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, "profile-classic1x-eu", default), Times.Once);
     }
 
+    // ── Multi-account looping ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_MultipleLinkedAccounts_QueriesBnetApiOncePerAccountWithItsOwnToken()
+    {
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account, SecondAccount]);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse { WowAccounts = [] });
+
+        await _sut.HandleAsync(Command);
+
+        _bnetApi.Verify(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, "profile-eu", default), Times.Once);
+        _bnetApi.Verify(r => r.GetWowCharactersAsync(SecondAccount.AccessToken, SecondAccount.Region, "profile-us", default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MultipleLinkedAccounts_AggregatesSyncedCountAcrossAccounts()
+    {
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account, SecondAccount]);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse
+            {
+                WowAccounts = [new BnetWowAccountDto { Id = 1, Characters = [BnetChar("kazzak", id: 1)] }],
+            });
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(SecondAccount.AccessToken, SecondAccount.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse
+            {
+                WowAccounts = [new BnetWowAccountDto { Id = 2, Characters = [BnetChar("silvermoon", id: 2), BnetChar("silvermoon", id: 3)] }],
+            });
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Message.Should().StartWith("3");
+    }
+
+    [Fact]
+    public async Task HandleAsync_MultipleLinkedAccounts_TagsEachCharacterWithItsSourceAccount()
+    {
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account, SecondAccount]);
+        _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse
+            {
+                WowAccounts = [new BnetWowAccountDto { Id = 1, Characters = [BnetChar("kazzak", id: 1)] }],
+            });
+        _bnetApi.Setup(r => r.GetWowCharactersAsync(SecondAccount.AccessToken, SecondAccount.Region, It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetWowAccountsResponse
+            {
+                WowAccounts = [new BnetWowAccountDto { Id = 2, Characters = [BnetChar("silvermoon", id: 2)] }],
+            });
+
+        await _sut.HandleAsync(Command);
+
+        _characters.Verify(r => r.UpsertAsync(
+            It.Is<Character>(c => c.BnetCharacterId == 1 && c.SourceBnetId == Account.BnetId), default), Times.Once);
+        _characters.Verify(r => r.UpsertAsync(
+            It.Is<Character>(c => c.BnetCharacterId == 2 && c.SourceBnetId == SecondAccount.BnetId), default), Times.Once);
+    }
+
     // ── Preserving enrichment data not returned by the character-list endpoint ──
 
     [Fact]
@@ -186,7 +257,6 @@ public class SyncBnetCharactersCommandHandlerTests
     {
         const long bnetCharacterId = 1001;
         ArrangeHappyPath([BnetChar("kazzak", id: bnetCharacterId)]);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default)).ReturnsAsync(ExistingRealm);
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, false, default)).ReturnsAsync(
         [
             new Character
@@ -208,7 +278,6 @@ public class SyncBnetCharactersCommandHandlerTests
     {
         const long bnetCharacterId = 1001;
         ArrangeHappyPath([BnetChar("kazzak", id: bnetCharacterId)]);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default)).ReturnsAsync(ExistingRealm);
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, false, default)).ReturnsAsync(
         [
             new Character
@@ -241,7 +310,6 @@ public class SyncBnetCharactersCommandHandlerTests
     public async Task HandleAsync_NoExistingCharacter_LeavesAvatarGuildNameAndItemLevelNull()
     {
         ArrangeHappyPath([BnetChar("kazzak")]);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default)).ReturnsAsync(ExistingRealm);
 
         CharacterExpansionState? upserted = null;
         _characters.Setup(r => r.UpsertExpansionStateAsync(It.IsAny<CharacterExpansionState>(), default))
@@ -264,8 +332,6 @@ public class SyncBnetCharactersCommandHandlerTests
     public async Task HandleAsync_FactionString_MapsCorrectly(string factionString, Faction expected)
     {
         ArrangeHappyPath([BnetChar("kazzak", faction: factionString)]);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
-            .ReturnsAsync(ExistingRealm);
 
         await _sut.HandleAsync(Command);
 
@@ -280,8 +346,6 @@ public class SyncBnetCharactersCommandHandlerTests
     public async Task HandleAsync_GenderString_MapsCorrectly(string genderString, Gender expected)
     {
         ArrangeHappyPath([BnetChar("kazzak", gender: genderString)]);
-        _realms.Setup(r => r.GetBySlugAndBranchAsync("kazzak", BranchId, default))
-            .ReturnsAsync(ExistingRealm);
 
         await _sut.HandleAsync(Command);
 
@@ -293,7 +357,7 @@ public class SyncBnetCharactersCommandHandlerTests
 
     private void ArrangeHappyPath(IEnumerable<BnetWowCharacterDto> characters)
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([Account]);
         _branches.Setup(r => r.GetByIdAsync(BranchId, default)).ReturnsAsync(Branch);
         _bnetApi.Setup(r => r.GetWowCharactersAsync(Account.AccessToken, Account.Region, It.IsAny<string>(), default))
             .ReturnsAsync(new BnetWowAccountsResponse

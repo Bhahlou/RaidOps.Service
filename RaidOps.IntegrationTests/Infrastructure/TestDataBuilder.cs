@@ -79,7 +79,8 @@ public static class TestDataBuilder
         int classId = 8,
         bool isActive = false,
         string name = "TestMage",
-        long bnetCharacterId = 99001) => new()
+        long bnetCharacterId = 99001,
+        string? sourceBnetId = null) => new()
     {
         Name = name,
         BnetCharacterId = bnetCharacterId,
@@ -91,6 +92,7 @@ public static class TestDataBuilder
         Faction = Faction.Alliance,
         Gender = Gender.Male,
         IsActiveInRaidOps = isActive,
+        SourceBnetId = sourceBnetId,
     };
 
     /// <summary>
@@ -98,10 +100,11 @@ public static class TestDataBuilder
     /// </summary>
     public static BattleNetAccount CreateBnetAccount(
         string userDiscordId,
-        string battleTag = "TestUser#1234") => new()
+        string battleTag = "TestUser#1234",
+        string bnetId = "987654321") => new()
     {
         UserDiscordId = userDiscordId,
-        BnetId = "987654321",
+        BnetId = bnetId,
         BattleTag = battleTag,
         AccessToken = "test-bnet-access-token",
         Region = "eu",

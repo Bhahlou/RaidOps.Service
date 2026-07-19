@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
@@ -31,7 +32,7 @@ public class RegisterGuildCommandHandlerTests
     public RegisterGuildCommandHandlerTests()
     {
         _bot.Setup(b => b.Guilds).Returns(_guildService.Object);
-        _sut = new RegisterGuildCommandHandler(_userGuilds.Object, _guilds.Object, _bot.Object, _auditLog.Object);
+        _sut = new RegisterGuildCommandHandler(_userGuilds.Object, _guilds.Object, _bot.Object, _auditLog.Object, NullLogger<RegisterGuildCommandHandler>.Instance);
     }
 
     [Fact]

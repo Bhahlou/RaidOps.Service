@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.0.0...v1.1.0) (2026-07-19)
+
+
+### 🚀 Features
+
+* support linking multiple Battle.net accounts per user ([#40](https://github.com/Bhahlou/RaidOps.Service/issues/40)) ([f31878f](https://github.com/Bhahlou/RaidOps.Service/commit/f31878f2e90d9daf0bb14fb46b7004c3dda30695))
+
+
+### 🐛 Bug Fixes
+
+* close JWT token-type confusion and CSRF gaps, bump Microsoft.Ope… ([#37](https://github.com/Bhahlou/RaidOps.Service/issues/37)) ([988a1e9](https://github.com/Bhahlou/RaidOps.Service/commit/988a1e942999e46626fd7b79dcdf260df6178662))
+* prevent excluding a guild member with an equal or higher role ([#39](https://github.com/Bhahlou/RaidOps.Service/issues/39)) ([6b087e9](https://github.com/Bhahlou/RaidOps.Service/commit/6b087e9038e82e6edd2d64b79eb64a3a29083629))
+
 ## [1.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v0.2.1...v1.0.0) (2026-07-06)
 
 
