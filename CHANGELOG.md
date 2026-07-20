@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.1.0...v1.2.0) (2026-07-20)
+
+
+### 🚀 Features
+
+* Add guild calendar availability declarations (one-off exceptions and recurring patterns) ([#42](https://github.com/Bhahlou/RaidOps.Service/issues/42)) ([d2a3c5e](https://github.com/Bhahlou/RaidOps.Service/commit/d2a3c5e73f4d6408c2eac6d05a32b3c3aec74321))
+
 ## [1.1.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.0.0...v1.1.0) (2026-07-19)
 
 
