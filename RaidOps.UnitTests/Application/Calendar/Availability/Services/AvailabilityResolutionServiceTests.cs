@@ -236,4 +236,28 @@ public class AvailabilityResolutionServiceTests
         result.Select(d => d.Date).Should().Equal(
             new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 2), new DateOnly(2026, 1, 3), new DateOnly(2026, 1, 4));
     }
+
+    [Fact]
+    public void Resolve_RangeSpansBeforeDuringAndAfterAnException_OnlyMatchesDaysWithinItsBounds()
+    {
+        // A non-empty exceptions list where most queried dates DON'T match it — exercises both
+        // halves of the `date >= StartDate && date <= EndDate` predicate independently (day 1 fails
+        // the upper bound, day 3 fails neither, day 5 fails the lower bound never even applying —
+        // day 4 fails the lower bound while the upper bound would hold), not just the all-empty or
+        // all-matching cases the other tests already cover.
+        var exception = new AvailabilityDeclaration
+        {
+            UserDiscordId = "user-1", GuildId = "guild-1",
+            StartDate = new DateOnly(2026, 1, 3), EndDate = new DateOnly(2026, 1, 3),
+            Status = DayAvailabilityStatus.Absent,
+        };
+
+        var result = _sut.Resolve(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 5), [exception], []);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Available); // Jan 1 — before the exception
+        result[1].Status.Should().Be(DayAvailabilityStatus.Available); // Jan 2 — still before
+        result[2].Status.Should().Be(DayAvailabilityStatus.Absent);    // Jan 3 — the exception itself
+        result[3].Status.Should().Be(DayAvailabilityStatus.Available); // Jan 4 — after
+        result[4].Status.Should().Be(DayAvailabilityStatus.Available); // Jan 5 — still after
+    }
 }

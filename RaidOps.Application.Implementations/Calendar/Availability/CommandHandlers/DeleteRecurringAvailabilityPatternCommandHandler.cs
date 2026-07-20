@@ -1,4 +1,3 @@
-using System.Text.Json;
 using RaidOps.Application.Contracts.Calendar.Availability.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -42,19 +41,7 @@ public class DeleteRecurringAvailabilityPatternCommandHandler(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.RecurringAvailabilityPatternStopped,
-            new Dictionary<string, string>
-            {
-                ["label"] = existing.Label ?? string.Empty,
-                ["cycleLengthDays"] = existing.CycleLengthDays.ToString(),
-                ["anchorDate"] = existing.AnchorDate.ToString("yyyy-MM-dd"),
-                ["days"] = JsonSerializer.Serialize(existing.Days.Select(d => new
-                {
-                    offsetInCycle = d.OffsetInCycle,
-                    status = d.Status.ToString(),
-                    availableFrom = d.AvailableFrom?.ToString("HH:mm:ss"),
-                    availableUntil = d.AvailableUntil?.ToString("HH:mm:ss"),
-                })),
-            },
+            RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(existing.Label, existing.CycleLengthDays, existing.AnchorDate, existing.Days),
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Recurring availability pattern stopped successfully."));

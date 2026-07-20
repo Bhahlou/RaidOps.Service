@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
@@ -683,6 +684,83 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         json.GetProperty("exceptions").GetArrayLength().Should().Be(0);
         json.GetProperty("days")[0].GetProperty("status").GetString().Should().Be("Available");
+    }
+
+    // ── Repository — not-found branches ─────────────────────────────────────
+    // The handlers' own pre-checks (existence, ownership) mean these repository-level "not found"
+    // branches are only ever reached in a genuine concurrent-delete race in production — calling
+    // the repository directly is the only realistic way to exercise them.
+
+    [Fact]
+    public async Task AvailabilityRepository_DeleteExceptionAsync_NonExistentId_ReturnsFalse()
+    {
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repository = new AvailabilityRepository(db);
+
+            var deleted = await repository.DeleteExceptionAsync(999_999, "nonexistent-user", "nonexistent-guild", default);
+
+            deleted.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task AvailabilityRepository_ClosePatternAsync_NonExistentId_ReturnsFalse()
+    {
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repository = new AvailabilityRepository(db);
+
+            var closed = await repository.ClosePatternAsync(999_999, "nonexistent-user", "nonexistent-guild", Today, default);
+
+            closed.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task AvailabilityRepository_DeletePatternAsync_NonExistentId_ReturnsFalse()
+    {
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repository = new AvailabilityRepository(db);
+
+            var deleted = await repository.DeletePatternAsync(999_999, "nonexistent-user", "nonexistent-guild", default);
+
+            deleted.Should().BeFalse();
+        }
+    }
+
+    // ── Entity relationships (FK / navigation round-trip) ───────────────────
+
+    [Fact]
+    public async Task Entities_NavigationPropertiesAndForeignKeys_RoundTripCorrectly()
+    {
+        const string id      = "980000000000000020";
+        const string guildId = "950000000000000020";
+        await SeedRosterAccess(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var exceptionId = await CreateExceptionAsync(client, guildId, Today, Today, "Absent");
+        var patternId = await CreatePatternAsync(client, guildId, 7, Today, [Day(1, DayAvailabilityStatus.Absent)]);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var exception = await db.AvailabilityExceptions.Include(e => e.User).Include(e => e.Guild).FirstAsync(e => e.Id == exceptionId);
+            exception.User.DiscordId.Should().Be(id);
+            exception.Guild.Id.Should().Be(guildId);
+
+            var pattern = await db.RecurringAvailabilityPatterns.Include(p => p.User).Include(p => p.Guild).FirstAsync(p => p.Id == patternId);
+            pattern.User.DiscordId.Should().Be(id);
+            pattern.Guild.Id.Should().Be(guildId);
+
+            var day = await db.RecurringAvailabilityPatternDays.Include(d => d.Pattern).FirstAsync(d => d.PatternId == patternId);
+            day.Id.Should().BeGreaterThan(0);
+            day.PatternId.Should().Be(patternId);
+            day.Pattern.Id.Should().Be(patternId);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

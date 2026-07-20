@@ -40,6 +40,15 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
     {
         Id = PatternId, UserDiscordId = RequesterId, GuildId = GuildId,
         CycleLengthDays = 7, AnchorDate = Anchor, EffectiveFrom = effectiveFrom, EffectiveUntil = null,
+        Days =
+        [
+            new RecurringAvailabilityPatternDay { OffsetInCycle = 0, Status = DayAvailabilityStatus.Absent },
+            new RecurringAvailabilityPatternDay
+            {
+                OffsetInCycle = 4, Status = DayAvailabilityStatus.Partial,
+                AvailableFrom = new TimeOnly(18, 0), AvailableUntil = new TimeOnly(22, 0),
+            },
+        ],
     };
 
     [Fact]
@@ -93,6 +102,25 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         _repository.Verify(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default), Times.Once);
         _repository.Verify(r => r.ClosePatternAsync(PatternId, RequesterId, GuildId, It.IsAny<DateOnly>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_LogsAuditVariablesIncludingEachDaysStatusAndTimes()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default))
+            .ReturnsAsync(MakeExistingPattern(Today));
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default)).ReturnsAsync(true);
+
+        await _sut.HandleAsync(Command);
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.RecurringAvailabilityPatternStopped,
+            It.Is<Dictionary<string, string>>(v =>
+                v["days"].Contains("\"offsetInCycle\":0") &&
+                v["days"].Contains("\"status\":\"Absent\"") &&
+                v["days"].Contains("\"availableFrom\":\"18:00:00\"")),
+            default), Times.Once);
     }
 
     [Fact]

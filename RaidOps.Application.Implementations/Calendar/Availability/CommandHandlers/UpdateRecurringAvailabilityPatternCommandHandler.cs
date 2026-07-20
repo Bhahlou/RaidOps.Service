@@ -1,4 +1,3 @@
-using System.Text.Json;
 using RaidOps.Application.Contracts.Calendar.Availability.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -28,11 +27,9 @@ public class UpdateRecurringAvailabilityPatternCommandHandler(
         if (accessLevel < GuildAccessLevel.Roster)
             return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
 
-        if (command.CycleLengthDays < 1)
-            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "CycleLengthDays must be at least 1.");
-
-        if (command.Days.Any(d => d.OffsetInCycle < 0 || d.OffsetInCycle >= command.CycleLengthDays))
-            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "Every day offset must be within the cycle length.");
+        var validationFailure = RecurringAvailabilityPatternRequestHelper.ValidateCycleAndDays(command.CycleLengthDays, command.Days);
+        if (validationFailure != null)
+            return validationFailure;
 
         var existing = await availabilityRepository.GetPatternByIdAsync(command.PatternId, command.RequesterDiscordId, command.GuildId, cancellationToken);
         if (existing == null)
@@ -53,33 +50,14 @@ public class UpdateRecurringAvailabilityPatternCommandHandler(
             AnchorDate = command.AnchorDate,
             EffectiveFrom = today,
             EffectiveUntil = null,
-            Days = [.. command.Days.Select(d => new RecurringAvailabilityPatternDay
-            {
-                OffsetInCycle = d.OffsetInCycle,
-                Status = d.Status,
-                Reason = d.Reason,
-                AvailableFrom = d.AvailableFrom,
-                AvailableUntil = d.AvailableUntil,
-            })],
+            Days = RecurringAvailabilityPatternRequestHelper.MapDays(command.Days),
         }, cancellationToken);
 
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.RecurringAvailabilityPatternUpdated,
-            new Dictionary<string, string>
-            {
-                ["label"] = command.Label ?? string.Empty,
-                ["cycleLengthDays"] = command.CycleLengthDays.ToString(),
-                ["anchorDate"] = command.AnchorDate.ToString("yyyy-MM-dd"),
-                ["days"] = JsonSerializer.Serialize(command.Days.Select(d => new
-                {
-                    offsetInCycle = d.OffsetInCycle,
-                    status = d.Status.ToString(),
-                    availableFrom = d.AvailableFrom?.ToString("HH:mm:ss"),
-                    availableUntil = d.AvailableUntil?.ToString("HH:mm:ss"),
-                })),
-            },
+            RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(command.Label, command.CycleLengthDays, command.AnchorDate, command.Days),
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Recurring availability pattern updated successfully.", new { pattern.Id }));
