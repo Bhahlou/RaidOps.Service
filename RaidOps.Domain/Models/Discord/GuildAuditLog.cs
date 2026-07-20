@@ -28,9 +28,10 @@ public class GuildAuditLog
 
     /// <summary>
     /// Human-readable context for the action (e.g. "Character 'Arthas' joined the roster").
-    /// Stored as a plain string; no structured schema enforced at the DB level.
+    /// Stored as a plain string; no structured schema enforced at the DB level. Unbounded — a
+    /// recurring availability pattern's full day-by-day breakdown (up to a 60-day cycle) can run
+    /// well past any fixed cap that made sense for the simpler settings/roster actions.
     /// </summary>
-    [MaxLength(512)]
     public string? Details { get; set; }
 
     /// <summary>UTC timestamp of when the action occurred.</summary>

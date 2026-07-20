@@ -32,6 +32,11 @@ public class GetGuildAuditLogQueryHandler(
         [GuildAuditAction.MemberExcluded] = GuildAuditCategory.Roster,
         [GuildAuditAction.MemberRankUpdated] = GuildAuditCategory.Roster,
         [GuildAuditAction.OfficerThresholdUpdated] = GuildAuditCategory.Settings,
+        [GuildAuditAction.AvailabilityExceptionDeclared] = GuildAuditCategory.Availability,
+        [GuildAuditAction.AvailabilityExceptionDeleted] = GuildAuditCategory.Availability,
+        [GuildAuditAction.RecurringAvailabilityPatternCreated] = GuildAuditCategory.Availability,
+        [GuildAuditAction.RecurringAvailabilityPatternUpdated] = GuildAuditCategory.Availability,
+        [GuildAuditAction.RecurringAvailabilityPatternStopped] = GuildAuditCategory.Availability,
     };
 
     /// <inheritdoc/>

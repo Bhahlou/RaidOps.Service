@@ -42,4 +42,9 @@ public static class ResponseDetail
 
     // ── Branch ────────────────────────────────────────────────────────────
     public const string BranchNotFound = nameof(BranchNotFound);
+
+    // ── Calendar ──────────────────────────────────────────────────────────
+    public const string AvailabilityExceptionNotFound = nameof(AvailabilityExceptionNotFound);
+    public const string RecurringAvailabilityPatternNotFound = nameof(RecurringAvailabilityPatternNotFound);
+    public const string PastDeclarationLocked = nameof(PastDeclarationLocked);
 }
