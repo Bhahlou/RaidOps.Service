@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Reference;
@@ -31,6 +32,17 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="NotificationDismissal"/> table tracking dismissed in-app notifications.</summary>
     public DbSet<NotificationDismissal> NotificationDismissals => Set<NotificationDismissal>();
+
+    // ── Calendar ──────────────────────────────────────────────────────────
+
+    /// <summary>Gets the <see cref="AvailabilityDeclaration"/> table (one-off availability declarations).</summary>
+    public DbSet<AvailabilityDeclaration> AvailabilityExceptions => Set<AvailabilityDeclaration>();
+
+    /// <summary>Gets the <see cref="RecurringAvailabilityPattern"/> table.</summary>
+    public DbSet<RecurringAvailabilityPattern> RecurringAvailabilityPatterns => Set<RecurringAvailabilityPattern>();
+
+    /// <summary>Gets the <see cref="RecurringAvailabilityPatternDay"/> table.</summary>
+    public DbSet<RecurringAvailabilityPatternDay> RecurringAvailabilityPatternDays => Set<RecurringAvailabilityPatternDay>();
 
     // ── Static reference data ─────────────────────────────────────────────
 
@@ -218,6 +230,48 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne<User>()
             .WithMany()
             .HasForeignKey(nd => nd.UserDiscordId);
+
+        // AvailabilityDeclaration — FK to User/Guild, no cascade (a departing member's history stays)
+        modelBuilder.Entity<AvailabilityDeclaration>()
+            .HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserDiscordId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AvailabilityDeclaration>()
+            .HasOne(e => e.Guild)
+            .WithMany()
+            .HasForeignKey(e => e.GuildId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AvailabilityDeclaration>()
+            .HasIndex(e => new { e.UserDiscordId, e.GuildId, e.StartDate, e.EndDate });
+
+        // RecurringAvailabilityPattern — FK to User/Guild, no cascade; Days cascade with their pattern
+        modelBuilder.Entity<RecurringAvailabilityPattern>()
+            .HasOne(p => p.User)
+            .WithMany()
+            .HasForeignKey(p => p.UserDiscordId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RecurringAvailabilityPattern>()
+            .HasOne(p => p.Guild)
+            .WithMany()
+            .HasForeignKey(p => p.GuildId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RecurringAvailabilityPattern>()
+            .HasIndex(p => new { p.UserDiscordId, p.GuildId });
+
+        modelBuilder.Entity<RecurringAvailabilityPatternDay>()
+            .HasOne(d => d.Pattern)
+            .WithMany(p => p.Days)
+            .HasForeignKey(d => d.PatternId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RecurringAvailabilityPatternDay>()
+            .HasIndex(d => new { d.PatternId, d.OffsetInCycle })
+            .IsUnique();
 
         // Realm — unique (Slug, Region, BranchId), FK to Branch
         modelBuilder.Entity<Realm>()
