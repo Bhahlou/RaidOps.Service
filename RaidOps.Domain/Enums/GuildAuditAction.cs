@@ -25,4 +25,19 @@ public enum GuildAuditAction
 
     /// <summary>The guild's Officer role threshold was updated.</summary>
     OfficerThresholdUpdated = 7,
+
+    /// <summary>A member declared a one-off availability exception (absence/lateness).</summary>
+    AvailabilityExceptionDeclared = 8,
+
+    /// <summary>A member deleted a one-off availability exception.</summary>
+    AvailabilityExceptionDeleted = 9,
+
+    /// <summary>A member created a recurring availability pattern.</summary>
+    RecurringAvailabilityPatternCreated = 10,
+
+    /// <summary>A member edited a recurring availability pattern (non-retroactively).</summary>
+    RecurringAvailabilityPatternUpdated = 11,
+
+    /// <summary>A member stopped a recurring availability pattern (non-retroactively).</summary>
+    RecurringAvailabilityPatternStopped = 12,
 }

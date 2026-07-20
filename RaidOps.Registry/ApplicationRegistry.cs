@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Calendar.Availability.Services;
 using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.Application.Implementations.Notifications.Services;
@@ -18,6 +19,7 @@ internal static class ApplicationRegistry
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IGuildAccessService, GuildAccessService>();
         services.AddScoped<IUserNotificationService, UserNotificationService>();
+        services.AddScoped<IAvailabilityResolutionService, AvailabilityResolutionService>();
         return services;
     }
 }
