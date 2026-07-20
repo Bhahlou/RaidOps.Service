@@ -14,4 +14,7 @@ public enum GuildAuditCategory
 
     /// <summary>Actions about the character roster (joins, leaves, exclusions, rank changes).</summary>
     Roster = 3,
+
+    /// <summary>Actions about members' personal availability declarations (one-off exceptions, recurring patterns).</summary>
+    Availability = 4,
 }
