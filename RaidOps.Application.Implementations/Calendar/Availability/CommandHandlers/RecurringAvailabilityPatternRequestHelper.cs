@@ -13,6 +13,8 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandl
 /// </summary>
 internal static class RecurringAvailabilityPatternRequestHelper
 {
+    private const string TimeFormat = "HH:mm:ss";
+
     /// <summary>Validates the cycle length and every day offset against it. Returns the failure to return, or <c>null</c> if valid.</summary>
     public static Result<CommandResponse>? ValidateCycleAndDays(int cycleLengthDays, IReadOnlyCollection<RecurringAvailabilityPatternDayInput> days)
     {
@@ -47,8 +49,8 @@ internal static class RecurringAvailabilityPatternRequestHelper
             {
                 offsetInCycle = d.OffsetInCycle,
                 status = d.Status.ToString(),
-                availableFrom = d.AvailableFrom?.ToString("HH:mm:ss"),
-                availableUntil = d.AvailableUntil?.ToString("HH:mm:ss"),
+                availableFrom = d.AvailableFrom?.ToString(TimeFormat),
+                availableUntil = d.AvailableUntil?.ToString(TimeFormat),
             })),
         };
 
@@ -63,8 +65,8 @@ internal static class RecurringAvailabilityPatternRequestHelper
             {
                 offsetInCycle = d.OffsetInCycle,
                 status = d.Status.ToString(),
-                availableFrom = d.AvailableFrom?.ToString("HH:mm:ss"),
-                availableUntil = d.AvailableUntil?.ToString("HH:mm:ss"),
+                availableFrom = d.AvailableFrom?.ToString(TimeFormat),
+                availableUntil = d.AvailableUntil?.ToString(TimeFormat),
             })),
         };
 }
