@@ -286,6 +286,22 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
+    [Fact]
+    public async Task CreateException_PartialWithoutEitherBound_Returns400InvalidRequest()
+    {
+        const string id      = "980000000000000021";
+        const string guildId = "950000000000000021";
+        await SeedRosterAccess(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { startDate = Today, endDate = Today, status = "Partial" });
+
+        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/exceptions", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("InvalidRequest");
+    }
+
     // ── DeleteException ─────────────────────────────────────────────────────
 
     [Fact]
@@ -399,6 +415,23 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
+    [Fact]
+    public async Task CreatePattern_PartialDayWithoutEitherBound_Returns400InvalidRequest()
+    {
+        const string id      = "980000000000000022";
+        const string guildId = "950000000000000022";
+        await SeedRosterAccess(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var days = new[] { Day(0, DayAvailabilityStatus.Partial) };
+        var body = JsonContent.Create(new { cycleLengthDays = 7, anchorDate = Today, days });
+
+        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/patterns", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("InvalidRequest");
+    }
+
     // ── UpdatePattern ────────────────────────────────────────────────────────
 
     [Fact]
@@ -465,7 +498,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         });
         var oldId = seeded!.Id;
         var client = CreateAuthenticatedClient(discordId: id);
-        var newDays = new[] { Day(3, DayAvailabilityStatus.Partial) };
+        var newDays = new[] { Day(3, DayAvailabilityStatus.Absent) };
         var body = JsonContent.Create(new { label = "New", cycleLengthDays = 5, anchorDate = Today, days = newDays });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/availability/patterns/{oldId}", body);
