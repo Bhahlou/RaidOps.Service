@@ -1,6 +1,7 @@
 using System.Text.Json;
 using RaidOps.Application.Contracts.Calendar.Availability.Commands;
 using RaidOps.Application.Contracts.Common;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
 
 namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandlers;
@@ -23,6 +24,9 @@ internal static class RecurringAvailabilityPatternRequestHelper
 
         if (days.Any(d => d.OffsetInCycle < 0 || d.OffsetInCycle >= cycleLengthDays))
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "Every day offset must be within the cycle length.");
+
+        if (days.Any(d => d.Status == DayAvailabilityStatus.Partial && d.AvailableFrom == null && d.AvailableUntil == null))
+            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "A Partial day needs at least one of AvailableFrom/AvailableUntil.");
 
         return null;
     }
