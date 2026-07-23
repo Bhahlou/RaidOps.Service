@@ -87,6 +87,19 @@ public class UpdateRecurringAvailabilityPatternCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PartialDayWithoutEitherBound_ReturnsInvalidRequest()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var command = MakeCommand(7, [new RecurringAvailabilityPatternDayInput { OffsetInCycle = 0, Status = DayAvailabilityStatus.Partial }]);
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.InvalidRequest);
+        _repository.Verify(r => r.AddPatternAsync(It.IsAny<RecurringAvailabilityPattern>(), default), Times.Never);
+    }
+
+    [Fact]
     public async Task HandleAsync_PatternNotFound_ReturnsRecurringAvailabilityPatternNotFound()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);

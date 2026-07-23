@@ -76,6 +76,38 @@ public class CreateAvailabilityExceptionCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PartialWithoutEitherBound_ReturnsInvalidRequest()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var command = MakeCommand(Today, Today);
+        command.Status = DayAvailabilityStatus.Partial;
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.InvalidRequest);
+        _repository.Verify(r => r.AddExceptionAsync(It.IsAny<AvailabilityDeclaration>(), default), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("09:00", null)]
+    [InlineData(null, "13:00")]
+    public async Task HandleAsync_PartialWithAtLeastOneBound_Succeeds(string? from, string? until)
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var command = MakeCommand(Today, Today);
+        command.Status = DayAvailabilityStatus.Partial;
+        command.AvailableFrom = from != null ? TimeOnly.Parse(from) : null;
+        command.AvailableUntil = until != null ? TimeOnly.Parse(until) : null;
+        _repository.Setup(r => r.AddExceptionAsync(It.IsAny<AvailabilityDeclaration>(), default))
+            .ReturnsAsync((AvailabilityDeclaration e, CancellationToken _) => { e.Id = 42; return e; });
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleAsync_StartDateToday_IsNotLockedAndSucceeds()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);

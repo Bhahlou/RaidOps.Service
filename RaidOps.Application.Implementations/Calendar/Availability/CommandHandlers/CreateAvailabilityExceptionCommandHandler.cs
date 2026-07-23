@@ -32,6 +32,9 @@ public class CreateAvailabilityExceptionCommandHandler(
         if (command.StartDate < DateOnly.FromDateTime(DateTime.UtcNow))
             return Result<CommandResponse>.Fail(ResponseDetail.PastDeclarationLocked, "Cannot declare an exception starting in the past.");
 
+        if (command.Status == DayAvailabilityStatus.Partial && command.AvailableFrom == null && command.AvailableUntil == null)
+            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "A Partial declaration needs at least one of AvailableFrom/AvailableUntil.");
+
         var exception = await availabilityRepository.AddExceptionAsync(new AvailabilityDeclaration
         {
             UserDiscordId = command.RequesterDiscordId,
