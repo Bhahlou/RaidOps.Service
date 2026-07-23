@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.2.0...v1.2.1) (2026-07-22)
+
+
+### 🐛 Bug Fixes
+
+* Partial availability now requires at least one time bound ([#45](https://github.com/Bhahlou/RaidOps.Service/issues/45)) ([11d0998](https://github.com/Bhahlou/RaidOps.Service/commit/11d09985efe645e74294b9feec2b82aaadd1ec67))
+
 ## [1.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.1.0...v1.2.0) (2026-07-20)
 
 
