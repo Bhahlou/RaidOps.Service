@@ -171,12 +171,20 @@ internal static class AbsenceNotificationText
         _ => $"(cycle of {cycleLengthDays} days)",
     };
 
+    private static readonly string[] EnglishWeekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    private static readonly string[] FrenchWeekdays = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+    private static readonly string[] GermanWeekdays = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
     /// <summary>Full localized weekday name (e.g. "Mardi") for the day <paramref name="offsetInCycle"/> days after <paramref name="anchorDate"/> — only meaningful for a 7-day cycle.</summary>
     private static string WeekdayLabel(DateOnly anchorDate, int offsetInCycle, string language)
     {
-        var culture = GetCulture(language);
-        var name = anchorDate.AddDays(offsetInCycle).ToDateTime(TimeOnly.MinValue).ToString("dddd", culture);
-        return culture.TextInfo.ToTitleCase(name);
+        var weekdays = language switch
+        {
+            "fr" => FrenchWeekdays,
+            "de" => GermanWeekdays,
+            _ => EnglishWeekdays,
+        };
+        return weekdays[(int)anchorDate.AddDays(offsetInCycle).DayOfWeek];
     }
 
     private static string DayNumberLabel(int offsetInCycle, string language) => language switch
@@ -189,11 +197,18 @@ internal static class AbsenceNotificationText
     /// <summary>Formats a date (or date range) using the short date pattern of the guild's configured language.</summary>
     public static string FormatDateRange(DateOnly start, DateOnly end, string language)
     {
-        var culture = GetCulture(language);
+        var format = ShortDateFormat(language);
         return start == end
-            ? start.ToString("d", culture)
-            : $"{start.ToString("d", culture)} → {end.ToString("d", culture)}";
+            ? start.ToString(format, CultureInfo.InvariantCulture)
+            : $"{start.ToString(format, CultureInfo.InvariantCulture)} → {end.ToString(format, CultureInfo.InvariantCulture)}";
     }
+
+    private static string ShortDateFormat(string language) => language switch
+    {
+        "fr" => "dd/MM/yyyy",
+        "de" => "dd.MM.yyyy",
+        _ => "M/d/yyyy",
+    };
 
     /// <summary>
     /// Formats the time-bound suffix for a Partial segment (e.g. "from 21:30", "until 17:00",
@@ -231,11 +246,4 @@ internal static class AbsenceNotificationText
     /// <summary>French reads clock times as "21h30"; every other supported language keeps "21:30".</summary>
     private static string FormatTime(TimeOnly time, string language) =>
         language == "fr" ? time.ToString("HH'h'mm") : time.ToString("HH:mm");
-
-    private static CultureInfo GetCulture(string language) => language switch
-    {
-        "fr" => CultureInfo.GetCultureInfo("fr-FR"),
-        "de" => CultureInfo.GetCultureInfo("de-DE"),
-        _ => CultureInfo.GetCultureInfo("en-US"),
-    };
 }
