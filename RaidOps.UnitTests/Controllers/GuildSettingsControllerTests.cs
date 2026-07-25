@@ -7,7 +7,6 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
 using RaidOps.Application.Contracts.Guilds.Settings.Queries;
 using RaidOps.Application.Contracts.Guilds.Settings.Responses;
-using RaidOps.Domain.Enums;
 
 namespace RaidOps.UnitTests.Controllers;
 
@@ -55,7 +54,7 @@ public class GuildSettingsControllerTests
     [Fact]
     public async Task GetSettings_Success_ReturnsOkWithResponse()
     {
-        var response = new GuildSettingsResponse { Timezone = "Europe/Paris", RosterMode = RosterMode.Open };
+        var response = new GuildSettingsResponse { Timezone = "Europe/Paris" };
         _queries.Setup(q => q.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
                 It.IsAny<GetGuildSettingsQuery>(), default))
             .ReturnsAsync(Result<GuildSettingsResponse>.Ok(response));
@@ -122,7 +121,7 @@ public class GuildSettingsControllerTests
     public async Task UpdateSettings_SubMissing_ReturnsUnauthorized()
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
-        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", RosterMode = RosterMode.Open, Language = "en" };
+        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", Language = "en" };
 
         var result = await _sut.UpdateSettings(GuildId, command, default);
 
@@ -132,7 +131,7 @@ public class GuildSettingsControllerTests
     [Fact]
     public async Task UpdateSettings_CommandFails_ReturnsBadRequest()
     {
-        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", RosterMode = RosterMode.Open, Language = "en" };
+        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", Language = "en" };
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateGuildSettingsCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.Forbidden));
 
@@ -144,7 +143,7 @@ public class GuildSettingsControllerTests
     [Fact]
     public async Task UpdateSettings_Success_SetsRouteFieldsAndReturnsOk()
     {
-        var command = new UpdateGuildSettingsCommand { Timezone = "Europe/Paris", RosterMode = RosterMode.Open, Language = "en" };
+        var command = new UpdateGuildSettingsCommand { Timezone = "Europe/Paris", Language = "en" };
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateGuildSettingsCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 

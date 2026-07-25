@@ -3,6 +3,7 @@ using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Domain.Enums;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Authentication.QueryHandlers;
@@ -34,15 +35,34 @@ public class GetMeQueryHandler(
 
         var eligibleGuilds = user.UserGuilds.Where(ug => ug.IsAdmin || ug.Guild.IsRegistered).ToList();
 
-        var guilds = eligibleGuilds.Select(ug => new UserGuildResponse
+        var guilds = eligibleGuilds.Select(ug =>
         {
-            Id = ug.Guild.Id,
-            Name = ug.Guild.Name,
-            IconHash = ug.Guild.IconHash,
-            IsRegistered = ug.Guild.IsRegistered,
-            IsConfigured = ug.Guild.Timezone != null && ug.Guild.RosterMode != null,
-            IsAdmin = ug.IsAdmin,
-            AccessLevel = guildAccessService.ComputeAccessLevel(ug, ug.Guild, cancellationToken),
+            var branches = ug.Guild.Branches
+                .Where(b => b.IsActive)
+                .Select(b => new UserGuildBranchResponse
+                {
+                    Id = b.Id,
+                    BranchId = b.BranchId,
+                    BranchName = b.Branch.Name,
+                    AccessLevel = guildAccessService.ComputeAccessLevel(ug, b, cancellationToken),
+                })
+                .ToList();
+
+            var accessLevel = ug.IsAdmin
+                ? GuildAccessLevel.Officer
+                : branches.Count > 0 ? branches.Max(b => b.AccessLevel) : GuildAccessLevel.Public;
+
+            return new UserGuildResponse
+            {
+                Id = ug.Guild.Id,
+                Name = ug.Guild.Name,
+                IconHash = ug.Guild.IconHash,
+                IsRegistered = ug.Guild.IsRegistered,
+                IsConfigured = ug.Guild.Timezone != null && ug.Guild.Language != null,
+                IsAdmin = ug.IsAdmin,
+                Branches = branches,
+                AccessLevel = accessLevel,
+            };
         }).ToList();
 
         return Result<UserResponse>.Ok(new UserResponse

@@ -187,6 +187,8 @@ public class BnetControllerTests(RaidOpsWebApplicationFactory factory)
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id, bnetId: "111"));
             db.Guilds.Add(TestDataBuilder.CreateGuild(id: guildId, name: "Test Guild", isRegistered: true));
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             var realm = TestDataBuilder.CreateRealm(slug: "unlink-audit-realm");
             db.Realms.Add(realm);
             await db.SaveChangesAsync();
@@ -196,7 +198,7 @@ public class BnetControllerTests(RaidOpsWebApplicationFactory factory)
             db.Characters.Add(character);
             await db.SaveChangesAsync();
 
-            db.GuildMemberships.Add(new GuildMembership { CharacterId = character.Id, GuildId = guildId, JoinedAt = DateTime.UtcNow });
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = character.Id, GuildId = guildId, GuildBranch = branch, JoinedAt = DateTime.UtcNow });
             await db.SaveChangesAsync();
         });
 

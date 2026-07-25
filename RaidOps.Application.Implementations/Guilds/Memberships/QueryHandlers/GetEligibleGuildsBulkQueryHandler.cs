@@ -2,7 +2,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Queries;
 using RaidOps.Application.Contracts.Guilds.Memberships.Responses;
-using RaidOps.Application.Implementations.Guilds.Memberships.Helpers;
+using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -11,13 +11,15 @@ namespace RaidOps.Application.Implementations.Guilds.Memberships.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetEligibleGuildsBulkQuery"/> by returning, for each registered guild the
-/// user belongs to on Discord, the subset of their active characters that are not yet on that
-/// guild's roster and pass the roster-mode access check.
+/// user belongs to on Discord, the subset of their active characters whose WoW branch is active
+/// and configured on that guild, not yet on that guild's roster, and passing the branch's
+/// roster-mode access check.
 /// All characters and memberships are fetched in bulk to avoid N+1 queries.
 /// </summary>
 public class GetEligibleGuildsBulkQueryHandler(
     ICharacterRepository characterRepository,
     IGuildsRepository guildsRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IUserGuildsRepository userGuildsRepository,
     IGuildMembershipRepository membershipRepository,
     IDiscordBotService discordBotService) : IQueryHandlerAsync<GetEligibleGuildsBulkQuery, List<GuildEligibilityResponse>>
@@ -45,26 +47,38 @@ public class GetEligibleGuildsBulkQueryHandler(
         foreach (var guildId in userGuilds.Select(ug => ug.GuildId))
         {
             var guild = await guildsRepository.GetByIdAsync(guildId, cancellationToken);
-            if (guild == null || !guild.IsRegistered || guild.RosterMode == null)
+            if (guild == null || !guild.IsRegistered)
                 continue;
 
-            var isAccessGranted = guild.RosterMode == RosterMode.Open
-                || (guild.MinRosterRoleId != null && DiscordRosterAccessHelper.HasDiscordRoleAccess(discordBotService, guild.Id, guild.MinRosterRoleId, query.RequesterDiscordId, cancellationToken));
-
-            if (!isAccessGranted)
+            var activeBranches = await guildBranchesRepository.GetActiveForGuildAsync(guildId, cancellationToken);
+            if (activeBranches.Count == 0)
                 continue;
 
-            var eligibleChars = characters
-                .Where(c => !joinedGuildsByCharacter.TryGetValue(c.Id, out var joined) || !joined.Contains(guildId))
-                .Select(c => new EligibleCharacterDto
+            var eligibleChars = new List<EligibleCharacterDto>();
+            foreach (var character in characters)
+            {
+                if (joinedGuildsByCharacter.TryGetValue(character.Id, out var joined) && joined.Contains(guildId))
+                    continue;
+
+                var branch = activeBranches.FirstOrDefault(b => b.BranchId == character.BranchId);
+                if (branch == null || branch.RosterMode == null)
+                    continue;
+
+                var isAccessGranted = branch.RosterMode == RosterMode.Open
+                    || DiscordRoleSetAccessHelper.HasAnyDiscordRole(discordBotService, guild.Id, branch.RosterRoleIds, query.RequesterDiscordId, cancellationToken);
+
+                if (!isAccessGranted)
+                    continue;
+
+                eligibleChars.Add(new EligibleCharacterDto
                 {
-                    Id = c.Id,
-                    Name = c.Name,
-                    ClassId = c.ClassId,
-                    ClassName = c.Class.Name,
-                    ClassColor = $"#{c.Class.Color}",
-                })
-                .ToList();
+                    Id = character.Id,
+                    Name = character.Name,
+                    ClassId = character.ClassId,
+                    ClassName = character.Class.Name,
+                    ClassColor = $"#{character.Class.Color}",
+                });
+            }
 
             if (eligibleChars.Count == 0)
                 continue;

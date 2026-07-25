@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -92,21 +91,16 @@ public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
 
         guild.IsRegistered = false;
         guild.Timezone = null;
-        guild.RosterMode = null;
-        guild.MinRosterRoleId = null;
-        guild.MinOfficerRoleId = null;
         guild.Language = null;
         await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
-    /// Updates the settings fields on the guild identified by <paramref name="guildId"/>.
+    /// Updates the guild-level identity settings (timezone and language) on the guild identified by <paramref name="guildId"/>.
     /// </summary>
     public async Task<bool> UpdateSettingsAsync(
         string guildId,
         string timezone,
-        RosterMode rosterMode,
-        string? minRosterRoleId,
         string language,
         CancellationToken cancellationToken = default)
     {
@@ -114,22 +108,7 @@ public class GuildsRepository(RaidOpsDbContext context) : IGuildsRepository
         if (guild == null) return false;
 
         guild.Timezone = timezone;
-        guild.RosterMode = rosterMode;
-        guild.MinRosterRoleId = rosterMode == RosterMode.DiscordRoleOnly ? minRosterRoleId : null;
         guild.Language = language;
-        await context.SaveChangesAsync(cancellationToken);
-        return true;
-    }
-
-    /// <summary>
-    /// Updates only <see cref="Guild.MinOfficerRoleId"/>, leaving every other setting untouched.
-    /// </summary>
-    public async Task<bool> UpdateOfficerThresholdAsync(string guildId, string minOfficerRoleId, CancellationToken cancellationToken = default)
-    {
-        var guild = await context.Guilds.FindAsync([guildId], cancellationToken);
-        if (guild == null) return false;
-
-        guild.MinOfficerRoleId = minOfficerRoleId;
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }

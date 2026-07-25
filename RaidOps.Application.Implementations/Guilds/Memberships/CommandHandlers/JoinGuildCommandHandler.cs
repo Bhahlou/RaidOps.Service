@@ -17,6 +17,7 @@ namespace RaidOps.Application.Implementations.Guilds.Memberships.CommandHandlers
 public class JoinGuildCommandHandler(
     ICharacterRepository characterRepository,
     IGuildsRepository guildsRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IUserGuildsRepository userGuildsRepository,
     IGuildMembershipRepository membershipRepository,
     IDiscordBotService discordBotService,
@@ -34,7 +35,7 @@ public class JoinGuildCommandHandler(
         if (character.UserDiscordId != command.RequesterDiscordId)
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOwned, "You do not own this character.");
 
-        // Verify the guild exists, is registered, and is configured
+        // Verify the guild exists and is registered
         var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
         if (guild == null)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildNotFound, $"Guild '{command.GuildId}' does not exist.");
@@ -42,8 +43,13 @@ public class JoinGuildCommandHandler(
         if (!guild.IsRegistered)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildNotRegistered, "Guild is not registered in RaidOps.");
 
-        if (guild.RosterMode == null)
-            return Result<CommandResponse>.Fail(ResponseDetail.GuildNotConfigured, "Guild settings have not been configured yet.");
+        // Verify the character's WoW branch is active on this guild
+        var branch = await guildBranchesRepository.GetByGuildAndBranchAsync(command.GuildId, character.BranchId, cancellationToken);
+        if (branch == null || !branch.IsActive)
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildBranchNotActive, "This guild does not run this character's WoW branch.");
+
+        if (branch.RosterMode == null)
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildNotConfigured, "This branch's roster settings have not been configured yet.");
 
         // Verify the requester is a Discord member of this guild
         var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(command.RequesterDiscordId, cancellationToken);
@@ -52,9 +58,9 @@ public class JoinGuildCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You are not a member of this Discord server.");
 
         // Verify roster access based on RosterMode
-        if (guild.RosterMode == RosterMode.DiscordRoleOnly)
+        if (branch.RosterMode == RosterMode.DiscordRoleOnly)
         {
-            var accessError = CheckDiscordRoleAccess(guild.MinRosterRoleId, command.GuildId, command.RequesterDiscordId, cancellationToken);
+            var accessError = CheckDiscordRoleAccess(branch.RosterRoleIds, command.GuildId, command.RequesterDiscordId, cancellationToken);
             if (accessError != null)
                 return accessError;
         }
@@ -69,6 +75,7 @@ public class JoinGuildCommandHandler(
         {
             CharacterId = command.CharacterId,
             GuildId = command.GuildId,
+            GuildBranchId = branch.Id,
             CharacterRank = command.CharacterRank,
             JoinedAt = DateTime.UtcNow,
         };
@@ -96,30 +103,24 @@ public class JoinGuildCommandHandler(
         return Result<CommandResponse>.Ok(new CommandResponse("Character added to the guild roster."));
     }
 
-    private Result<CommandResponse>? CheckDiscordRoleAccess(string? minRosterRoleId, string guildId, string requesterDiscordId, CancellationToken cancellationToken)
+    private Result<CommandResponse>? CheckDiscordRoleAccess(List<string> rosterRoleIds, string guildId, string requesterDiscordId, CancellationToken cancellationToken)
     {
-        if (minRosterRoleId == null)
-            return Result<CommandResponse>.Fail(ResponseDetail.GuildNotConfigured, "Roster role threshold is not configured.");
+        if (rosterRoleIds.Count == 0)
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildNotConfigured, "Roster role set is not configured.");
 
         try
         {
-            var roles = discordBotService.Guilds.GetRoles(guildId, cancellationToken)
-                .ToDictionary(r => r.Id.ToString());
-
-            if (!roles.TryGetValue(minRosterRoleId, out var minRole))
-                return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "The required Discord role no longer exists.");
-
             var guildUser = discordBotService.Guilds.GetUsers(guildId, cancellationToken)
                 .FirstOrDefault(u => u.Id.ToString() == requesterDiscordId);
 
             if (guildUser == null)
                 return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You are not found in this Discord server.");
 
-            var hasAccess = guildUser.RoleIds.Any(rid =>
-                roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
+            var heldRoleIds = guildUser.RoleIds.Select(r => r.ToString()).ToHashSet();
+            var hasAccess = rosterRoleIds.Any(heldRoleIds.Contains);
 
             if (!hasAccess)
-                return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You do not have the required Discord role to join this roster.");
+                return Result<CommandResponse>.Fail(ResponseDetail.RosterAccessDenied, "You do not have any of the required Discord roles to join this roster.");
         }
         catch (InvalidOperationException ex)
         {

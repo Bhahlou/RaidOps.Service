@@ -17,7 +17,6 @@ public class GuildLanguageNotConfiguredProviderTests
         bool isRegistered,
         string name = "Guild Name",
         string? timezone = "Europe/Paris",
-        RosterMode? rosterMode = RosterMode.Open,
         string? language = null) => new()
     {
         UserDiscordId = DiscordId,
@@ -29,7 +28,6 @@ public class GuildLanguageNotConfiguredProviderTests
             Name = name,
             IsRegistered = isRegistered,
             Timezone = timezone,
-            RosterMode = rosterMode,
             Language = language,
         },
     };
@@ -79,16 +77,6 @@ public class GuildLanguageNotConfiguredProviderTests
     public async Task GetActiveAsync_GuildStillOnboarding_TimezoneNull_NoNotification()
     {
         var guild = MakeUserGuild("g1", isAdmin: true, isRegistered: true, timezone: null);
-
-        var result = await _sut.GetActiveAsync(DiscordId, [guild], default);
-
-        result.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetActiveAsync_GuildStillOnboarding_RosterModeNull_NoNotification()
-    {
-        var guild = MakeUserGuild("g1", isAdmin: true, isRegistered: true, rosterMode: null);
 
         var result = await _sut.GetActiveAsync(DiscordId, [guild], default);
 

@@ -32,8 +32,6 @@ public class GetGuildSettingsQueryHandler(
         return Result<GuildSettingsResponse>.Ok(new GuildSettingsResponse
         {
             Timezone = guild.Timezone,
-            RosterMode = guild.RosterMode ?? RosterMode.Open,
-            MinRosterRoleId = guild.MinRosterRoleId,
             Language = guild.Language,
         });
     }

@@ -1,7 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using NetCord;
 using NetCord.Gateway;
 using RaidOps.Application.Contracts.Common;
 using DiscordGuild = RaidOps.Domain.Models.Discord.Guild;
@@ -22,22 +21,24 @@ namespace RaidOps.UnitTests.Application.Guilds.Memberships.CommandHandlers;
 /// </summary>
 public class JoinGuildCommandHandlerTests
 {
-    private readonly Mock<ICharacterRepository>       _characters  = new();
-    private readonly Mock<IGuildsRepository>          _guilds      = new();
-    private readonly Mock<IUserGuildsRepository>      _userGuilds  = new();
-    private readonly Mock<IGuildMembershipRepository> _memberships = new();
-    private readonly Mock<IDiscordBotService>         _bot         = new();
-    private readonly Mock<IGuildService>              _guild       = new();
-    private readonly Mock<IAuditLogService>           _auditLog    = new();
+    private readonly Mock<ICharacterRepository>       _characters    = new();
+    private readonly Mock<IGuildsRepository>          _guilds        = new();
+    private readonly Mock<IGuildBranchesRepository>   _guildBranches = new();
+    private readonly Mock<IUserGuildsRepository>      _userGuilds    = new();
+    private readonly Mock<IGuildMembershipRepository> _memberships   = new();
+    private readonly Mock<IDiscordBotService>         _bot           = new();
+    private readonly Mock<IGuildService>              _guild         = new();
+    private readonly Mock<IAuditLogService>           _auditLog      = new();
     private readonly JoinGuildCommandHandler          _sut;
 
-    private const int    CharacterId   = 1;
-    private const string GuildId       = "guild-1";
-    private const string DiscordId     = "200000000000000001";
-    private const ulong  DiscordUlong  = 200000000000000001UL;
-    private const string MinRoleId     = "100000000000000001";
-    private const ulong  MinRoleUlong  = 100000000000000001UL;
-    private const ulong  LowRoleUlong  = 100000000000000002UL;
+    private const int    CharacterId    = 1;
+    private const string GuildId        = "guild-1";
+    private const string DiscordId      = "200000000000000001";
+    private const ulong  DiscordUlong   = 200000000000000001UL;
+    private const string RosterRoleId   = "100000000000000001";
+    private const ulong  RosterRoleUlong = 100000000000000001UL;
+    private const int    CharacterBranchId = 10;
+    private const int    GuildBranchId  = 1;
 
     private static readonly JoinGuildCommand Command = new()
     {
@@ -53,6 +54,7 @@ public class JoinGuildCommandHandlerTests
         _sut = new JoinGuildCommandHandler(
             _characters.Object,
             _guilds.Object,
+            _guildBranches.Object,
             _userGuilds.Object,
             _memberships.Object,
             _bot.Object,
@@ -116,14 +118,45 @@ public class JoinGuildCommandHandlerTests
         result.Error.Should().Be(ResponseDetail.GuildNotRegistered);
     }
 
-    // ── GuildNotConfigured (RosterMode null) ──────────────────────────────
+    // ── Branch not active on this guild ───────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_BranchNotActiveOnGuild_ReturnsGuildBranchNotActive()
+    {
+        SetupCharacter();
+        SetupRegisteredGuild();
+        _guildBranches.Setup(b => b.GetByGuildAndBranchAsync(GuildId, CharacterBranchId, default))
+            .ReturnsAsync((GuildBranch?)null);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.GuildBranchNotActive);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchDeactivated_ReturnsGuildBranchNotActive()
+    {
+        SetupCharacter();
+        SetupRegisteredGuild();
+        _guildBranches.Setup(b => b.GetByGuildAndBranchAsync(GuildId, CharacterBranchId, default))
+            .ReturnsAsync(MakeBranch(rosterMode: RosterMode.Open, isActive: false));
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.GuildBranchNotActive);
+    }
+
+    // ── GuildNotConfigured (branch RosterMode null) ───────────────────────
 
     [Fact]
     public async Task HandleAsync_RosterModeNull_ReturnsGuildNotConfigured()
     {
         SetupCharacter();
-        _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
-            .ReturnsAsync(new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = true, RosterMode = null });
+        SetupRegisteredGuild();
+        _guildBranches.Setup(b => b.GetByGuildAndBranchAsync(GuildId, CharacterBranchId, default))
+            .ReturnsAsync(MakeBranch(rosterMode: null));
 
         var result = await _sut.HandleAsync(Command);
 
@@ -177,7 +210,7 @@ public class JoinGuildCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         _memberships.Verify(r => r.AddAsync(
             It.Is<GuildMembership>(m => m.CharacterId == CharacterId && m.GuildId == GuildId &&
-                                        m.CharacterRank == CharacterRank.Main),
+                                        m.GuildBranchId == GuildBranchId && m.CharacterRank == CharacterRank.Main),
             default), Times.Once);
         _auditLog.Verify(a => a.LogAsync(
             GuildId, DiscordId, GuildAuditAction.MemberJoined,
@@ -185,18 +218,15 @@ public class JoinGuildCommandHandlerTests
             default), Times.Once);
     }
 
-    // ── DiscordRoleOnly — MinRosterRoleId null ────────────────────────────
+    // ── DiscordRoleOnly — RosterRoleIds empty ─────────────────────────────
 
     [Fact]
-    public async Task HandleAsync_DiscordRoleOnly_MinRoleIdNull_ReturnsGuildNotConfigured()
+    public async Task HandleAsync_DiscordRoleOnly_RosterRoleIdsEmpty_ReturnsGuildNotConfigured()
     {
         SetupCharacter();
-        _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
-            .ReturnsAsync(new DiscordGuild
-            {
-                Id = GuildId, Name = "RaidOps", IsRegistered = true,
-                RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = null,
-            });
+        SetupRegisteredGuild();
+        _guildBranches.Setup(b => b.GetByGuildAndBranchAsync(GuildId, CharacterBranchId, default))
+            .ReturnsAsync(MakeBranch(rosterMode: RosterMode.DiscordRoleOnly, rosterRoleIds: []));
         SetupDiscordMember();
 
         var result = await _sut.HandleAsync(Command);
@@ -213,32 +243,12 @@ public class JoinGuildCommandHandlerTests
         SetupCharacter();
         SetupRoleOnlyGuild();
         SetupDiscordMember();
-        _guild.Setup(g => g.GetRoles(GuildId, default)).Throws<InvalidOperationException>();
+        _guild.Setup(g => g.GetUsers(GuildId, default)).Throws<InvalidOperationException>();
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.GuildBotNotPresent);
-    }
-
-    // ── DiscordRoleOnly — MinRole not in Discord ──────────────────────────
-
-    [Fact]
-    public async Task HandleAsync_DiscordRoleOnly_MinRoleNotFound_ReturnsRosterAccessDenied()
-    {
-        SetupCharacter();
-        SetupRoleOnlyGuild();
-        SetupDiscordMember();
-
-        // Only role present is 999 — not MinRoleId
-        var otherRole = NetCordTestHelpers.MakeJsonRole(999UL, (Permissions)0, position: 5);
-        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [otherRole]);
-        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
-
-        var result = await _sut.HandleAsync(Command);
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.RosterAccessDenied);
     }
 
     // ── DiscordRoleOnly — User not in Discord guild ───────────────────────
@@ -249,7 +259,6 @@ public class JoinGuildCommandHandlerTests
         SetupCharacter();
         SetupRoleOnlyGuild();
         SetupDiscordMember();
-        SetupMinRole(position: 5);
         _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([]);
 
         var result = await _sut.HandleAsync(Command);
@@ -258,7 +267,7 @@ public class JoinGuildCommandHandlerTests
         result.Error.Should().Be(ResponseDetail.RosterAccessDenied);
     }
 
-    // ── DiscordRoleOnly — User has insufficient role ───────────────────────
+    // ── DiscordRoleOnly — User has none of the roster roles ────────────────
 
     [Fact]
     public async Task HandleAsync_DiscordRoleOnly_UserLacksRole_ReturnsRosterAccessDenied()
@@ -267,36 +276,8 @@ public class JoinGuildCommandHandlerTests
         SetupRoleOnlyGuild();
         SetupDiscordMember();
 
-        // MinRole at position 10; user's role at position 3
-        var minJson = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: 10);
-        var lowJson = NetCordTestHelpers.MakeJsonRole(LowRoleUlong, (Permissions)0, position: 3);
-        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [minJson, lowJson]);
-        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
-
-        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [LowRoleUlong]);
-        _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
-
-        var result = await _sut.HandleAsync(Command);
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.RosterAccessDenied);
-    }
-
-    // ── DiscordRoleOnly — User's role id is unknown to the guild (e.g. deleted role) ──
-
-    [Fact]
-    public async Task HandleAsync_DiscordRoleOnly_UserHasUnknownRoleId_ReturnsRosterAccessDenied()
-    {
-        SetupCharacter();
-        SetupRoleOnlyGuild();
-        SetupDiscordMember();
-
-        var minJson = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: 5);
-        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [minJson]);
-        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
-
-        const ulong unknownRoleUlong = 999999999999999999UL;
-        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [unknownRoleUlong]);
+        const ulong unrelatedRoleUlong = 999999999999999999UL;
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [unrelatedRoleUlong]);
         _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
 
         var result = await _sut.HandleAsync(Command);
@@ -337,7 +318,7 @@ public class JoinGuildCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _memberships.Verify(r => r.AddAsync(
-            It.Is<GuildMembership>(m => m.CharacterId == CharacterId && m.GuildId == GuildId),
+            It.Is<GuildMembership>(m => m.CharacterId == CharacterId && m.GuildId == GuildId && m.GuildBranchId == GuildBranchId),
             default), Times.Once);
         _auditLog.Verify(a => a.LogAsync(
             GuildId, DiscordId, GuildAuditAction.MemberJoined,
@@ -346,41 +327,46 @@ public class JoinGuildCommandHandlerTests
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
+    private static GuildBranch MakeBranch(RosterMode? rosterMode, List<string>? rosterRoleIds = null, bool isActive = true)
+        => new()
+        {
+            Id = GuildBranchId,
+            GuildId = GuildId,
+            BranchId = CharacterBranchId,
+            RosterMode = rosterMode,
+            RosterRoleIds = rosterRoleIds ?? [],
+            IsActive = isActive,
+        };
+
     private void SetupCharacter() =>
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
-            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId, ClassId = 5 });
+            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId, ClassId = 5, BranchId = CharacterBranchId });
 
-    private void SetupOpenGuild() =>
+    private void SetupRegisteredGuild() =>
         _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
-            .ReturnsAsync(new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = true, RosterMode = RosterMode.Open });
+            .ReturnsAsync(new DiscordGuild { Id = GuildId, Name = "RaidOps", IsRegistered = true });
 
-    private void SetupRoleOnlyGuild() =>
-        _guilds.Setup(r => r.GetByIdAsync(GuildId, default))
-            .ReturnsAsync(new DiscordGuild
-            {
-                Id = GuildId, Name = "RaidOps", IsRegistered = true,
-                RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = MinRoleId,
-            });
+    private void SetupOpenGuild()
+    {
+        SetupRegisteredGuild();
+        _guildBranches.Setup(b => b.GetByGuildAndBranchAsync(GuildId, CharacterBranchId, default))
+            .ReturnsAsync(MakeBranch(rosterMode: RosterMode.Open));
+    }
+
+    private void SetupRoleOnlyGuild()
+    {
+        SetupRegisteredGuild();
+        _guildBranches.Setup(b => b.GetByGuildAndBranchAsync(GuildId, CharacterBranchId, default))
+            .ReturnsAsync(MakeBranch(rosterMode: RosterMode.DiscordRoleOnly, rosterRoleIds: [RosterRoleId]));
+    }
 
     private void SetupDiscordMember() =>
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(DiscordId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = DiscordId }]);
 
-    private void SetupMinRole(int position)
-    {
-        var jsonRole = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: position);
-        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [jsonRole]);
-        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
-    }
-
     private void SetupRoleAccess()
     {
-        // User has MinRole itself — position equal to threshold
-        var jsonRole  = NetCordTestHelpers.MakeJsonRole(MinRoleUlong, (Permissions)0, position: 5);
-        var g = NetCordTestHelpers.MakeGuild(0UL, 0UL, new Dictionary<ulong, GuildUser>(), [jsonRole]);
-        _guild.Setup(gs => gs.GetRoles(GuildId, default)).Returns(g.Roles.Values);
-
-        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [MinRoleUlong]);
+        var guildUser = NetCordTestHelpers.MakeGuildUser(DiscordUlong, 0UL, [RosterRoleUlong]);
         _guild.Setup(gs => gs.GetUsers(GuildId, default)).Returns([guildUser]);
     }
 }
