@@ -13,4 +13,20 @@ public enum NotificationType
     /// been designated as granting Officer access.
     /// </summary>
     OfficerThresholdNotConfigured = 1,
+
+    /// <summary>
+    /// The user is an admin of an already-configured guild that has no
+    /// <see cref="Models.Discord.Guild.Language"/> set yet — it was added after some guilds had
+    /// already registered, so their bot messages silently fall back to English instead of the
+    /// guild's actual language.
+    /// </summary>
+    GuildLanguageNotConfigured = 2,
+
+    /// <summary>
+    /// The user is an admin of an already-configured guild that has never saved the "Absences"
+    /// Discord notification family (neither <see cref="Models.Discord.GuildNotificationSetting"/>
+    /// row for that family exists yet) — as opposed to a guild that deliberately saved the tab
+    /// with every event left off, which is a legitimate steady state.
+    /// </summary>
+    AbsenceNotificationsNotConfigured = 3,
 }

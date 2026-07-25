@@ -16,7 +16,7 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandl
 public class DeleteAvailabilityExceptionCommandHandler(
     IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<DeleteAvailabilityExceptionCommand>
+    IAvailabilityChangeAnnouncer availabilityChangeAnnouncer) : ICommandHandlerAsync<DeleteAvailabilityExceptionCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeleteAvailabilityExceptionCommand command, CancellationToken cancellationToken = default)
@@ -32,22 +32,25 @@ public class DeleteAvailabilityExceptionCommandHandler(
         if (existing.EndDate < DateOnly.FromDateTime(DateTime.UtcNow))
             return Result<CommandResponse>.Fail(ResponseDetail.PastDeclarationLocked, "Cannot delete a declaration that has already fully elapsed.");
 
+        var beforeExceptions = await availabilityRepository.GetExceptionsOverlappingAsync(
+            command.RequesterDiscordId, command.GuildId, existing.StartDate, existing.EndDate, cancellationToken);
+        var patterns = await availabilityRepository.GetPatternsAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+
         var deleted = await availabilityRepository.DeleteExceptionAsync(command.ExceptionId, command.RequesterDiscordId, command.GuildId, cancellationToken);
         if (!deleted)
             return Result<CommandResponse>.Fail(ResponseDetail.AvailabilityExceptionNotFound, $"Exception '{command.ExceptionId}' does not exist.");
 
-        await auditLogService.LogAsync(
-            command.GuildId,
-            command.RequesterDiscordId,
-            GuildAuditAction.AvailabilityExceptionDeleted,
-            new Dictionary<string, string>
-            {
-                ["startDate"] = existing.StartDate.ToString("yyyy-MM-dd"),
-                ["endDate"] = existing.EndDate.ToString("yyyy-MM-dd"),
-                ["status"] = existing.Status.ToString(),
-                ["availableFrom"] = existing.AvailableFrom?.ToString("HH:mm:ss") ?? string.Empty,
-                ["availableUntil"] = existing.AvailableUntil?.ToString("HH:mm:ss") ?? string.Empty,
-            },
+        var afterExceptions = beforeExceptions.Where(e => e.Id != existing.Id).ToList();
+
+        await availabilityChangeAnnouncer.AnnounceAsync(
+            new AvailabilityChange(
+                command.GuildId,
+                command.RequesterDiscordId,
+                existing.StartDate,
+                existing.EndDate,
+                beforeExceptions,
+                afterExceptions,
+                patterns),
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Availability exception deleted successfully."));

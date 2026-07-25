@@ -6,6 +6,7 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Calendar.Availability.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Calendar.Availability.CommandHandlers;
@@ -15,6 +16,8 @@ public class CreateRecurringAvailabilityPatternCommandHandlerTests
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IAvailabilityRepository> _repository = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
+    private readonly Mock<IGuildNotificationDispatcher> _notificationDispatcher = new();
+    private readonly Mock<IAbsenceNotificationContentBuilder> _absenceContentBuilder = new();
     private readonly CreateRecurringAvailabilityPatternCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -25,7 +28,7 @@ public class CreateRecurringAvailabilityPatternCommandHandlerTests
 
     public CreateRecurringAvailabilityPatternCommandHandlerTests()
     {
-        _sut = new CreateRecurringAvailabilityPatternCommandHandler(_access.Object, _repository.Object, _auditLog.Object);
+        _sut = new CreateRecurringAvailabilityPatternCommandHandler(_access.Object, _repository.Object, _auditLog.Object, _notificationDispatcher.Object, _absenceContentBuilder.Object);
     }
 
     private static CreateRecurringAvailabilityPatternCommand MakeCommand(int cycleLengthDays, List<RecurringAvailabilityPatternDayInput> days) => new()
@@ -117,5 +120,37 @@ public class CreateRecurringAvailabilityPatternCommandHandlerTests
             p.Days.Any(d => d.OffsetInCycle == 4 && d.Status == DayAvailabilityStatus.Partial &&
                              d.AvailableFrom == new TimeOnly(18, 0) && d.AvailableUntil == new TimeOnly(22, 0))),
             default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_BuildsPatternEmbedFromSubmittedDaysAndNotifiesAbsenceAdded()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var days = new List<RecurringAvailabilityPatternDayInput>
+        {
+            new() { OffsetInCycle = 2, Status = DayAvailabilityStatus.Absent, Reason = "Wednesday off" },
+            new() { OffsetInCycle = 4, Status = DayAvailabilityStatus.Partial, AvailableFrom = new TimeOnly(18, 0), AvailableUntil = new TimeOnly(22, 0) },
+        };
+        var command = MakeCommand(7, days);
+        _repository.Setup(r => r.AddPatternAsync(It.IsAny<RecurringAvailabilityPattern>(), default))
+            .ReturnsAsync((RecurringAvailabilityPattern p, CancellationToken _) => { p.Id = 99; return p; });
+        var embed = new DiscordEmbedContent("New recurring absences");
+        _absenceContentBuilder.Setup(b => b.BuildPatternAsync(
+                GuildId, RequesterId, GuildNotificationEventType.AbsenceAdded, Anchor, 7,
+                It.IsAny<IReadOnlyList<PatternDayNotification>>(), default))
+            .ReturnsAsync(embed);
+
+        await _sut.HandleAsync(command);
+
+        _absenceContentBuilder.Verify(b => b.BuildPatternAsync(
+            GuildId, RequesterId, GuildNotificationEventType.AbsenceAdded, Anchor, 7,
+            It.Is<IReadOnlyList<PatternDayNotification>>(mapped =>
+                mapped.Count == 2 &&
+                mapped.Any(d => d.OffsetInCycle == 2 && d.Status == DayAvailabilityStatus.Absent && d.Reason == "Wednesday off") &&
+                mapped.Any(d => d.OffsetInCycle == 4 && d.Status == DayAvailabilityStatus.Partial &&
+                                 d.AvailableFrom == new TimeOnly(18, 0) && d.AvailableUntil == new TimeOnly(22, 0))),
+            default), Times.Once);
+
+        _notificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, embed, default), Times.Once);
     }
 }

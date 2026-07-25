@@ -12,7 +12,7 @@ namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
 /// Exposes guild settings endpoints: read and write settings, fetch Discord roles,
-/// read and write the Officer role threshold.
+/// read and write the Officer role threshold, read and write Discord notification settings.
 /// </summary>
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/guilds")]
@@ -100,6 +100,61 @@ public class GuildSettingsController(
     public async Task<IActionResult> UpdateOfficerThreshold(
         string guildId,
         [FromBody] UpdateOfficerThresholdCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Returns the guild's Discord notification settings (one entry per event type).
+    /// </summary>
+    [HttpGet("{guildId}/notification-settings")]
+    public async Task<IActionResult> GetNotificationSettings(string guildId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildNotificationSettingsQuery, List<GuildNotificationSettingResponse>>(
+            new GetGuildNotificationSettingsQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Returns the guild's text-postable Discord channels, annotated with whether the bot can
+    /// currently post in each, for the notification settings channel picker.
+    /// </summary>
+    [HttpGet("{guildId}/notification-channels")]
+    public async Task<IActionResult> GetNotificationChannels(string guildId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildNotificationChannelsQuery, List<DiscordChannelResponse>>(
+            new GetGuildNotificationChannelsQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Persists the guild's Discord notification settings in bulk.
+    /// </summary>
+    [HttpPatch("{guildId}/notification-settings")]
+    public async Task<IActionResult> UpdateNotificationSettings(
+        string guildId,
+        [FromBody] UpdateGuildNotificationSettingsCommand command,
         CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;

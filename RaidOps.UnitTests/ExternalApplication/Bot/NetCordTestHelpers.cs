@@ -102,16 +102,26 @@ internal static class NetCordTestHelpers
         ulong guildId,
         ulong ownerId,
         IReadOnlyDictionary<ulong, GuildUser> users,
-        JsonRole[]? roles = null)
+        JsonRole[]? roles = null,
+        IReadOnlyDictionary<ulong, IGuildChannel>? channels = null,
+        string? preferredLocale = null,
+        Permissions? permissions = null)
     {
         var jsonGuild = Uninitialized<JsonGuild>();
         SetField(jsonGuild, typeof(JsonGuild).BaseType!, "<Id>k__BackingField", guildId);
         SetField(jsonGuild, typeof(JsonGuild), "<OwnerId>k__BackingField", ownerId);
+        if (preferredLocale is not null)
+            SetField(jsonGuild, typeof(JsonGuild), "<PreferredLocale>k__BackingField", preferredLocale);
+        // NetCord's GetChannelPermissions(Guild) computes from this summary field (the acting
+        // user's own guild-level permission bit), not from per-role aggregation — a null value
+        // means "partial guild" and makes permission calculation throw.
+        SetField(jsonGuild, typeof(JsonGuild), "<Permissions>k__BackingField", permissions);
 
         var guild = Uninitialized<Guild>();
         // _jsonModel is declared on RestGuild (Guild base) — GetField searches up hierarchy
         SetField(guild, typeof(Guild), "_jsonModel", jsonGuild);
         SetField(guild, typeof(Guild), "<Users>k__BackingField", users);
+        SetField(guild, typeof(Guild), "<Channels>k__BackingField", channels ?? new Dictionary<ulong, IGuildChannel>());
 
         // <Roles>k__BackingField is on RestGuild — build IReadOnlyDictionary<ulong, Role>
         var rolesDict = (roles ?? [])
@@ -120,6 +130,37 @@ internal static class NetCordTestHelpers
         SetField(guild, typeof(Guild), "<Roles>k__BackingField", rolesDict);
 
         return guild;
+    }
+
+    /// <summary>Builds a minimal text channel with no permission overwrites — pair with an Administrator role on the acting member to bypass overwrite computation entirely.</summary>
+    internal static TextGuildChannel MakeTextChannel(ulong id, string name, ulong guildId, ulong? parentId = null)
+    {
+        var jsonChannelType = Type.GetType("NetCord.JsonModels.JsonChannel, NetCord")!;
+        var jc = RuntimeHelpers.GetUninitializedObject(jsonChannelType);
+        SetField(jc, jsonChannelType.BaseType!, "<Id>k__BackingField", id);
+        SetField(jc, jsonChannelType, "<Name>k__BackingField", name);
+        if (parentId.HasValue)
+            SetField(jc, jsonChannelType, "<ParentId>k__BackingField", (ulong?)parentId.Value);
+
+        var channel = Uninitialized<TextGuildChannel>();
+        SetField(channel, typeof(TextGuildChannel).BaseType!.BaseType!, "_jsonModel", jc);
+        SetField(channel, typeof(TextGuildChannel), "<GuildId>k__BackingField", guildId);
+        SetField(channel, typeof(TextGuildChannel), "<PermissionOverwrites>k__BackingField", new Dictionary<ulong, PermissionOverwrite>());
+
+        return channel;
+    }
+
+    // ── CurrentUser (bot's own user) ────────────────────────────────────────────
+
+    internal static CurrentUser MakeCurrentUser(ulong userId)
+    {
+        var jsonUserType = Type.GetType("NetCord.JsonModels.JsonUser, NetCord")!;
+        var ju = RuntimeHelpers.GetUninitializedObject(jsonUserType);
+        SetField(ju, jsonUserType.BaseType!, "<Id>k__BackingField", userId);
+
+        var user = Uninitialized<CurrentUser>();
+        SetField(user, typeof(CurrentUser).BaseType!, "_jsonModel", ju);
+        return user;
     }
 
     private static Role MakeRole(JsonRole jsonRole, ulong guildId)
@@ -146,7 +187,15 @@ internal static class NetCordTestHelpers
 
     // ── GuildUser ─────────────────────────────────────────────────────────────
 
-    internal static GuildUser MakeGuildUser(ulong userId, ulong guildId, ulong[] roleIds)
+    internal static GuildUser MakeGuildUser(
+        ulong userId,
+        ulong guildId,
+        ulong[] roleIds,
+        string? username = null,
+        string? nickname = null,
+        string? globalName = null,
+        string? avatarHash = null,
+        string? guildAvatarHash = null)
     {
         var jsonGuildUserType = Type.GetType("NetCord.JsonModels.JsonGuildUser, NetCord")!;
         var jsonUserType      = Type.GetType("NetCord.JsonModels.JsonUser, NetCord")!;
@@ -154,10 +203,20 @@ internal static class NetCordTestHelpers
         // JsonGuildUser: set RoleIds
         var jgu = RuntimeHelpers.GetUninitializedObject(jsonGuildUserType);
         SetField(jgu, jsonGuildUserType, "<RoleIds>k__BackingField", roleIds);
+        if (nickname is not null)
+            SetField(jgu, jsonGuildUserType, "<Nickname>k__BackingField", nickname);
+        if (guildAvatarHash is not null)
+            SetField(jgu, jsonGuildUserType, "<GuildAvatarHash>k__BackingField", guildAvatarHash);
 
         // JsonUser: set Id (via JsonEntity base)
         var ju = RuntimeHelpers.GetUninitializedObject(jsonUserType);
         SetField(ju, jsonUserType.BaseType!, "<Id>k__BackingField", userId);
+        if (username is not null)
+            SetField(ju, jsonUserType, "<Username>k__BackingField", username);
+        if (globalName is not null)
+            SetField(ju, jsonUserType, "<GlobalName>k__BackingField", globalName);
+        if (avatarHash is not null)
+            SetField(ju, jsonUserType, "<AvatarHash>k__BackingField", avatarHash);
 
         // GuildUser: set both _jsonModel fields and guildId
         var user   = Uninitialized<GuildUser>();
@@ -208,6 +267,14 @@ internal static class NetCordTestHelpers
         var dict  = guilds.ToDictionary(g => g.id, g => g.guild);
         var cache = new Mock<IGatewayClientCache>();
         cache.Setup(c => c.Guilds).Returns(dict);
+        return cache;
+    }
+
+    /// <summary>Same as <see cref="CacheWith"/>, but also stubs <c>Cache.User</c> with the bot's own current user — required by <c>GuildService.GetChannels</c>.</summary>
+    internal static Mock<IGatewayClientCache> CacheWith(CurrentUser botUser, params (ulong id, Guild guild)[] guilds)
+    {
+        var cache = CacheWith(guilds);
+        cache.Setup(c => c.User).Returns(botUser);
         return cache;
     }
 

@@ -56,6 +56,15 @@ public class Guild
     /// </summary>
     public string? MinOfficerRoleId { get; set; }
 
+    /// <summary>
+    /// Language RaidOps communicates in for this guild (e.g. Discord bot messages) — one of the
+    /// front-end's supported locale codes ("en", "fr", "de"). Pre-filled from the Discord guild's
+    /// <c>preferred_locale</c> at registration when it maps to a supported language (only
+    /// meaningful for Community-enabled Discord servers; defaults to "en" otherwise), and
+    /// editable afterwards from guild settings.
+    /// </summary>
+    public string? Language { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>Discord user memberships associated with this guild.</summary>

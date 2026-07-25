@@ -15,7 +15,9 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandl
 public class CreateRecurringAvailabilityPatternCommandHandler(
     IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<CreateRecurringAvailabilityPatternCommand>
+    IAuditLogService auditLogService,
+    IGuildNotificationDispatcher guildNotificationDispatcher,
+    IAbsenceNotificationContentBuilder absenceNotificationContentBuilder) : ICommandHandlerAsync<CreateRecurringAvailabilityPatternCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(CreateRecurringAvailabilityPatternCommand command, CancellationToken cancellationToken = default)
@@ -46,6 +48,19 @@ public class CreateRecurringAvailabilityPatternCommandHandler(
             GuildAuditAction.RecurringAvailabilityPatternCreated,
             RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(command.Label, command.CycleLengthDays, command.AnchorDate, command.Days),
             cancellationToken);
+
+        var eventType = GuildNotificationEventType.AbsenceAdded;
+
+        var embed = await absenceNotificationContentBuilder.BuildPatternAsync(
+            command.GuildId,
+            command.RequesterDiscordId,
+            eventType,
+            command.AnchorDate,
+            command.CycleLengthDays,
+            [.. command.Days.Select(d => new PatternDayNotification(d.OffsetInCycle, d.Status, d.Reason, d.AvailableFrom, d.AvailableUntil))],
+            cancellationToken);
+
+        await guildNotificationDispatcher.NotifyAsync(command.GuildId, eventType, embed, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Recurring availability pattern created successfully.", new { pattern.Id }));
     }

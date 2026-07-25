@@ -65,4 +65,50 @@ public class GuildService(GatewayClient gatewayClient) : IGuildService
             .Where(r => r.Id != guild.Id && !r.Managed)
             .OrderByDescending(r => r.Position)];
     }
+
+    /// <inheritdoc/>
+    public IEnumerable<DiscordChannelInfo> GetChannels(string guildId, CancellationToken cancellationToken = default)
+    {
+        if (!gatewayClient.Cache.Guilds.TryGetValue(ulong.Parse(guildId), out var guild))
+            throw new InvalidOperationException($"Guild '{guildId}' not found in bot cache.");
+
+        var botUser = gatewayClient.Cache.User
+            ?? throw new InvalidOperationException("Bot user not yet available in the Gateway cache.");
+        guild.Users.TryGetValue(botUser.Id, out var botMember);
+
+        return [.. guild.Channels.Values
+            .Where(c => c is TextGuildChannel or AnnouncementGuildChannel)
+            .Select(c =>
+            {
+                var canSend = botMember is not null
+                    && PartialGuildUserExtensions.GetChannelPermissions(botMember, guild, c.Id) is var permissions
+                    && permissions.HasFlag(Permissions.ViewChannel)
+                    && permissions.HasFlag(Permissions.SendMessages);
+
+                var categoryName = c is TextGuildChannel { ParentId: { } parentId }
+                    && guild.Channels.TryGetValue(parentId, out var parent)
+                        ? parent.Name
+                        : null;
+
+                return new DiscordChannelInfo(c.Id, c.Name, canSend, categoryName);
+            })];
+    }
+
+    /// <inheritdoc/>
+    public GuildUser? GetUser(string guildId, string userId, CancellationToken cancellationToken = default)
+    {
+        if (!gatewayClient.Cache.Guilds.TryGetValue(ulong.Parse(guildId), out var guild))
+            throw new InvalidOperationException($"Guild '{guildId}' not found in bot cache.");
+
+        return guild.Users.TryGetValue(ulong.Parse(userId), out var user) ? user : null;
+    }
+
+    /// <inheritdoc/>
+    public string? GetPreferredLocale(string guildId, CancellationToken cancellationToken = default)
+    {
+        if (!gatewayClient.Cache.Guilds.TryGetValue(ulong.Parse(guildId), out var guild))
+            throw new InvalidOperationException($"Guild '{guildId}' not found in bot cache.");
+
+        return guild.PreferredLocale;
+    }
 }

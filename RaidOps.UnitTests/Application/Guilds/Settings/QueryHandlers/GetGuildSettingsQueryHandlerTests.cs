@@ -78,6 +78,7 @@ public class GetGuildSettingsQueryHandlerTests
                 Timezone     = "Europe/Paris",
                 RosterMode   = RosterMode.Open,
                 MinRosterRoleId = "role-abc",
+                Language     = "fr",
             });
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
 
@@ -87,6 +88,20 @@ public class GetGuildSettingsQueryHandlerTests
         result.Value!.Timezone.Should().Be("Europe/Paris");
         result.Value!.RosterMode.Should().Be(RosterMode.Open);
         result.Value!.MinRosterRoleId.Should().Be("role-abc");
+        result.Value!.Language.Should().Be("fr");
+    }
+
+    [Fact]
+    public async Task HandleAsync_LanguageUnset_ReturnsNull()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true, Language = null });
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Language.Should().BeNull();
     }
 
     [Fact]

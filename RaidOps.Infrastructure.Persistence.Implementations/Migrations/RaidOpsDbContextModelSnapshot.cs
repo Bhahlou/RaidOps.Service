@@ -363,6 +363,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<bool>("IsRegistered")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Language")
+                        .HasColumnType("text");
+
                     b.Property<string>("MinOfficerRoleId")
                         .HasColumnType("text");
 
@@ -435,6 +438,25 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("GuildId");
 
                     b.ToTable("GuildMemberships");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Discord.GuildNotificationSetting", b =>
+                {
+                    b.Property<string>("GuildId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChannelId")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("GuildId", "EventType");
+
+                    b.ToTable("GuildNotificationSettings");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.NotificationDismissal", b =>
@@ -1582,6 +1604,17 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired();
 
                     b.Navigation("Character");
+
+                    b.Navigation("Guild");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Discord.GuildNotificationSetting", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Guild");
                 });
