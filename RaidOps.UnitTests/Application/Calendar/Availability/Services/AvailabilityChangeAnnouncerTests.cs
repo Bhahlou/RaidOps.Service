@@ -281,6 +281,57 @@ public class AvailabilityChangeAnnouncerTests
     }
 
     [Fact]
+    public async Task AnnounceAsync_ContiguousDaysAvailableFromGoesFromSetToUnset_DoNotMerge()
+    {
+        // Same Status (Partial) and contiguous, but AvailableFrom flips from set to unset between
+        // the two days (LateArrival on Day1, EarlyLeave on Day2) — a HasValue mismatch, distinct
+        // from the "both set but different" case already covered above.
+        SetupResolve(Day1, Day2,
+            before: [Resolved(Day1, DayAvailabilityStatus.Available), Resolved(Day2, DayAvailabilityStatus.Available)],
+            after:
+            [
+                Resolved(Day1, DayAvailabilityStatus.Partial, from: new TimeOnly(9, 0)),
+                Resolved(Day2, DayAvailabilityStatus.Partial, until: new TimeOnly(17, 0)),
+            ]);
+
+        await _sut.AnnounceAsync(MakeChange(Day1, Day2));
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-01" && v["endDate"] == "2026-07-01"),
+            default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-02" && v["endDate"] == "2026-07-02"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnnounceAsync_ContiguousDaysAvailableUntilGoesFromUnsetToSet_DoNotMerge()
+    {
+        // AvailableFrom matches (both null) so the chain reaches the AvailableUntil comparison,
+        // where it flips from unset to set — the HasValue-mismatch branch for AvailableUntil.
+        SetupResolve(Day1, Day2,
+            before: [Resolved(Day1, DayAvailabilityStatus.Available), Resolved(Day2, DayAvailabilityStatus.Available)],
+            after:
+            [
+                Resolved(Day1, DayAvailabilityStatus.Partial),
+                Resolved(Day2, DayAvailabilityStatus.Partial, until: new TimeOnly(17, 0)),
+            ]);
+
+        await _sut.AnnounceAsync(MakeChange(Day1, Day2));
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-01" && v["endDate"] == "2026-07-01"),
+            default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-02" && v["endDate"] == "2026-07-02"),
+            default), Times.Once);
+    }
+
+    [Fact]
     public async Task AnnounceAsync_MultipleSegments_FetchesGuildLanguageOnlyOnce()
     {
         SetupResolve(Day1, Day3,
