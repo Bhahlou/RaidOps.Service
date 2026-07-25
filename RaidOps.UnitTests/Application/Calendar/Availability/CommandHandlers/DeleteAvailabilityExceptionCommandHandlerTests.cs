@@ -14,7 +14,7 @@ public class DeleteAvailabilityExceptionCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IAvailabilityRepository> _repository = new();
-    private readonly Mock<IAuditLogService> _auditLog = new();
+    private readonly Mock<IAvailabilityChangeAnnouncer> _announcer = new();
     private readonly DeleteAvailabilityExceptionCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -32,7 +32,13 @@ public class DeleteAvailabilityExceptionCommandHandlerTests
 
     public DeleteAvailabilityExceptionCommandHandlerTests()
     {
-        _sut = new DeleteAvailabilityExceptionCommandHandler(_access.Object, _repository.Object, _auditLog.Object);
+        _repository.Setup(r => r.GetExceptionsOverlappingAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _repository.Setup(r => r.GetPatternsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _sut = new DeleteAvailabilityExceptionCommandHandler(_access.Object, _repository.Object, _announcer.Object);
     }
 
     private static AvailabilityDeclaration MakeException(DateOnly endDate) => new()
@@ -116,40 +122,5 @@ public class DeleteAvailabilityExceptionCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _repository.Verify(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, GuildId, default), Times.Once);
-    }
-
-    [Fact]
-    public async Task HandleAsync_Success_LogsAuditVariablesWithEmptyTimesWhenNotPartial()
-    {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
-            .ReturnsAsync(MakeException(Today.AddDays(1)));
-        _repository.Setup(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync(true);
-
-        await _sut.HandleAsync(Command);
-
-        _auditLog.Verify(a => a.LogAsync(
-            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeleted,
-            It.Is<Dictionary<string, string>>(v => v["availableFrom"] == "" && v["availableUntil"] == ""),
-            default), Times.Once);
-    }
-
-    [Fact]
-    public async Task HandleAsync_Success_LogsAuditVariablesWithFormattedTimesWhenPartial()
-    {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        var existing = MakeException(Today.AddDays(1));
-        existing.Status = DayAvailabilityStatus.Partial;
-        existing.AvailableFrom = new TimeOnly(21, 30);
-        existing.AvailableUntil = new TimeOnly(23, 0);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync(existing);
-        _repository.Setup(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync(true);
-
-        await _sut.HandleAsync(Command);
-
-        _auditLog.Verify(a => a.LogAsync(
-            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeleted,
-            It.Is<Dictionary<string, string>>(v => v["availableFrom"] == "21:30:00" && v["availableUntil"] == "23:00:00"),
-            default), Times.Once);
     }
 }

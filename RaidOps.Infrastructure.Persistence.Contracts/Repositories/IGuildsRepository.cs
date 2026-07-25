@@ -27,9 +27,14 @@ public interface IGuildsRepository
     /// Marks the specified guild as registered in RaidOps by setting <see cref="Guild.IsRegistered"/> to <c>true</c>.
     /// </summary>
     /// <param name="guildId">The Discord snowflake ID of the guild to register.</param>
+    /// <param name="preferredLanguage">
+    /// Best-effort language to pre-fill <see cref="Guild.Language"/> with (derived from Discord's
+    /// <c>preferred_locale</c>). Only applied if the guild doesn't already have a language set —
+    /// never overwrites an admin's existing choice.
+    /// </param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
     /// <returns>The updated guild, or <c>null</c> if no matching guild exists.</returns>
-    Task<Guild?> RegisterAsync(string guildId, CancellationToken cancellationToken = default);
+    Task<Guild?> RegisterAsync(string guildId, string? preferredLanguage, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Marks the specified guild as unregistered in RaidOps by setting <see cref="Guild.IsRegistered"/> to <c>false</c>.
@@ -50,6 +55,7 @@ public interface IGuildsRepository
     /// Members with this role or any role with a higher position are granted access.
     /// Only relevant when <paramref name="rosterMode"/> is <see cref="RosterMode.DiscordRoleOnly"/>.
     /// </param>
+    /// <param name="language">Language RaidOps communicates in for this guild (e.g. <c>"en"</c>, <c>"fr"</c>, <c>"de"</c>).</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
     /// <returns><c>true</c> if the guild was found and updated; <c>false</c> if no matching guild exists.</returns>
     Task<bool> UpdateSettingsAsync(
@@ -57,6 +63,7 @@ public interface IGuildsRepository
         string timezone,
         RosterMode rosterMode,
         string? minRosterRoleId,
+        string language,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -72,4 +79,15 @@ public interface IGuildsRepository
         string guildId,
         string minOfficerRoleId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Dev-only: fully resets a guild's registration state for replaying the get-started flow —
+    /// unregisters it AND clears every setting (timezone, roster mode, role thresholds, language).
+    /// Unlike <see cref="UnregisterAsync"/>, which deliberately preserves settings so a real admin
+    /// re-registering later doesn't lose their configuration, this wipes them so the guild reads as
+    /// genuinely unconfigured again. Silently no-ops if the guild does not exist.
+    /// </summary>
+    /// <param name="guildId">The Discord snowflake ID of the guild to reset.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    Task ResetOnboardingAsync(string guildId, CancellationToken cancellationToken = default);
 }

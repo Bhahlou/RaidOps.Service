@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NetCord;
 using NetCord.Gateway;
+using NetCord.JsonModels;
 using RaidOps.ExternalApplication.Implementations.Bot;
 
 namespace RaidOps.UnitTests.ExternalApplication.Bot;
@@ -192,6 +193,142 @@ public class GuildServiceTests
         var roles = sut.GetRoles(GuildId.ToString()).ToList();
 
         roles.Should().ContainSingle(r => r.Id == AdminRoleId);
+    }
+
+    // ── GetUser ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetUser_UserInGuild_ReturnsUser()
+    {
+        var user = NetCordTestHelpers.MakeGuildUser(UserId1, GuildId, []);
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId, new Dictionary<ulong, GuildUser> { [UserId1] = user });
+        var sut = MakeSut(guild);
+
+        var result = sut.GetUser(GuildId.ToString(), UserId1.ToString());
+
+        result.Should().BeSameAs(user);
+    }
+
+    [Fact]
+    public void GetUser_UserNotInGuild_ReturnsNull()
+    {
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId, new Dictionary<ulong, GuildUser>());
+        var sut = MakeSut(guild);
+
+        var result = sut.GetUser(GuildId.ToString(), UserId1.ToString());
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetUser_GuildNotInCache_ThrowsInvalidOperationException()
+    {
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(NetCordTestHelpers.EmptyCache().Object));
+
+        var act = () => sut.GetUser(GuildId.ToString(), UserId1.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{GuildId}*");
+    }
+
+    // ── GetPreferredLocale ────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetPreferredLocale_GuildHasLocale_ReturnsIt()
+    {
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId, new Dictionary<ulong, GuildUser>(), preferredLocale: "fr");
+        var sut = MakeSut(guild);
+
+        var result = sut.GetPreferredLocale(GuildId.ToString());
+
+        result.Should().Be("fr");
+    }
+
+    [Fact]
+    public void GetPreferredLocale_GuildNotInCache_ThrowsInvalidOperationException()
+    {
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(NetCordTestHelpers.EmptyCache().Object));
+
+        var act = () => sut.GetPreferredLocale(GuildId.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{GuildId}*");
+    }
+
+    // ── GetChannels ───────────────────────────────────────────────────────────
+
+    private const ulong BotUserId = 777UL;
+    private const ulong ChannelId1 = 300UL;
+    private const ulong ChannelId2 = 301UL;
+    private const ulong CategoryId = 400UL;
+
+    [Fact]
+    public void GetChannels_GuildNotInCache_ThrowsInvalidOperationException()
+    {
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(NetCordTestHelpers.EmptyCache().Object));
+
+        var act = () => sut.GetChannels(GuildId.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{GuildId}*");
+    }
+
+    [Fact]
+    public void GetChannels_BotUserNotYetCached_ThrowsInvalidOperationException()
+    {
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId, new Dictionary<ulong, GuildUser>());
+        var cache = NetCordTestHelpers.CacheWith((GuildId, guild)); // no .User stubbed
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var act = () => sut.GetChannels(GuildId.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Bot user*");
+    }
+
+    /// <summary>
+    /// NetCord's permission calculation always starts from the @everyone role (same snowflake as
+    /// the guild itself) — a guild snapshot missing that entry is treated as "partial" and throws,
+    /// so every <c>GetChannels</c> fixture below must include it even when it grants nothing.
+    /// </summary>
+    private static JsonRole EveryoneRole => NetCordTestHelpers.MakeJsonRole(GuildId, (Permissions)0);
+
+    [Fact]
+    public void GetChannels_BotHasAdministratorRole_ReturnsChannelsWithBotCanSendMessagesTrueAndCategoryResolved()
+    {
+        var adminRole = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.Administrator, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+        var category = NetCordTestHelpers.MakeTextChannel(CategoryId, "Raid", GuildId);
+        var channel = NetCordTestHelpers.MakeTextChannel(ChannelId1, "general", GuildId, parentId: CategoryId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, adminRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = category, [ChannelId1] = channel });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetChannels(GuildId.ToString()).ToList();
+
+        result.Should().ContainSingle(c => c.ChannelId == ChannelId1 && c.Name == "general" && c.BotCanSendMessages && c.CategoryName == "Raid");
+    }
+
+    [Fact]
+    public void GetChannels_BotHasNoRoles_ReturnsChannelsWithBotCanSendMessagesFalse()
+    {
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, []);
+        var channel = NetCordTestHelpers.MakeTextChannel(ChannelId2, "mod-only", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [ChannelId2] = channel });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetChannels(GuildId.ToString()).ToList();
+
+        result.Should().ContainSingle(c => c.ChannelId == ChannelId2 && !c.BotCanSendMessages && c.CategoryName == null);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

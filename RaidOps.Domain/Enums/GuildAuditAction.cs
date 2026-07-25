@@ -40,4 +40,7 @@ public enum GuildAuditAction
 
     /// <summary>A member stopped a recurring availability pattern (non-retroactively).</summary>
     RecurringAvailabilityPatternStopped = 12,
+
+    /// <summary>The guild's Discord notification settings (per-event enabled state and channel) were updated.</summary>
+    NotificationSettingsUpdated = 13,
 }
