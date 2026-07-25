@@ -83,7 +83,8 @@ public class GuildService(GatewayClient gatewayClient) : IGuildService
                 var canSend = botMember is not null
                     && PartialGuildUserExtensions.GetChannelPermissions(botMember, guild, c.Id) is var permissions
                     && permissions.HasFlag(Permissions.ViewChannel)
-                    && permissions.HasFlag(Permissions.SendMessages);
+                    && permissions.HasFlag(Permissions.SendMessages)
+                    && permissions.HasFlag(Permissions.EmbedLinks);
 
                 var categoryName = c is TextGuildChannel { ParentId: { } parentId }
                     && guild.Channels.TryGetValue(parentId, out var parent)

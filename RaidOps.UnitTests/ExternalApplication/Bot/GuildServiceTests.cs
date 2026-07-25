@@ -331,6 +331,27 @@ public class GuildServiceTests
         result.Should().ContainSingle(c => c.ChannelId == ChannelId2 && !c.BotCanSendMessages && c.CategoryName == null);
     }
 
+    [Fact]
+    public void GetChannels_BotCanViewAndSendButNotEmbedLinks_ReturnsChannelsWithBotCanSendMessagesFalse()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.ViewChannel | Permissions.SendMessages, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+        var channel = NetCordTestHelpers.MakeTextChannel(ChannelId1, "general", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role],
+            channels: new Dictionary<ulong, IGuildChannel> { [ChannelId1] = channel });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetChannels(GuildId.ToString()).ToList();
+
+        result.Should().ContainSingle(c => c.ChannelId == ChannelId1 && !c.BotCanSendMessages);
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private static GuildService MakeSut(Guild guild)
