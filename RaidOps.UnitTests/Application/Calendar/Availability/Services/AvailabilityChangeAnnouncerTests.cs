@@ -256,6 +256,31 @@ public class AvailabilityChangeAnnouncerTests
     }
 
     [Fact]
+    public async Task AnnounceAsync_ContiguousDaysDifferentAvailableUntil_DoNotMerge()
+    {
+        // Same status shape (Partial, AvailableFrom null) and contiguous, but AvailableUntil
+        // itself differs between the two days — must not be folded into a single segment.
+        SetupResolve(Day1, Day2,
+            before: [Resolved(Day1, DayAvailabilityStatus.Available), Resolved(Day2, DayAvailabilityStatus.Available)],
+            after:
+            [
+                Resolved(Day1, DayAvailabilityStatus.Partial, until: new TimeOnly(17, 0)),
+                Resolved(Day2, DayAvailabilityStatus.Partial, until: new TimeOnly(18, 0)),
+            ]);
+
+        await _sut.AnnounceAsync(MakeChange(Day1, Day2));
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-01" && v["endDate"] == "2026-07-01" && v["availableUntil"] == "17:00:00"),
+            default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-02" && v["endDate"] == "2026-07-02" && v["availableUntil"] == "18:00:00"),
+            default), Times.Once);
+    }
+
+    [Fact]
     public async Task AnnounceAsync_MultipleSegments_FetchesGuildLanguageOnlyOnce()
     {
         SetupResolve(Day1, Day3,
