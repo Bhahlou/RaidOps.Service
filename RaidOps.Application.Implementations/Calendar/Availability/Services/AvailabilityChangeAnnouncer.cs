@@ -98,7 +98,10 @@ public class AvailabilityChangeAnnouncer(
             var isAdded = isRestricted;
             var reference = isAdded ? day : beforeDay;
 
-            if (current is { } c && c.IsAdded == isAdded && day.Date == c.End.AddDays(1)
+            // No day.Date == c.End.AddDays(1) check needed: Resolve() always returns one entry per
+            // calendar day with no gaps, so whenever `current` survives to here it was set on the
+            // immediately preceding iteration — day.Date is always c.End.AddDays(1) by construction.
+            if (current is { } c && c.IsAdded == isAdded
                 && c.Status == reference.Status && c.AvailableFrom == reference.AvailableFrom && c.AvailableUntil == reference.AvailableUntil)
                 current = c with { End = day.Date };
             else
