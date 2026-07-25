@@ -33,6 +33,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="NotificationDismissal"/> table tracking dismissed in-app notifications.</summary>
     public DbSet<NotificationDismissal> NotificationDismissals => Set<NotificationDismissal>();
 
+    /// <summary>Gets the <see cref="GuildNotificationSetting"/> table (per-event Discord notification preferences).</summary>
+    public DbSet<GuildNotificationSetting> GuildNotificationSettings => Set<GuildNotificationSetting>();
+
     // ── Calendar ──────────────────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="AvailabilityDeclaration"/> table (one-off availability declarations).</summary>
@@ -230,6 +233,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne<User>()
             .WithMany()
             .HasForeignKey(nd => nd.UserDiscordId);
+
+        // GuildNotificationSetting — composite PK (GuildId, EventType)
+        modelBuilder.Entity<GuildNotificationSetting>()
+            .HasKey(s => new { s.GuildId, s.EventType });
+
+        modelBuilder.Entity<GuildNotificationSetting>()
+            .HasOne(s => s.Guild)
+            .WithMany()
+            .HasForeignKey(s => s.GuildId);
 
         // AvailabilityDeclaration — FK to User/Guild, no cascade (a departing member's history stays)
         modelBuilder.Entity<AvailabilityDeclaration>()

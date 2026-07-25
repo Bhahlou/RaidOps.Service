@@ -81,6 +81,52 @@ public class AvailabilityController(
     }
 
     /// <summary>
+    /// Replaces the dates/status of one of the requesting member's own one-off availability
+    /// exceptions.
+    /// </summary>
+    [HttpPatch("{guildId}/availability/exceptions/{exceptionId:int}")]
+    public async Task<IActionResult> UpdateException(
+        string guildId,
+        int exceptionId,
+        [FromBody] UpdateAvailabilityExceptionCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.RequesterDiscordId = discordId;
+        command.ExceptionId = exceptionId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Clears a single day out of one of the requesting member's own one-off availability
+    /// exceptions, shrinking or splitting it as needed.
+    /// </summary>
+    [HttpPost("{guildId}/availability/exceptions/{exceptionId:int}/remove-day")]
+    public async Task<IActionResult> RemoveExceptionDay(
+        string guildId,
+        int exceptionId,
+        [FromBody] RemoveAvailabilityExceptionDayCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.RequesterDiscordId = discordId;
+        command.ExceptionId = exceptionId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>
     /// Creates a recurring availability pattern (e.g. a weekly recurrence, or a shift rotation).
     /// </summary>
     [HttpPost("{guildId}/availability/patterns")]

@@ -3,6 +3,7 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Calendar.Availability.Services;
 using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Application.Implementations.Guilds.Access;
+using RaidOps.Application.Implementations.Guilds.Notifications;
 using RaidOps.Application.Implementations.Notifications.Services;
 using RaidOps.Application.Implementations.Services;
 
@@ -20,6 +21,9 @@ internal static class ApplicationRegistry
         services.AddScoped<IGuildAccessService, GuildAccessService>();
         services.AddScoped<IUserNotificationService, UserNotificationService>();
         services.AddScoped<IAvailabilityResolutionService, AvailabilityResolutionService>();
+        services.AddScoped<IGuildNotificationDispatcher, GuildNotificationDispatcher>();
+        services.AddScoped<IAbsenceNotificationContentBuilder, AbsenceNotificationContentBuilder>();
+        services.AddScoped<IAvailabilityChangeAnnouncer, AvailabilityChangeAnnouncer>();
         return services;
     }
 }

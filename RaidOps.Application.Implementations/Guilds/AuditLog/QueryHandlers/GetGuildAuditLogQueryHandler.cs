@@ -37,6 +37,7 @@ public class GetGuildAuditLogQueryHandler(
         [GuildAuditAction.RecurringAvailabilityPatternCreated] = GuildAuditCategory.Availability,
         [GuildAuditAction.RecurringAvailabilityPatternUpdated] = GuildAuditCategory.Availability,
         [GuildAuditAction.RecurringAvailabilityPatternStopped] = GuildAuditCategory.Availability,
+        [GuildAuditAction.NotificationSettingsUpdated] = GuildAuditCategory.Settings,
     };
 
     /// <inheritdoc/>

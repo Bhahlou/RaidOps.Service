@@ -17,4 +17,10 @@ internal class NoOpGuildService : IGuildService
     public IEnumerable<GuildUser> GetAdmins(string guildId, CancellationToken cancellationToken = default) => [];
 
     public IEnumerable<Role> GetRoles(string guildId, CancellationToken cancellationToken = default) => [];
+
+    public IEnumerable<DiscordChannelInfo> GetChannels(string guildId, CancellationToken cancellationToken = default) => [];
+
+    public string? GetPreferredLocale(string guildId, CancellationToken cancellationToken = default) => null;
+
+    public GuildUser? GetUser(string guildId, string userId, CancellationToken cancellationToken = default) => null;
 }

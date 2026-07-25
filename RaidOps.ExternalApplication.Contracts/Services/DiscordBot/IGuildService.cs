@@ -34,4 +34,28 @@ public interface IGuildService
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the guild is not in the bot's cache.</exception>
     IEnumerable<Role> GetRoles(string guildId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a single member of the given guild from the bot's Gateway cache, or <c>null</c> if
+    /// that user isn't a member (e.g. they left the server).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the guild is not in the bot's cache.</exception>
+    GuildUser? GetUser(string guildId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the text-postable channels (text and announcement channels) of the given guild from
+    /// the bot's Gateway cache, each annotated with whether the bot currently has permission to
+    /// post messages there.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the guild is not in the bot's cache.</exception>
+    IEnumerable<DiscordChannelInfo> GetChannels(string guildId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the Discord-reported preferred locale of the given guild (e.g. <c>"en-US"</c>,
+    /// <c>"fr"</c>), or <c>null</c> if Discord hasn't set one. Only meaningful for
+    /// Community-enabled Discord servers — a regular guild reports a default value regardless of
+    /// its members' actual language.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the guild is not in the bot's cache.</exception>
+    string? GetPreferredLocale(string guildId, CancellationToken cancellationToken = default);
 }

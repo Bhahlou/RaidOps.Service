@@ -33,6 +33,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         Timezone            = "Europe/Paris",
         RosterMode          = RosterMode.Open,
         MinRosterRoleId     = null,
+        Language            = "en",
     };
 
     public UpdateGuildSettingsCommandHandlerTests()
@@ -93,14 +94,14 @@ public class UpdateGuildSettingsCommandHandlerTests
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
-            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _guilds.Setup(g => g.UpdateSettingsAsync(GuildId, Command.Timezone, Command.RosterMode, null, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true, Language = "en" });
+        _guilds.Setup(g => g.UpdateSettingsAsync(GuildId, Command.Timezone, Command.RosterMode, null, Command.Language, default))
             .ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsSuccess.Should().BeTrue();
-        _guilds.Verify(g => g.UpdateSettingsAsync(GuildId, Command.Timezone, Command.RosterMode, null, default), Times.Once);
+        _guilds.Verify(g => g.UpdateSettingsAsync(GuildId, Command.Timezone, Command.RosterMode, null, Command.Language, default), Times.Once);
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public class UpdateGuildSettingsCommandHandlerTests
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
-            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true, Timezone = null, RosterMode = null, MinRosterRoleId = null });
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true, Timezone = null, RosterMode = null, MinRosterRoleId = null, Language = Command.Language });
 
         await _sut.HandleAsync(Command);
 
@@ -130,6 +131,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -137,6 +139,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "UTC", RosterMode = RosterMode.Open, MinRosterRoleId = oldRoleId,
+                Language = command.Language,
             });
         SetupRoles(
             NetCordTestHelpers.MakeJsonRole(ulong.Parse(oldRoleId), (Permissions)0, name: "Officiers", primaryColor: 0xFF0000),
@@ -163,6 +166,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -170,6 +174,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = null,
+                Language = command.Language,
             });
         SetupRoles(NetCordTestHelpers.MakeJsonRole(ulong.Parse(newRoleId), (Permissions)0, name: "Raiders", iconHash: "abc123"));
 
@@ -190,6 +195,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -197,6 +203,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = null,
+                Language = command.Language,
             });
         _guildService.Setup(g => g.GetRoles(GuildId, default)).Throws<InvalidOperationException>();
 
@@ -217,6 +224,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/London", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -224,6 +232,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+                Language = command.Language,
             });
 
         await _sut.HandleAsync(command);
@@ -244,6 +253,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/London", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -251,6 +261,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+                Language = command.Language,
             });
 
         await _sut.HandleAsync(command);
@@ -270,6 +281,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = newRoleId,
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -277,6 +289,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "UTC", RosterMode = RosterMode.Open, MinRosterRoleId = oldRoleId,
+                Language = command.Language,
             });
         SetupRoles(
             NetCordTestHelpers.MakeJsonRole(ulong.Parse(oldRoleId), (Permissions)0, name: "Officiers"),
@@ -297,6 +310,7 @@ public class UpdateGuildSettingsCommandHandlerTests
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.Open, MinRosterRoleId = null,
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -304,6 +318,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+                Language = command.Language,
             });
 
         await _sut.HandleAsync(command);
@@ -317,12 +332,66 @@ public class UpdateGuildSettingsCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Success_LanguageChanged_LogsOldAndNewLanguageAndIncludesInChangedFields()
+    {
+        var command = new UpdateGuildSettingsCommand
+        {
+            GuildId = GuildId, RequesterDiscordId = RequesterId,
+            Timezone = "Europe/Paris", RosterMode = RosterMode.Open, MinRosterRoleId = null,
+            Language = "de",
+        };
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild
+            {
+                Id = GuildId, Name = "Test", IsRegistered = true,
+                Timezone = "Europe/Paris", RosterMode = RosterMode.Open, MinRosterRoleId = null,
+                Language = "fr",
+            });
+
+        await _sut.HandleAsync(command);
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.SettingsUpdated,
+            It.Is<Dictionary<string, string>>(v =>
+                v["oldLanguage"] == "fr" && v["newLanguage"] == "de" && v["changedFields"] == "language"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_LanguageFirstTimeConfiguration_OmitsOldLanguage()
+    {
+        var command = new UpdateGuildSettingsCommand
+        {
+            GuildId = GuildId, RequesterDiscordId = RequesterId,
+            Timezone = "Europe/Paris", RosterMode = RosterMode.Open, MinRosterRoleId = null,
+            Language = "en",
+        };
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild
+            {
+                Id = GuildId, Name = "Test", IsRegistered = true,
+                Timezone = "Europe/Paris", RosterMode = RosterMode.Open, MinRosterRoleId = null,
+                Language = null,
+            });
+
+        await _sut.HandleAsync(command);
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.SettingsUpdated,
+            It.Is<Dictionary<string, string>>(v => !v.ContainsKey("oldLanguage") && v["newLanguage"] == "en"),
+            default), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_Success_NothingChanged_DoesNotLog()
     {
         var command = new UpdateGuildSettingsCommand
         {
             GuildId = GuildId, RequesterDiscordId = RequesterId,
             Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+            Language = "en",
         };
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
@@ -330,6 +399,7 @@ public class UpdateGuildSettingsCommandHandlerTests
             {
                 Id = GuildId, Name = "Test", IsRegistered = true,
                 Timezone = "Europe/Paris", RosterMode = RosterMode.DiscordRoleOnly, MinRosterRoleId = "role-1",
+                Language = command.Language,
             });
 
         var result = await _sut.HandleAsync(command);

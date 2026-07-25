@@ -3,6 +3,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Guilds.Registration.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -29,9 +30,11 @@ public class RegisterGuildCommandHandler(
         if (membership == null || !membership.IsAdmin)
             return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
 
+        string? preferredLanguage;
         try
         {
-            discordBotService.Guilds.Get(command.GuildId, cancellationToken);
+            var discordLocale = discordBotService.Guilds.GetPreferredLocale(command.GuildId, cancellationToken);
+            preferredLanguage = DiscordLocaleMapper.ToAppLanguage(discordLocale);
         }
         catch (InvalidOperationException ex)
         {
@@ -41,7 +44,7 @@ public class RegisterGuildCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.GuildBotNotPresent, "The RaidOps bot is not present in this guild. Please complete the bot invite before registering.");
         }
 
-        var guild = await guildsRepository.RegisterAsync(command.GuildId, cancellationToken);
+        var guild = await guildsRepository.RegisterAsync(command.GuildId, preferredLanguage, cancellationToken);
         if (guild == null)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildNotFound, $"Guild '{command.GuildId}' does not exist.");
 
