@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.2.1...v1.3.0) (2026-07-25)
+
+
+### 🚀 Features
+
+* Add guild Discord notification settings and switch availability announcements to real state diffing ([#48](https://github.com/Bhahlou/RaidOps.Service/issues/48)) ([c8ef113](https://github.com/Bhahlou/RaidOps.Service/commit/c8ef113ba54d42bf99f9c32b4b99bde537427c28))
+
 ## [1.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.2.0...v1.2.1) (2026-07-22)
 
 
