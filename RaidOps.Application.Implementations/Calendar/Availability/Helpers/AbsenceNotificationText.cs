@@ -155,7 +155,9 @@ internal static class AbsenceNotificationText
     private static string FormatPatternDayLine(string dayLabel, DayAvailabilityStatus status, TimeOnly? availableFrom, TimeOnly? availableUntil, string? reason, string language)
     {
         var kind = DetermineKind(status, availableFrom, availableUntil);
-        var statusLabel = kind == AbsenceKind.FullDay ? AbsentWord(language) : FormatPartialSuffix(kind, availableFrom, availableUntil, language) ?? AbsentWord(language);
+        // Non-FullDay kinds are exactly LateArrival/EarlyLeave/PartialWindow, all handled by
+        // FormatPartialSuffix's switch, so it never returns null here.
+        var statusLabel = kind == AbsenceKind.FullDay ? AbsentWord(language) : FormatPartialSuffix(kind, availableFrom, availableUntil, language)!;
         var line = $"- {dayLabel} : {statusLabel}";
         return string.IsNullOrWhiteSpace(reason) ? line : $"{line} ({reason})";
     }

@@ -209,6 +209,53 @@ public class AvailabilityChangeAnnouncerTests
     }
 
     [Fact]
+    public async Task AnnounceAsync_ContiguousDaysOppositeDirection_DoNotMerge()
+    {
+        // Day1 flips restricted->available (removed) while the adjacent Day2 flips
+        // available->restricted (added) — same date adjacency as a mergeable run, but opposite
+        // IsAdded, so they must stay two separate segments.
+        SetupResolve(Day1, Day2,
+            before: [Resolved(Day1, DayAvailabilityStatus.Absent), Resolved(Day2, DayAvailabilityStatus.Available)],
+            after: [Resolved(Day1, DayAvailabilityStatus.Available), Resolved(Day2, DayAvailabilityStatus.Absent)]);
+
+        await _sut.AnnounceAsync(MakeChange(Day1, Day2));
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeleted,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-01" && v["endDate"] == "2026-07-01"),
+            default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-02" && v["endDate"] == "2026-07-02"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnnounceAsync_ContiguousDaysDifferentStatus_DoNotMerge()
+    {
+        // Same direction (both added) and contiguous, but the resulting status itself differs
+        // (Absent vs Partial) — must not be folded into a single segment.
+        SetupResolve(Day1, Day2,
+            before: [Resolved(Day1, DayAvailabilityStatus.Available), Resolved(Day2, DayAvailabilityStatus.Available)],
+            after:
+            [
+                Resolved(Day1, DayAvailabilityStatus.Absent),
+                Resolved(Day2, DayAvailabilityStatus.Partial, from: new TimeOnly(9, 0)),
+            ]);
+
+        await _sut.AnnounceAsync(MakeChange(Day1, Day2));
+
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-01" && v["endDate"] == "2026-07-01" && v["status"] == "Absent"),
+            default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.AvailabilityExceptionDeclared,
+            It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-02" && v["endDate"] == "2026-07-02" && v["status"] == "Partial"),
+            default), Times.Once);
+    }
+
+    [Fact]
     public async Task AnnounceAsync_MultipleSegments_FetchesGuildLanguageOnlyOnce()
     {
         SetupResolve(Day1, Day3,

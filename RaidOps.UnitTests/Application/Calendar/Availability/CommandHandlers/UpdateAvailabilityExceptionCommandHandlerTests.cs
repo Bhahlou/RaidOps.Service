@@ -161,4 +161,28 @@ public class UpdateAvailabilityExceptionCommandHandlerTests
             It.Is<AvailabilityChange>(c => c.WindowStart == Today && c.WindowEnd == Today.AddDays(4)),
             default), Times.Once);
     }
+
+    [Fact]
+    public async Task HandleAsync_Success_ExpandedRangeAnnouncesWidestWindow()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var existing = MakeExisting(Today, Today.AddDays(2));
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync(existing);
+        _repository.Setup(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync(true);
+        _repository.Setup(r => r.AddExceptionAsync(It.IsAny<AvailabilityDeclaration>(), default))
+            .ReturnsAsync((AvailabilityDeclaration e, CancellationToken _) => { e.Id = 99; return e; });
+
+        // Shifts and expands the range to [Today+1, Today+5] — the announce window must still
+        // cover the widest span: existing.StartDate (Today) on the left, command.EndDate
+        // (Today+5) on the right.
+        var command = MakeCommand(Today.AddDays(1), Today.AddDays(5));
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+
+        _announcer.Verify(a => a.AnnounceAsync(
+            It.Is<AvailabilityChange>(c => c.WindowStart == Today && c.WindowEnd == Today.AddDays(5)),
+            default), Times.Once);
+    }
 }

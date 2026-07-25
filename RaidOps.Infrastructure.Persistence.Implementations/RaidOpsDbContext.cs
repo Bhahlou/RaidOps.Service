@@ -239,7 +239,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasKey(s => new { s.GuildId, s.EventType });
 
         modelBuilder.Entity<GuildNotificationSetting>()
-            .HasOne(s => s.Guild)
+            .HasOne<Guild>()
             .WithMany()
             .HasForeignKey(s => s.GuildId);
 

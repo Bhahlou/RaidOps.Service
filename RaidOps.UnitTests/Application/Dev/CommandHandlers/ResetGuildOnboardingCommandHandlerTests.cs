@@ -53,4 +53,23 @@ public class ResetGuildOnboardingCommandHandlerTests
         _bnetAccounts.Verify(r => r.DeleteAsync(DiscordId, "bnet-2", default), Times.Once);
         _guilds.Verify(g => g.ResetOnboardingAsync(GuildId, default), Times.Once);
     }
+
+    [Fact]
+    public async Task HandleAsync_InformationLoggingEnabled_LogsResetSummary()
+    {
+        _logger.Setup(l => l.IsEnabled(LogLevel.Information)).Returns(true);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        _logger.Verify(
+            l => l.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => true),
+                null,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
 }

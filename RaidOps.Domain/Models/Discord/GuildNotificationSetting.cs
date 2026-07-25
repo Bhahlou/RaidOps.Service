@@ -23,9 +23,4 @@ public class GuildNotificationSetting
 
     /// <summary>Discord snowflake ID of the channel to post to, or <c>null</c> if none is configured yet.</summary>
     public string? ChannelId { get; set; }
-
-    // ── Navigation ────────────────────────────────────────────────────────
-
-    /// <summary>The guild this setting belongs to.</summary>
-    public virtual Guild Guild { get; set; } = null!;
 }
