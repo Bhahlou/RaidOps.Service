@@ -7,8 +7,9 @@ namespace RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 /// <param name="ChannelId">Discord snowflake ID of the channel.</param>
 /// <param name="Name">Channel name.</param>
 /// <param name="BotCanSendMessages">
-/// Whether the bot currently has both <c>ViewChannel</c> and <c>SendMessages</c> permissions on
-/// this channel, computed from its role/overwrite permissions at read time (not cached).
+/// Whether the bot currently has <c>ViewChannel</c>, <c>SendMessages</c>, and <c>EmbedLinks</c>
+/// permissions on this channel — the latter is required since notifications are sent as embeds —
+/// computed from its role/overwrite permissions at read time (not cached).
 /// </param>
 /// <param name="CategoryName">
 /// Name of the category this channel is nested under, or <c>null</c> if it isn't in one —

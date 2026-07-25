@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.1...v1.3.2) (2026-07-25)
+
+
+### 🐛 Bug Fixes
+
+* Require EmbedLinks permission for a notification channel to be marked postable ([#54](https://github.com/Bhahlou/RaidOps.Service/issues/54)) ([8c2bee0](https://github.com/Bhahlou/RaidOps.Service/commit/8c2bee06ba8178a4549e30287d130fec03efa6a1))
+
 ## [1.3.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.0...v1.3.1) (2026-07-25)
 
 
