@@ -15,4 +15,7 @@ public class GuildSettingsResponse
 
     /// <summary>Discord snowflake ID of the minimum roster role, or <c>null</c> when roster mode is Open.</summary>
     public string? MinRosterRoleId { get; set; }
+
+    /// <summary>Language RaidOps communicates in for this guild ("en", "fr", "de"), or <c>null</c> if not yet resolved.</summary>
+    public string? Language { get; set; }
 }

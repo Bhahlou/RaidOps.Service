@@ -176,7 +176,7 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open" });
+        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open", language = "en" });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/settings", body);
 
@@ -410,13 +410,14 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "UTC";
             guild.RosterMode = RosterMode.Open;
+            guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open" });
+        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open", language = "en" });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/settings", body);
 
@@ -444,13 +445,14 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
             guild.RosterMode = RosterMode.Open;
+            guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open" });
+        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open", language = "en" });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/settings", body);
 
@@ -477,6 +479,7 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
             guild.RosterMode = RosterMode.Open;
+            guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
@@ -485,7 +488,7 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateAuthenticatedClient(discordId: id);
         var body = JsonContent.Create(new
         {
-            timezone = "Europe/Paris", rosterMode = "DiscordRoleOnly", minRosterRoleId = "300000000000000009",
+            timezone = "Europe/Paris", rosterMode = "DiscordRoleOnly", minRosterRoleId = "300000000000000009", language = "en",
         });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/settings", body);
@@ -513,13 +516,14 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
             guild.Timezone = "Europe/Paris";
             guild.RosterMode = RosterMode.DiscordRoleOnly;
             guild.MinRosterRoleId = "300000000000000010";
+            guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open" });
+        var body = JsonContent.Create(new { timezone = "Europe/Paris", rosterMode = "Open", language = "en" });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/settings", body);
 

@@ -14,7 +14,7 @@ public class CreateAvailabilityExceptionCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IAvailabilityRepository> _repository = new();
-    private readonly Mock<IAuditLogService> _auditLog = new();
+    private readonly Mock<IAvailabilityChangeAnnouncer> _announcer = new();
     private readonly CreateAvailabilityExceptionCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -24,7 +24,13 @@ public class CreateAvailabilityExceptionCommandHandlerTests
 
     public CreateAvailabilityExceptionCommandHandlerTests()
     {
-        _sut = new CreateAvailabilityExceptionCommandHandler(_access.Object, _repository.Object, _auditLog.Object);
+        _repository.Setup(r => r.GetExceptionsOverlappingAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _repository.Setup(r => r.GetPatternsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _sut = new CreateAvailabilityExceptionCommandHandler(_access.Object, _repository.Object, _announcer.Object);
     }
 
     private static CreateAvailabilityExceptionCommand MakeCommand(DateOnly startDate, DateOnly endDate) => new()

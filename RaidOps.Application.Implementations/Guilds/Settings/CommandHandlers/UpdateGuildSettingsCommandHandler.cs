@@ -39,12 +39,14 @@ public class UpdateGuildSettingsCommandHandler(
         var oldTimezone = guild.Timezone;
         var oldRosterMode = guild.RosterMode;
         var oldMinRosterRoleId = guild.MinRosterRoleId;
+        var oldLanguage = guild.Language;
 
         await guildsRepository.UpdateSettingsAsync(
             command.GuildId,
             command.Timezone,
             command.RosterMode,
             command.MinRosterRoleId,
+            command.Language,
             cancellationToken);
 
         // Mirrors GuildsRepository.UpdateSettingsAsync, which clears the role unless DiscordRoleOnly.
@@ -55,6 +57,7 @@ public class UpdateGuildSettingsCommandHandler(
 
         RecordChange(variables, changedFields, "timezone", "Timezone", oldTimezone, command.Timezone);
         RecordChange(variables, changedFields, "rosterMode", "RosterMode", oldRosterMode, command.RosterMode);
+        RecordChange(variables, changedFields, "language", "Language", oldLanguage, command.Language);
         RecordMinRosterRoleChange(variables, changedFields, command.GuildId, command.RosterMode, oldMinRosterRoleId, newMinRosterRoleId, cancellationToken);
 
         if (changedFields.Count > 0)

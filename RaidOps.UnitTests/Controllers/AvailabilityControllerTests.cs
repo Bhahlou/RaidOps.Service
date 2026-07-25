@@ -168,6 +168,95 @@ public class AvailabilityControllerTests
             default), Times.Once);
     }
 
+    // ── UpdateException ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateException_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        var command = new UpdateAvailabilityExceptionCommand
+        {
+            StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 1), Status = DayAvailabilityStatus.Absent,
+        };
+
+        var result = await _sut.UpdateException(GuildId, 7, command, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task UpdateException_CommandFails_ReturnsBadRequest()
+    {
+        var command = new UpdateAvailabilityExceptionCommand
+        {
+            StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 1), Status = DayAvailabilityStatus.Absent,
+        };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateAvailabilityExceptionCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest));
+
+        var result = await _sut.UpdateException(GuildId, 7, command, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdateException_Success_SetsRouteFieldsIncludingExceptionIdAndReturnsOk()
+    {
+        var command = new UpdateAvailabilityExceptionCommand
+        {
+            StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 1), Status = DayAvailabilityStatus.Absent,
+        };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateAvailabilityExceptionCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        var result = await _sut.UpdateException(GuildId, 7, command, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        command.GuildId.Should().Be(GuildId);
+        command.RequesterDiscordId.Should().Be(DiscordId);
+        command.ExceptionId.Should().Be(7);
+    }
+
+    // ── RemoveExceptionDay ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RemoveExceptionDay_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        var command = new RemoveAvailabilityExceptionDayCommand { Date = new DateOnly(2026, 1, 2) };
+
+        var result = await _sut.RemoveExceptionDay(GuildId, 7, command, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task RemoveExceptionDay_CommandFails_ReturnsBadRequest()
+    {
+        var command = new RemoveAvailabilityExceptionDayCommand { Date = new DateOnly(2026, 1, 2) };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<RemoveAvailabilityExceptionDayCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest));
+
+        var result = await _sut.RemoveExceptionDay(GuildId, 7, command, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task RemoveExceptionDay_Success_SetsRouteFieldsIncludingExceptionIdAndReturnsOk()
+    {
+        var command = new RemoveAvailabilityExceptionDayCommand { Date = new DateOnly(2026, 1, 2) };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<RemoveAvailabilityExceptionDayCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        var result = await _sut.RemoveExceptionDay(GuildId, 7, command, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        command.GuildId.Should().Be(GuildId);
+        command.RequesterDiscordId.Should().Be(DiscordId);
+        command.ExceptionId.Should().Be(7);
+    }
+
     // ── CreatePattern ─────────────────────────────────────────────────────────
 
     [Fact]

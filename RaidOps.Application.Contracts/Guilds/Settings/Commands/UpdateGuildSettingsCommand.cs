@@ -26,4 +26,7 @@ public class UpdateGuildSettingsCommand : ICommandRequest
     /// Only relevant when <see cref="RosterMode"/> is <see cref="RosterMode.DiscordRoleOnly"/>.
     /// </summary>
     public string? MinRosterRoleId { get; set; }
+
+    /// <summary>Language RaidOps communicates in for this guild (e.g. Discord bot messages) — "en", "fr", or "de".</summary>
+    public required string Language { get; set; }
 }

@@ -140,9 +140,14 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             guild.Timezone = "Europe/Paris";
             guild.RosterMode = RosterMode.Open;
             guild.MinOfficerRoleId = "999000000000000001";
+            guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            db.GuildNotificationSettings.Add(new GuildNotificationSetting
+            {
+                GuildId = guildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null,
+            });
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
@@ -186,9 +191,14 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
             guild.RosterMode = RosterMode.Open;
+            guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            db.GuildNotificationSettings.Add(new GuildNotificationSetting
+            {
+                GuildId = guildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null,
+            });
             db.NotificationDismissals.Add(new NotificationDismissal
             {
                 UserDiscordId = id,
