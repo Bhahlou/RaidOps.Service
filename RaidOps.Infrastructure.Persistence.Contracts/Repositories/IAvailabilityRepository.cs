@@ -41,4 +41,22 @@ public interface IAvailabilityRepository
 
     /// <summary>Deletes the pattern identified by <paramref name="patternId"/> if it belongs to <paramref name="userDiscordId"/>. Returns <c>false</c> if no matching pattern exists.</summary>
     Task<bool> DeletePatternAsync(int patternId, string userDiscordId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every exception with a non-null <see cref="AvailabilityDeclaration.GuildId"/> equal to
+    /// <paramref name="guildId"/> that overlaps <paramref name="rangeStart"/>..<paramref name="rangeEnd"/> —
+    /// a bulk, guild-wide counterpart to <see cref="GetExceptionsOverlappingAsync"/> used to resolve
+    /// availability for many members at once (e.g. the raid board) without one query per member.
+    /// Does not include Global-scoped declarations (<c>GuildId == null</c>) — see the raid-builder
+    /// catch-up note on resolving those too before this is relied on for a real absence check.
+    /// </summary>
+    Task<List<AvailabilityDeclaration>> GetExceptionsOverlappingForGuildAsync(string guildId, DateOnly rangeStart, DateOnly rangeEnd, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every version (current and historical) of every recurring pattern with a non-null
+    /// <see cref="RecurringAvailabilityPattern.GuildId"/> equal to <paramref name="guildId"/>, with
+    /// their days — a bulk, guild-wide counterpart to <see cref="GetPatternsAsync"/>. Does not include
+    /// Global-scoped patterns, same caveat as <see cref="GetExceptionsOverlappingForGuildAsync"/>.
+    /// </summary>
+    Task<List<RecurringAvailabilityPattern>> GetPatternsForGuildAsync(string guildId, CancellationToken cancellationToken = default);
 }

@@ -50,4 +50,19 @@ public static class ResponseDetail
     public const string AvailabilityExceptionNotFound = nameof(AvailabilityExceptionNotFound);
     public const string RecurringAvailabilityPatternNotFound = nameof(RecurringAvailabilityPatternNotFound);
     public const string PastDeclarationLocked = nameof(PastDeclarationLocked);
+
+    // ── Raids ─────────────────────────────────────────────────────────────
+    public const string RaidZoneNotFound = nameof(RaidZoneNotFound);
+    public const string RaidSeriesNotFound = nameof(RaidSeriesNotFound);
+    public const string RaidEventNotFound = nameof(RaidEventNotFound);
+    public const string RaidEventCancelled = nameof(RaidEventCancelled);
+    public const string RaidEventHasAssignments = nameof(RaidEventHasAssignments);
+    public const string SlotOccupied = nameof(SlotOccupied);
+    public const string InvalidGroupOrSlotNumber = nameof(InvalidGroupOrSlotNumber);
+    public const string CharacterNotOnRoster = nameof(CharacterNotOnRoster);
+    public const string BranchMismatch = nameof(BranchMismatch);
+    public const string PlayerAlreadyAssignedInEvent = nameof(PlayerAlreadyAssignedInEvent);
+    public const string MemberDeclaredAbsent = nameof(MemberDeclaredAbsent);
+    public const string RaidLockoutConflict = nameof(RaidLockoutConflict);
+    public const string RaidEventAlreadyPublished = nameof(RaidEventAlreadyPublished);
 }

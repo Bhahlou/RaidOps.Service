@@ -91,4 +91,19 @@ public class AvailabilityRepository(RaidOpsDbContext context) : IAvailabilityRep
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <inheritdoc/>
+    public async Task<List<AvailabilityDeclaration>> GetExceptionsOverlappingForGuildAsync(string guildId, DateOnly rangeStart, DateOnly rangeEnd, CancellationToken cancellationToken = default)
+        => await context.AvailabilityExceptions
+            .Where(e => e.GuildId == guildId && e.StartDate <= rangeEnd && e.EndDate >= rangeStart)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<List<RecurringAvailabilityPattern>> GetPatternsForGuildAsync(string guildId, CancellationToken cancellationToken = default)
+        => await context.RecurringAvailabilityPatterns
+            .Where(p => p.GuildId == guildId)
+            .Include(p => p.Days)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 }

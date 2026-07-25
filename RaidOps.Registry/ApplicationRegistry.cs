@@ -5,6 +5,7 @@ using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.Application.Implementations.Guilds.Notifications;
 using RaidOps.Application.Implementations.Notifications.Services;
+using RaidOps.Application.Implementations.Raids.Services;
 using RaidOps.Application.Implementations.Services;
 
 namespace RaidOps.Registry;
@@ -26,6 +27,7 @@ internal static class ApplicationRegistry
         services.AddScoped<IGuildNotificationDispatcher, GuildNotificationDispatcher>();
         services.AddScoped<IAbsenceNotificationContentBuilder, AbsenceNotificationContentBuilder>();
         services.AddScoped<IAvailabilityChangeAnnouncer, AvailabilityChangeAnnouncer>();
+        services.AddScoped<IRaidLockoutService, RaidLockoutService>();
         return services;
     }
 }

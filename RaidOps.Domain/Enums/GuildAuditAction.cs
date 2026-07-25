@@ -55,4 +55,28 @@ public enum GuildAuditAction
 
     /// <summary>A branch's Discord notification settings overrides were reset, reverting it to the guild-wide fallback.</summary>
     NotificationSettingsReset = 17,
+
+    /// <summary>A recurring raid series was created.</summary>
+    RaidSeriesCreated = 18,
+
+    /// <summary>A recurring raid series was updated.</summary>
+    RaidSeriesUpdated = 19,
+
+    /// <summary>A recurring raid series was deactivated.</summary>
+    RaidSeriesDeactivated = 20,
+
+    /// <summary>An ad-hoc raid event was created.</summary>
+    RaidEventCreated = 21,
+
+    /// <summary>A raid event was updated.</summary>
+    RaidEventUpdated = 22,
+
+    /// <summary>A raid event was cancelled.</summary>
+    RaidEventCancelled = 23,
+
+    /// <summary>A raid event was deleted.</summary>
+    RaidEventDeleted = 24,
+
+    /// <summary>A raid event was published, making it visible to non-officer roster members.</summary>
+    RaidEventPublished = 25,
 }

@@ -28,6 +28,10 @@ internal static class PersistenceRegistry
         services.AddScoped<INotificationDismissalRepository, NotificationDismissalRepository>();
         services.AddScoped<IAvailabilityRepository, AvailabilityRepository>();
         services.AddScoped<IGuildNotificationSettingsRepository, GuildNotificationSettingsRepository>();
+        services.AddScoped<IRaidZoneRepository, RaidZoneRepository>();
+        services.AddScoped<IRaidSeriesRepository, RaidSeriesRepository>();
+        services.AddScoped<IRaidEventRepository, RaidEventRepository>();
+        services.AddScoped<IRaidCompositionRepository, RaidCompositionRepository>();
 
         return services;
     }
