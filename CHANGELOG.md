@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.0...v1.3.1) (2026-07-25)
+
+
+### 🐛 Bug Fixes
+
+* Stop using non-invariant CultureInfo for absence notification date formatting ([#51](https://github.com/Bhahlou/RaidOps.Service/issues/51)) ([423899c](https://github.com/Bhahlou/RaidOps.Service/commit/423899c727f94531d2d2209f15ccbffe13f3cc21))
+
 ## [1.3.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.2.1...v1.3.0) (2026-07-25)
 
 
