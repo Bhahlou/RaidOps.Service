@@ -105,6 +105,14 @@ public class AbsenceNotificationTextTests
         result.Should().Be("7/1/2026");
     }
 
+    [Fact]
+    public void FormatDateRange_German_UsesDottedFormat()
+    {
+        var result = AbsenceNotificationText.FormatDateRange(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 3), "de");
+
+        result.Should().Be("01.07.2026 → 03.07.2026");
+    }
+
     // ── FormatPartialSuffix ───────────────────────────────────────────────────
 
     [Theory]
