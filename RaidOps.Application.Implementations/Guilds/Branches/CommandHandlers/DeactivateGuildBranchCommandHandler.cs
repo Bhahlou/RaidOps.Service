@@ -15,6 +15,7 @@ namespace RaidOps.Application.Implementations.Guilds.Branches.CommandHandlers;
 public class DeactivateGuildBranchCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildBranchesRepository guildBranchesRepository,
+    IBranchRepository branchRepository,
     IAuditLogService auditLogService,
     ILogger<DeactivateGuildBranchCommandHandler> logger) : ICommandHandlerAsync<DeactivateGuildBranchCommand>
 {
@@ -31,11 +32,17 @@ public class DeactivateGuildBranchCommandHandler(
 
         await guildBranchesRepository.DeactivateAsync(command.GuildBranchId, cancellationToken);
 
+        var wowBranch = await branchRepository.GetByIdAsync(branch.BranchId, cancellationToken);
+
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.BranchDeactivated,
-            new Dictionary<string, string> { ["branchId"] = branch.BranchId.ToString() },
+            new Dictionary<string, string>
+            {
+                ["branchId"] = branch.BranchId.ToString(),
+                ["branchName"] = wowBranch?.Name ?? "Unknown",
+            },
             cancellationToken);
 
         if (logger.IsEnabled(LogLevel.Information))

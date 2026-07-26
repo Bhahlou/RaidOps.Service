@@ -38,6 +38,9 @@ public class GetGuildAuditLogQueryHandler(
         [GuildAuditAction.RecurringAvailabilityPatternUpdated] = GuildAuditCategory.Availability,
         [GuildAuditAction.RecurringAvailabilityPatternStopped] = GuildAuditCategory.Availability,
         [GuildAuditAction.NotificationSettingsUpdated] = GuildAuditCategory.Settings,
+        [GuildAuditAction.BranchActivated] = GuildAuditCategory.Branches,
+        [GuildAuditAction.BranchDeactivated] = GuildAuditCategory.Branches,
+        [GuildAuditAction.BranchRosterSettingsUpdated] = GuildAuditCategory.Branches,
     };
 
     /// <inheritdoc/>

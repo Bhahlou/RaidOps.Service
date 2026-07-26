@@ -16,6 +16,7 @@ namespace RaidOps.Application.Implementations.Guilds.Branches.CommandHandlers;
 public class UpdateGuildBranchRosterSettingsCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildBranchesRepository guildBranchesRepository,
+    IBranchRepository branchRepository,
     IAuditLogService auditLogService,
     ILogger<UpdateGuildBranchRosterSettingsCommandHandler> logger) : ICommandHandlerAsync<UpdateGuildBranchRosterSettingsCommand>
 {
@@ -51,6 +52,8 @@ public class UpdateGuildBranchRosterSettingsCommandHandler(
 
         if (changedFields.Count > 0)
         {
+            var wowBranch = await branchRepository.GetByIdAsync(branch.BranchId, cancellationToken);
+
             await auditLogService.LogAsync(
                 command.GuildId,
                 command.RequesterDiscordId,
@@ -58,6 +61,7 @@ public class UpdateGuildBranchRosterSettingsCommandHandler(
                 new Dictionary<string, string>
                 {
                     ["branchId"] = branch.BranchId.ToString(),
+                    ["branchName"] = wowBranch?.Name ?? "Unknown",
                     ["changedFields"] = string.Join(',', changedFields),
                 },
                 cancellationToken);

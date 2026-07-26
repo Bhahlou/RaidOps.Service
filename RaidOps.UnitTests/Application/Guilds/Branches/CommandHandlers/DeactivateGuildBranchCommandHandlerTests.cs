@@ -7,6 +7,7 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.Branches.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Guilds.Branches.CommandHandlers;
@@ -18,6 +19,7 @@ public class DeactivateGuildBranchCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService>      _access        = new();
     private readonly Mock<IGuildBranchesRepository> _guildBranches = new();
+    private readonly Mock<IBranchRepository>        _branchRepo    = new();
     private readonly Mock<IAuditLogService>         _auditLog      = new();
     private readonly DeactivateGuildBranchCommandHandler _sut;
 
@@ -33,7 +35,8 @@ public class DeactivateGuildBranchCommandHandlerTests
 
     public DeactivateGuildBranchCommandHandlerTests()
     {
-        _sut = new DeactivateGuildBranchCommandHandler(_access.Object, _guildBranches.Object, _auditLog.Object, NullLogger<DeactivateGuildBranchCommandHandler>.Instance);
+        _branchRepo.Setup(b => b.GetByIdAsync(BranchId, default)).ReturnsAsync(new Branch { Id = BranchId, Name = "Classic Era" });
+        _sut = new DeactivateGuildBranchCommandHandler(_access.Object, _guildBranches.Object, _branchRepo.Object, _auditLog.Object, NullLogger<DeactivateGuildBranchCommandHandler>.Instance);
     }
 
     [Fact]
@@ -85,7 +88,24 @@ public class DeactivateGuildBranchCommandHandlerTests
         _guildBranches.Verify(b => b.DeactivateAsync(GuildBranchId, default), Times.Once);
         _auditLog.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.BranchDeactivated,
-            It.Is<Dictionary<string, string>>(v => v["branchId"] == BranchId.ToString()),
+            It.Is<Dictionary<string, string>>(v => v["branchId"] == BranchId.ToString() && v["branchName"] == "Classic Era"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WowBranchNotResolvable_LogsFallbackBranchName()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default))
+            .ReturnsAsync(new GuildBranch { Id = GuildBranchId, GuildId = GuildId, BranchId = BranchId });
+        _branchRepo.Setup(b => b.GetByIdAsync(BranchId, default)).ReturnsAsync((Branch?)null);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.BranchDeactivated,
+            It.Is<Dictionary<string, string>>(v => v["branchName"] == "Unknown"),
             default), Times.Once);
     }
 }

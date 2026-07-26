@@ -7,6 +7,7 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.Branches.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Guilds.Branches.CommandHandlers;
@@ -18,6 +19,7 @@ public class UpdateGuildBranchRosterSettingsCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService>      _access        = new();
     private readonly Mock<IGuildBranchesRepository> _guildBranches = new();
+    private readonly Mock<IBranchRepository>        _branchRepo    = new();
     private readonly Mock<IAuditLogService>         _auditLog      = new();
     private readonly UpdateGuildBranchRosterSettingsCommandHandler _sut;
 
@@ -28,7 +30,8 @@ public class UpdateGuildBranchRosterSettingsCommandHandlerTests
 
     public UpdateGuildBranchRosterSettingsCommandHandlerTests()
     {
-        _sut = new UpdateGuildBranchRosterSettingsCommandHandler(_access.Object, _guildBranches.Object, _auditLog.Object, NullLogger<UpdateGuildBranchRosterSettingsCommandHandler>.Instance);
+        _branchRepo.Setup(b => b.GetByIdAsync(BranchId, default)).ReturnsAsync(new Branch { Id = BranchId, Name = "Classic Era" });
+        _sut = new UpdateGuildBranchRosterSettingsCommandHandler(_access.Object, _guildBranches.Object, _branchRepo.Object, _auditLog.Object, NullLogger<UpdateGuildBranchRosterSettingsCommandHandler>.Instance);
     }
 
     private static UpdateGuildBranchRosterSettingsCommand MakeCommand(RosterMode rosterMode = RosterMode.Open, List<string>? rosterRoleIds = null, List<string>? officerRoleIds = null)
@@ -95,7 +98,8 @@ public class UpdateGuildBranchRosterSettingsCommandHandlerTests
         _auditLog.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.BranchRosterSettingsUpdated,
             It.Is<Dictionary<string, string>>(v =>
-                v["branchId"] == BranchId.ToString() && v["changedFields"] == "rosterMode,rosterRoleIds,officerRoleIds"),
+                v["branchId"] == BranchId.ToString() && v["branchName"] == "Classic Era"
+                && v["changedFields"] == "rosterMode,rosterRoleIds,officerRoleIds"),
             default), Times.Once);
     }
 

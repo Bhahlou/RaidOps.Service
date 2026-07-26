@@ -290,6 +290,9 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
                 l.GuildId == guildId && l.ActionType == GuildAuditAction.BranchRosterSettingsUpdated);
             log.Should().NotBeNull();
             log!.ActorDiscordId.Should().Be(id);
+
+            var variables = JsonSerializer.Deserialize<Dictionary<string, string>>(log.Details!);
+            variables.Should().ContainKey("branchName").WhoseValue.Should().NotBeNullOrEmpty();
         }
     }
 }

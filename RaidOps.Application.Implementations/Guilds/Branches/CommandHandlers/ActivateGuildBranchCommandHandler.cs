@@ -17,6 +17,7 @@ public class ActivateGuildBranchCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildsRepository guildsRepository,
     IGuildBranchesRepository guildBranchesRepository,
+    IBranchRepository branchRepository,
     IAuditLogService auditLogService,
     ILogger<ActivateGuildBranchCommandHandler> logger) : ICommandHandlerAsync<ActivateGuildBranchCommand>
 {
@@ -40,11 +41,17 @@ public class ActivateGuildBranchCommandHandler(
 
         await guildBranchesRepository.ActivateAsync(command.GuildId, command.BranchId, cancellationToken);
 
+        var wowBranch = await branchRepository.GetByIdAsync(command.BranchId, cancellationToken);
+
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.BranchActivated,
-            new Dictionary<string, string> { ["branchId"] = command.BranchId.ToString() },
+            new Dictionary<string, string>
+            {
+                ["branchId"] = command.BranchId.ToString(),
+                ["branchName"] = wowBranch?.Name ?? "Unknown",
+            },
             cancellationToken);
 
         if (logger.IsEnabled(LogLevel.Information))
