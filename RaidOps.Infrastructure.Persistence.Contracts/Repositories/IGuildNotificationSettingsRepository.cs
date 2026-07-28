@@ -17,13 +17,17 @@ public interface IGuildNotificationSettingsRepository
     Task<IReadOnlyList<GuildNotificationSetting>> GetAllForGuildAsync(string guildId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the notification setting for a single (guild, event type) pair, or <c>null</c> if
-    /// no row exists (i.e. the event is disabled).
+    /// Returns the notification setting for a (guild, event type) pair, scoped to
+    /// <paramref name="guildBranchId"/> when given: the branch-specific override row is tried first,
+    /// falling back to the guild-wide row (<see cref="GuildNotificationSetting.GuildBranchId"/> <c>null</c>)
+    /// when no branch-specific row exists. Passing <c>null</c> looks up the guild-wide row directly.
+    /// Returns <c>null</c> if no matching row exists (i.e. the event is disabled for this scope).
     /// </summary>
     /// <param name="guildId">The Discord snowflake ID of the guild.</param>
     /// <param name="eventType">The event type to look up.</param>
+    /// <param name="guildBranchId">The branch to check for an override, or <c>null</c> for the guild-wide row directly.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    Task<GuildNotificationSetting?> GetAsync(string guildId, GuildNotificationEventType eventType, CancellationToken cancellationToken = default);
+    Task<GuildNotificationSetting?> GetAsync(string guildId, GuildNotificationEventType eventType, int? guildBranchId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Inserts or updates the given settings for the specified guild, matching on

@@ -18,10 +18,21 @@ public class GuildNotificationSettingsRepository(RaidOpsDbContext context) : IGu
             .ToListAsync(cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<GuildNotificationSetting?> GetAsync(string guildId, GuildNotificationEventType eventType, CancellationToken cancellationToken = default)
-        => await context.GuildNotificationSettings
+    public async Task<GuildNotificationSetting?> GetAsync(string guildId, GuildNotificationEventType eventType, int? guildBranchId, CancellationToken cancellationToken = default)
+    {
+        if (guildBranchId != null)
+        {
+            var branchSetting = await context.GuildNotificationSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.GuildId == guildId && s.EventType == eventType && s.GuildBranchId == guildBranchId, cancellationToken);
+            if (branchSetting != null)
+                return branchSetting;
+        }
+
+        return await context.GuildNotificationSettings
             .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.GuildId == guildId && s.EventType == eventType, cancellationToken);
+            .FirstOrDefaultAsync(s => s.GuildId == guildId && s.EventType == eventType && s.GuildBranchId == null, cancellationToken);
+    }
 
     /// <inheritdoc/>
     public async Task UpsertRangeAsync(string guildId, IEnumerable<GuildNotificationSetting> settings, CancellationToken cancellationToken = default)

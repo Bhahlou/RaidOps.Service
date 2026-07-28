@@ -10,6 +10,7 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.Services;
 /// <inheritdoc cref="IAvailabilityChangeAnnouncer"/>
 public class AvailabilityChangeAnnouncer(
     IAvailabilityResolutionService resolutionService,
+    IActiveRosterBranchResolver activeRosterBranchResolver,
     IAuditLogService auditLogService,
     IGuildNotificationDispatcher guildNotificationDispatcher,
     IAbsenceNotificationContentBuilder absenceNotificationContentBuilder) : IAvailabilityChangeAnnouncer
@@ -21,12 +22,36 @@ public class AvailabilityChangeAnnouncer(
     {
         var (guildId, guildBranchId, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns) = change;
 
-        // A Global mutation has no single guild to audit-log or notify against — properly announcing
-        // it means fanning out across every branch where the member has an active roster character
-        // (calendar global rework Phase C, not implemented yet). Silently unannounced until then.
-        if (guildId == null)
+        if (guildId != null)
+        {
+            await AnnounceForScopeAsync(
+                guildId, guildBranchId!.Value, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns, cancellationToken);
             return;
+        }
 
+        // A Global mutation has no single guild to audit-log or notify against — fan out across
+        // every branch where the member currently has an active roster character, re-resolving the
+        // diff independently per branch (branch scope wins over global via ResolveForScope's own
+        // cascade), and only announcing where that branch's resolved day actually changed.
+        var activeBranches = await activeRosterBranchResolver.GetActiveBranchesAsync(requesterDiscordId, cancellationToken);
+        foreach (var branch in activeBranches)
+        {
+            await AnnounceForScopeAsync(
+                branch.GuildId, branch.GuildBranchId, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns, cancellationToken);
+        }
+    }
+
+    private async Task AnnounceForScopeAsync(
+        string guildId,
+        int guildBranchId,
+        string requesterDiscordId,
+        DateOnly windowStart,
+        DateOnly windowEnd,
+        IReadOnlyCollection<AvailabilityDeclaration> beforeExceptions,
+        IReadOnlyCollection<AvailabilityDeclaration> afterExceptions,
+        IReadOnlyCollection<RecurringAvailabilityPattern> patterns,
+        CancellationToken cancellationToken)
+    {
         var before = resolutionService.ResolveForScope(windowStart, windowEnd, beforeExceptions, patterns, guildId, guildBranchId);
         var after = resolutionService.ResolveForScope(windowStart, windowEnd, afterExceptions, patterns, guildId, guildBranchId);
 
@@ -69,7 +94,7 @@ public class AvailabilityChangeAnnouncer(
                 [new DiscordEmbedField("Dates", datesValue)],
                 cancellationToken);
 
-            await guildNotificationDispatcher.NotifyAsync(guildId, eventType, embed, cancellationToken);
+            await guildNotificationDispatcher.NotifyAsync(guildId, eventType, guildBranchId, embed, cancellationToken);
         }
     }
 

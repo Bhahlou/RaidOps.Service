@@ -11,14 +11,14 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandl
 /// <summary>
 /// Handles <see cref="CreateRecurringAvailabilityPatternCommand"/> by verifying roster access (for
 /// a branch-scoped pattern — a Global one just needs an authenticated member) and persisting the
-/// pattern along with its day set. Audit log and Discord notification only apply to a branch-scoped
-/// pattern — a Global one has no single guild to log/notify against; properly announcing it means
-/// fanning out across every branch where the member has an active roster character (not implemented
-/// yet, calendar global rework Phase C), so it's silently unannounced until then.
+/// pattern along with its day set. A branch-scoped pattern audit-logs/notifies that one branch; a
+/// Global pattern has no single guild to log/notify against, so it fans out identically to every
+/// branch where the member currently has an active roster character.
 /// </summary>
 public class CreateRecurringAvailabilityPatternCommandHandler(
     IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
+    IActiveRosterBranchResolver activeRosterBranchResolver,
     IAuditLogService auditLogService,
     IGuildNotificationDispatcher guildNotificationDispatcher,
     IAbsenceNotificationContentBuilder absenceNotificationContentBuilder) : ICommandHandlerAsync<CreateRecurringAvailabilityPatternCommand>
@@ -53,29 +53,40 @@ public class CreateRecurringAvailabilityPatternCommandHandler(
             Days = RecurringAvailabilityPatternRequestHelper.MapDays(command.Days),
         }, cancellationToken);
 
+        var auditVariables = RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(command.Label, command.CycleLengthDays, command.AnchorDate, command.Days);
+        List<PatternDayNotification> days = [.. command.Days.Select(d => new PatternDayNotification(d.OffsetInCycle, d.Status, d.Reason, d.AvailableFrom, d.AvailableUntil))];
+
         if (command.GuildId != null)
         {
-            await auditLogService.LogAsync(
-                command.GuildId,
-                command.RequesterDiscordId,
-                GuildAuditAction.RecurringAvailabilityPatternCreated,
-                RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(command.Label, command.CycleLengthDays, command.AnchorDate, command.Days),
-                cancellationToken);
-
-            var eventType = GuildNotificationEventType.AbsenceAdded;
-
-            var embed = await absenceNotificationContentBuilder.BuildPatternAsync(
-                command.GuildId,
-                command.RequesterDiscordId,
-                eventType,
-                command.AnchorDate,
-                command.CycleLengthDays,
-                [.. command.Days.Select(d => new PatternDayNotification(d.OffsetInCycle, d.Status, d.Reason, d.AvailableFrom, d.AvailableUntil))],
-                cancellationToken);
-
-            await guildNotificationDispatcher.NotifyAsync(command.GuildId, eventType, embed, cancellationToken);
+            await AnnouncePatternAsync(command.GuildId, command.GuildBranchId!.Value, command.RequesterDiscordId, auditVariables, command.AnchorDate, command.CycleLengthDays, days, cancellationToken);
+        }
+        else
+        {
+            var activeBranches = await activeRosterBranchResolver.GetActiveBranchesAsync(command.RequesterDiscordId, cancellationToken);
+            foreach (var branch in activeBranches)
+                await AnnouncePatternAsync(branch.GuildId, branch.GuildBranchId, command.RequesterDiscordId, auditVariables, command.AnchorDate, command.CycleLengthDays, days, cancellationToken);
         }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Recurring availability pattern created successfully.", new { pattern.Id }));
+    }
+
+    private async Task AnnouncePatternAsync(
+        string guildId,
+        int guildBranchId,
+        string requesterDiscordId,
+        Dictionary<string, string> auditVariables,
+        DateOnly anchorDate,
+        int cycleLengthDays,
+        IReadOnlyList<PatternDayNotification> days,
+        CancellationToken cancellationToken)
+    {
+        await auditLogService.LogAsync(guildId, requesterDiscordId, GuildAuditAction.RecurringAvailabilityPatternCreated, auditVariables, cancellationToken);
+
+        var eventType = GuildNotificationEventType.AbsenceAdded;
+
+        var embed = await absenceNotificationContentBuilder.BuildPatternAsync(
+            guildId, requesterDiscordId, eventType, anchorDate, cycleLengthDays, days, cancellationToken);
+
+        await guildNotificationDispatcher.NotifyAsync(guildId, eventType, guildBranchId, embed, cancellationToken);
     }
 }
