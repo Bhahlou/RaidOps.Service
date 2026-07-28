@@ -11,23 +11,22 @@ using System.IdentityModel.Tokens.Jwt;
 namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
-/// Manages a member's own availability declarations (one-off exceptions and recurring patterns)
-/// for a specific guild.
+/// Manages a member's own availability declarations (one-off exceptions and recurring patterns),
+/// each independently scoped Global or to a specific guild branch.
 /// </summary>
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/guilds")]
+[Route("api/v{version:apiVersion}/me/availability")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AvailabilityController(
     ICommandDispatcher commandDispatcher,
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
     /// <summary>
-    /// Returns the requesting member's resolved availability calendar over a date range,
-    /// along with the raw exceptions and recurring patterns backing it.
+    /// Returns the requesting member's resolved availability overview over a date range, across
+    /// every scope, along with the raw exceptions and recurring patterns backing it.
     /// </summary>
-    [HttpGet("{guildId}/availability")]
+    [HttpGet]
     public async Task<IActionResult> GetMyAvailability(
-        string guildId,
         [FromQuery] DateOnly rangeStart,
         [FromQuery] DateOnly rangeEnd,
         CancellationToken cancellationToken)
@@ -37,18 +36,19 @@ public class AvailabilityController(
             return Unauthorized();
 
         var result = await QueryDispatcher.DispatchAsync<GetMyAvailabilityQuery, AvailabilityCalendarResponse>(
-            new GetMyAvailabilityQuery { GuildId = guildId, RequesterDiscordId = discordId, RangeStart = rangeStart, RangeEnd = rangeEnd },
+            new GetMyAvailabilityQuery { RequesterDiscordId = discordId, RangeStart = rangeStart, RangeEnd = rangeEnd },
             cancellationToken);
 
         return ToActionResult(result);
     }
 
     /// <summary>
-    /// Declares a one-off availability exception for a single date or date range.
+    /// Declares a one-off availability exception for a single date or date range, either Global or
+    /// scoped to a specific branch (both <see cref="CreateAvailabilityExceptionCommand.GuildId"/> and
+    /// <see cref="CreateAvailabilityExceptionCommand.GuildBranchId"/> set).
     /// </summary>
-    [HttpPost("{guildId}/availability/exceptions")]
+    [HttpPost("exceptions")]
     public async Task<IActionResult> CreateException(
-        string guildId,
         [FromBody] CreateAvailabilityExceptionCommand command,
         CancellationToken cancellationToken)
     {
@@ -56,7 +56,6 @@ public class AvailabilityController(
         if (discordId == null)
             return Unauthorized();
 
-        command.GuildId = guildId;
         command.RequesterDiscordId = discordId;
 
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
@@ -66,15 +65,15 @@ public class AvailabilityController(
     /// <summary>
     /// Deletes one of the requesting member's own one-off availability exceptions.
     /// </summary>
-    [HttpDelete("{guildId}/availability/exceptions/{exceptionId:int}")]
-    public async Task<IActionResult> DeleteException(string guildId, int exceptionId, CancellationToken cancellationToken)
+    [HttpDelete("exceptions/{exceptionId:int}")]
+    public async Task<IActionResult> DeleteException(int exceptionId, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
         var result = await CommandDispatcher.DispatchAsync(
-            new DeleteAvailabilityExceptionCommand { GuildId = guildId, RequesterDiscordId = discordId, ExceptionId = exceptionId },
+            new DeleteAvailabilityExceptionCommand { RequesterDiscordId = discordId, ExceptionId = exceptionId },
             cancellationToken);
 
         return ToActionResult(result);
@@ -82,11 +81,10 @@ public class AvailabilityController(
 
     /// <summary>
     /// Replaces the dates/status of one of the requesting member's own one-off availability
-    /// exceptions.
+    /// exceptions. Scope (Global/branch) is immutable — not part of this request.
     /// </summary>
-    [HttpPatch("{guildId}/availability/exceptions/{exceptionId:int}")]
+    [HttpPatch("exceptions/{exceptionId:int}")]
     public async Task<IActionResult> UpdateException(
-        string guildId,
         int exceptionId,
         [FromBody] UpdateAvailabilityExceptionCommand command,
         CancellationToken cancellationToken)
@@ -95,7 +93,6 @@ public class AvailabilityController(
         if (discordId == null)
             return Unauthorized();
 
-        command.GuildId = guildId;
         command.RequesterDiscordId = discordId;
         command.ExceptionId = exceptionId;
 
@@ -107,9 +104,8 @@ public class AvailabilityController(
     /// Clears a single day out of one of the requesting member's own one-off availability
     /// exceptions, shrinking or splitting it as needed.
     /// </summary>
-    [HttpPost("{guildId}/availability/exceptions/{exceptionId:int}/remove-day")]
+    [HttpPost("exceptions/{exceptionId:int}/remove-day")]
     public async Task<IActionResult> RemoveExceptionDay(
-        string guildId,
         int exceptionId,
         [FromBody] RemoveAvailabilityExceptionDayCommand command,
         CancellationToken cancellationToken)
@@ -118,7 +114,6 @@ public class AvailabilityController(
         if (discordId == null)
             return Unauthorized();
 
-        command.GuildId = guildId;
         command.RequesterDiscordId = discordId;
         command.ExceptionId = exceptionId;
 
@@ -127,11 +122,11 @@ public class AvailabilityController(
     }
 
     /// <summary>
-    /// Creates a recurring availability pattern (e.g. a weekly recurrence, or a shift rotation).
+    /// Creates a recurring availability pattern (e.g. a weekly recurrence, or a shift rotation),
+    /// either Global or scoped to a specific branch.
     /// </summary>
-    [HttpPost("{guildId}/availability/patterns")]
+    [HttpPost("patterns")]
     public async Task<IActionResult> CreatePattern(
-        string guildId,
         [FromBody] CreateRecurringAvailabilityPatternCommand command,
         CancellationToken cancellationToken)
     {
@@ -139,7 +134,6 @@ public class AvailabilityController(
         if (discordId == null)
             return Unauthorized();
 
-        command.GuildId = guildId;
         command.RequesterDiscordId = discordId;
 
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
@@ -147,11 +141,11 @@ public class AvailabilityController(
     }
 
     /// <summary>
-    /// Replaces the settings and full day set of one of the requesting member's own recurring patterns.
+    /// Replaces the settings and full day set of one of the requesting member's own recurring
+    /// patterns. Scope (Global/branch) is immutable — not part of this request.
     /// </summary>
-    [HttpPatch("{guildId}/availability/patterns/{patternId:int}")]
+    [HttpPatch("patterns/{patternId:int}")]
     public async Task<IActionResult> UpdatePattern(
-        string guildId,
         int patternId,
         [FromBody] UpdateRecurringAvailabilityPatternCommand command,
         CancellationToken cancellationToken)
@@ -160,7 +154,6 @@ public class AvailabilityController(
         if (discordId == null)
             return Unauthorized();
 
-        command.GuildId = guildId;
         command.RequesterDiscordId = discordId;
         command.PatternId = patternId;
 
@@ -171,15 +164,15 @@ public class AvailabilityController(
     /// <summary>
     /// Deletes one of the requesting member's own recurring availability patterns.
     /// </summary>
-    [HttpDelete("{guildId}/availability/patterns/{patternId:int}")]
-    public async Task<IActionResult> DeletePattern(string guildId, int patternId, CancellationToken cancellationToken)
+    [HttpDelete("patterns/{patternId:int}")]
+    public async Task<IActionResult> DeletePattern(int patternId, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
         var result = await CommandDispatcher.DispatchAsync(
-            new DeleteRecurringAvailabilityPatternCommand { GuildId = guildId, RequesterDiscordId = discordId, PatternId = patternId },
+            new DeleteRecurringAvailabilityPatternCommand { RequesterDiscordId = discordId, PatternId = patternId },
             cancellationToken);
 
         return ToActionResult(result);

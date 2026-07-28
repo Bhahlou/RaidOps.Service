@@ -8,6 +8,12 @@ public class RecurringAvailabilityPatternResponse
     /// <summary>The pattern's identifier.</summary>
     public int Id { get; set; }
 
+    /// <summary>The guild of this pattern's branch scope, or <c>null</c> if it's Global.</summary>
+    public string? GuildId { get; set; }
+
+    /// <summary>This pattern's specific branch scope, or <c>null</c> if it's Global.</summary>
+    public int? GuildBranchId { get; set; }
+
     /// <summary>Optional friendly name for the member's own reference.</summary>
     public string? Label { get; set; }
 

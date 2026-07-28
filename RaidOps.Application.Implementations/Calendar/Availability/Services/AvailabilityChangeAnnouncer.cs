@@ -19,10 +19,16 @@ public class AvailabilityChangeAnnouncer(
     /// <inheritdoc/>
     public async Task AnnounceAsync(AvailabilityChange change, CancellationToken cancellationToken = default)
     {
-        var (guildId, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns) = change;
+        var (guildId, guildBranchId, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns) = change;
 
-        var before = resolutionService.Resolve(windowStart, windowEnd, beforeExceptions, patterns);
-        var after = resolutionService.Resolve(windowStart, windowEnd, afterExceptions, patterns);
+        // A Global mutation has no single guild to audit-log or notify against — properly announcing
+        // it means fanning out across every branch where the member has an active roster character
+        // (calendar global rework Phase C, not implemented yet). Silently unannounced until then.
+        if (guildId == null)
+            return;
+
+        var before = resolutionService.ResolveForScope(windowStart, windowEnd, beforeExceptions, patterns, guildId, guildBranchId);
+        var after = resolutionService.ResolveForScope(windowStart, windowEnd, afterExceptions, patterns, guildId, guildBranchId);
 
         var segments = BuildDeltaSegments(before, after);
         if (segments.Count == 0)
