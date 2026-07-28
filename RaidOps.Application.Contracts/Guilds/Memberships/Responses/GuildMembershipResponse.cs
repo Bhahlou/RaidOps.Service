@@ -11,6 +11,9 @@ public class GuildMembershipResponse
     /// <summary>Discord snowflake ID of the guild.</summary>
     public required string GuildId { get; set; }
 
+    /// <summary>Id of the <c>GuildBranch</c> this membership is on.</summary>
+    public required int GuildBranchId { get; set; }
+
     /// <summary>Name of the guild.</summary>
     public required string GuildName { get; set; }
 
