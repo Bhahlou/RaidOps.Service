@@ -19,6 +19,9 @@ namespace RaidOps.IntegrationTests.Controllers;
 public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {
+    private static readonly string[] RosterRoleIds = ["role-1"];
+    private static readonly string[] OfficerRoleIds = ["role-2"];
+
     // ── Auth enforcement ────────────────────────────────────────────────────
 
     [Fact]
@@ -227,7 +230,7 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { rosterMode = "DiscordRoleOnly", rosterRoleIds = new[] { "role-1" }, officerRoleIds = new[] { "role-2" } });
+        var body = JsonContent.Create(new { rosterMode = "DiscordRoleOnly", rosterRoleIds = RosterRoleIds, officerRoleIds = OfficerRoleIds });
 
         var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/roster-settings", body);
 
@@ -279,7 +282,7 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { rosterMode = "DiscordRoleOnly", rosterRoleIds = new[] { "role-1" } });
+        var body = JsonContent.Create(new { rosterMode = "DiscordRoleOnly", rosterRoleIds = RosterRoleIds });
 
         await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/roster-settings", body);
 

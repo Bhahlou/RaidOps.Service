@@ -48,9 +48,8 @@ public class GetMeQueryHandler(
                 })
                 .ToList();
 
-            var accessLevel = ug.IsAdmin
-                ? GuildAccessLevel.Officer
-                : branches.Count > 0 ? branches.Max(b => b.AccessLevel) : GuildAccessLevel.Public;
+            var maxBranchAccessLevel = branches.Count > 0 ? branches.Max(b => b.AccessLevel) : GuildAccessLevel.Public;
+            var accessLevel = ug.IsAdmin ? GuildAccessLevel.Officer : maxBranchAccessLevel;
 
             return new UserGuildResponse
             {
