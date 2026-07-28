@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -12,9 +13,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260728203539_MakeAvailabilityScopeOptionalAndBranchAwareNotifications")]
+    partial class MakeAvailabilityScopeOptionalAndBranchAwareNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
