@@ -69,4 +69,31 @@ public class GuildBranchesRepositoryTests(RaidOpsWebApplicationFactory factory)
             result.Should().BeFalse();
         }
     }
+
+    [Fact]
+    public async Task UpdateRosterSettingsAsync_ModeNotDiscordRoleOnly_ClearsRosterRoleIds()
+    {
+        const string guildId = "960000000000000002";
+        await SeedGuildAsync(guildId);
+        var branch = TestDataBuilder.CreateGuildBranch(
+            guildId, rosterMode: RosterMode.DiscordRoleOnly, rosterRoleIds: ["role-1"]);
+        await SeedAsync(db =>
+        {
+            db.GuildBranches.Add(branch);
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+            var result = await repo.UpdateRosterSettingsAsync(branch.Id, RosterMode.Open, rosterRoleIds: ["role-1"], officerRoleIds: []);
+
+            result.Should().BeTrue();
+
+            var updated = await db.GuildBranches.FindAsync(branch.Id);
+            updated!.RosterMode.Should().Be(RosterMode.Open);
+            updated.RosterRoleIds.Should().BeEmpty();
+        }
+    }
 }
