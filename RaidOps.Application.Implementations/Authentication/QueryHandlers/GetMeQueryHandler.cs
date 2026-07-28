@@ -15,7 +15,8 @@ namespace RaidOps.Application.Implementations.Authentication.QueryHandlers;
 public class GetMeQueryHandler(
     IUsersRepository usersRepository,
     IGuildAccessService guildAccessService,
-    IUserNotificationService userNotificationService) : IQueryHandlerAsync<GetMeQuery, UserResponse>
+    IUserNotificationService userNotificationService,
+    IActiveRosterBranchResolver activeRosterBranchResolver) : IQueryHandlerAsync<GetMeQuery, UserResponse>
 {
     /// <summary>
     /// Retrieves the user identified by <see cref="GetMeQuery.DiscordId"/> and maps them
@@ -35,6 +36,10 @@ public class GetMeQueryHandler(
 
         var eligibleGuilds = user.UserGuilds.Where(ug => ug.IsAdmin || ug.Guild.IsRegistered).ToList();
 
+        var activeBranches = (await activeRosterBranchResolver.GetActiveBranchesAsync(query.DiscordId, cancellationToken))
+            .Select(b => (b.GuildId, b.GuildBranchId))
+            .ToHashSet();
+
         var guilds = eligibleGuilds.Select(ug =>
         {
             var branches = ug.Guild.Branches
@@ -45,6 +50,7 @@ public class GetMeQueryHandler(
                     BranchId = b.BranchId,
                     BranchName = b.Branch.Name,
                     AccessLevel = guildAccessService.ComputeAccessLevel(ug, b, cancellationToken),
+                    HasActiveCharacter = activeBranches.Contains((ug.Guild.Id, b.Id)),
                 })
                 .ToList();
 

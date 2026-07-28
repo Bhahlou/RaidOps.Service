@@ -80,14 +80,14 @@ public class GuildSettingsController(
     /// Returns the guild's Discord notification settings (one entry per event type).
     /// </summary>
     [HttpGet("{guildId}/notification-settings")]
-    public async Task<IActionResult> GetNotificationSettings(string guildId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetNotificationSettings(string guildId, [FromQuery] int? guildBranchId, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
         var result = await QueryDispatcher.DispatchAsync<GetGuildNotificationSettingsQuery, List<GuildNotificationSettingResponse>>(
-            new GetGuildNotificationSettingsQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            new GetGuildNotificationSettingsQuery { GuildId = guildId, RequesterDiscordId = discordId, GuildBranchId = guildBranchId },
             cancellationToken);
 
         return ToActionResult(result);

@@ -16,4 +16,11 @@ public class GuildNotificationSettingResponse
 
     /// <summary>Discord snowflake ID of the configured channel, or <c>null</c> if none is set yet.</summary>
     public string? ChannelId { get; set; }
+
+    /// <summary>
+    /// The branch this row is an explicit override for, or <c>null</c> when it's the guild-wide row
+    /// (either because that's what was requested, or because the requested branch has no override
+    /// and this is the inherited fallback).
+    /// </summary>
+    public int? GuildBranchId { get; set; }
 }

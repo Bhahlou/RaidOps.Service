@@ -18,6 +18,20 @@ public class GuildNotificationSettingsRepository(RaidOpsDbContext context) : IGu
             .ToListAsync(cancellationToken);
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<GuildNotificationSetting>> GetEffectiveForGuildAsync(string guildId, int? guildBranchId, CancellationToken cancellationToken = default)
+    {
+        var rows = await context.GuildNotificationSettings
+            .Where(s => s.GuildId == guildId && (s.GuildBranchId == null || s.GuildBranchId == guildBranchId))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(s => s.EventType)
+            .Select(g => g.OrderByDescending(s => s.GuildBranchId != null).First())
+            .ToList();
+    }
+
+    /// <inheritdoc/>
     public async Task<GuildNotificationSetting?> GetAsync(string guildId, GuildNotificationEventType eventType, int? guildBranchId, CancellationToken cancellationToken = default)
     {
         if (guildBranchId != null)
@@ -35,13 +49,13 @@ public class GuildNotificationSettingsRepository(RaidOpsDbContext context) : IGu
     }
 
     /// <inheritdoc/>
-    public async Task UpsertRangeAsync(string guildId, IEnumerable<GuildNotificationSetting> settings, CancellationToken cancellationToken = default)
+    public async Task UpsertRangeAsync(string guildId, int? guildBranchId, IEnumerable<GuildNotificationSetting> settings, CancellationToken cancellationToken = default)
     {
         var incoming = settings.ToList();
         var eventTypes = incoming.Select(s => s.EventType).ToList();
 
         var existing = await context.GuildNotificationSettings
-            .Where(s => s.GuildId == guildId && eventTypes.Contains(s.EventType))
+            .Where(s => s.GuildId == guildId && s.GuildBranchId == guildBranchId && eventTypes.Contains(s.EventType))
             .ToDictionaryAsync(s => s.EventType, cancellationToken);
 
         foreach (var setting in incoming)
@@ -56,6 +70,7 @@ public class GuildNotificationSettingsRepository(RaidOpsDbContext context) : IGu
                 context.GuildNotificationSettings.Add(new GuildNotificationSetting
                 {
                     GuildId = guildId,
+                    GuildBranchId = guildBranchId,
                     EventType = setting.EventType,
                     Enabled = setting.Enabled,
                     ChannelId = setting.ChannelId,
