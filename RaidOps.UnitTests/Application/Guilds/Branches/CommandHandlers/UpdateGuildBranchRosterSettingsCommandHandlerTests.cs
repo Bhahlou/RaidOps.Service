@@ -104,6 +104,23 @@ public class UpdateGuildBranchRosterSettingsCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Success_WowBranchNoLongerExists_LogsUnknownBranchName()
+    {
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch(rosterMode: RosterMode.Open, rosterRoleIds: [], officerRoleIds: []));
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _branchRepo.Setup(b => b.GetByIdAsync(BranchId, default)).ReturnsAsync((Branch?)null);
+        var command = MakeCommand(rosterMode: RosterMode.DiscordRoleOnly, rosterRoleIds: ["role-1"], officerRoleIds: []);
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.BranchRosterSettingsUpdated,
+            It.Is<Dictionary<string, string>>(v => v["branchName"] == "Unknown"),
+            default), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_NothingChanged_DoesNotLog()
     {
         _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default))
