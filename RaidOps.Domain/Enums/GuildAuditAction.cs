@@ -43,4 +43,13 @@ public enum GuildAuditAction
 
     /// <summary>The guild's Discord notification settings (per-event enabled state and channel) were updated.</summary>
     NotificationSettingsUpdated = 13,
+
+    /// <summary>A WoW game-version branch was activated on the guild.</summary>
+    BranchActivated = 14,
+
+    /// <summary>A WoW game-version branch was deactivated on the guild.</summary>
+    BranchDeactivated = 15,
+
+    /// <summary>A guild branch's roster/officer role-set configuration was updated.</summary>
+    BranchRosterSettingsUpdated = 16,
 }

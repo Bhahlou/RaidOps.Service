@@ -105,7 +105,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     // ── Notifications ──────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMe_AdminOfConfiguredGuildWithoutOfficerThreshold_ReturnsNotification()
+    public async Task GetMe_AdminOfGuildWithActiveBranchMissingOfficerRoles_ReturnsNotification()
     {
         const string id = "200000000000000004";
         const string guildId = "850000000000000003";
@@ -113,9 +113,9 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
-            guild.RosterMode = RosterMode.Open;
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
@@ -126,11 +126,11 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         body!.Notifications.Should().ContainSingle(n =>
-            n.Type == NotificationType.OfficerThresholdNotConfigured && n.GuildId == guildId);
+            n.Type == NotificationType.BranchOfficerRolesNotConfigured && n.GuildId == guildId);
     }
 
     [Fact]
-    public async Task GetMe_AdminOfGuildWithOfficerThreshold_NoNotification()
+    public async Task GetMe_AdminOfGuildWithBranchOfficerRolesConfigured_NoNotification()
     {
         const string id = "200000000000000005";
         const string guildId = "850000000000000004";
@@ -138,11 +138,10 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
-            guild.RosterMode = RosterMode.Open;
-            guild.MinOfficerRoleId = "999000000000000001";
             guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: ["999000000000000001"]));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             db.GuildNotificationSettings.Add(new GuildNotificationSetting
             {
@@ -162,7 +161,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task GetMe_AdminOfGuildStillOnboarding_NoNotification()
     {
-        // Bot invited but settings step not completed yet — never nudge mid get-started.
+        // Bot invited but no branch activated yet — never nudge mid get-started.
         const string id = "200000000000000006";
         const string guildId = "850000000000000005";
         await SeedAsync(db =>
@@ -190,10 +189,10 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
-            guild.RosterMode = RosterMode.Open;
             guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             db.GuildNotificationSettings.Add(new GuildNotificationSetting
             {
@@ -202,7 +201,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             db.NotificationDismissals.Add(new NotificationDismissal
             {
                 UserDiscordId = id,
-                Type = NotificationType.OfficerThresholdNotConfigured,
+                Type = NotificationType.BranchOfficerRolesNotConfigured,
                 GuildId = guildId,
                 DismissedAt = DateTime.UtcNow,
             });
@@ -226,9 +225,9 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var guild = TestDataBuilder.CreateGuild(guildId, isRegistered: true);
             guild.Timezone = "Europe/Paris";
-            guild.RosterMode = RosterMode.Open;
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
             return Task.CompletedTask;
         });

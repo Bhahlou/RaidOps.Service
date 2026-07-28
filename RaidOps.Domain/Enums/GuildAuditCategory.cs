@@ -9,7 +9,7 @@ public enum GuildAuditCategory
     /// <summary>Actions about the guild itself (e.g. registration).</summary>
     Guild = 1,
 
-    /// <summary>Actions about guild settings (timezone, roster mode, role threshold).</summary>
+    /// <summary>Actions about guild-level identity settings (timezone, language).</summary>
     Settings = 2,
 
     /// <summary>Actions about the character roster (joins, leaves, exclusions, rank changes).</summary>
@@ -17,4 +17,7 @@ public enum GuildAuditCategory
 
     /// <summary>Actions about members' personal availability declarations (one-off exceptions, recurring patterns).</summary>
     Availability = 4,
+
+    /// <summary>Actions about guild branches (activation/deactivation, roster/officer role-set configuration).</summary>
+    Branches = 5,
 }

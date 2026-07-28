@@ -223,6 +223,16 @@ public class GetGuildAuditLogQueryHandlerTests
     [InlineData(GuildAuditAction.MemberLeft, GuildAuditCategory.Roster)]
     [InlineData(GuildAuditAction.MemberExcluded, GuildAuditCategory.Roster)]
     [InlineData(GuildAuditAction.MemberRankUpdated, GuildAuditCategory.Roster)]
+    [InlineData(GuildAuditAction.OfficerThresholdUpdated, GuildAuditCategory.Settings)]
+    [InlineData(GuildAuditAction.AvailabilityExceptionDeclared, GuildAuditCategory.Availability)]
+    [InlineData(GuildAuditAction.AvailabilityExceptionDeleted, GuildAuditCategory.Availability)]
+    [InlineData(GuildAuditAction.RecurringAvailabilityPatternCreated, GuildAuditCategory.Availability)]
+    [InlineData(GuildAuditAction.RecurringAvailabilityPatternUpdated, GuildAuditCategory.Availability)]
+    [InlineData(GuildAuditAction.RecurringAvailabilityPatternStopped, GuildAuditCategory.Availability)]
+    [InlineData(GuildAuditAction.NotificationSettingsUpdated, GuildAuditCategory.Settings)]
+    [InlineData(GuildAuditAction.BranchActivated, GuildAuditCategory.Branches)]
+    [InlineData(GuildAuditAction.BranchDeactivated, GuildAuditCategory.Branches)]
+    [InlineData(GuildAuditAction.BranchRosterSettingsUpdated, GuildAuditCategory.Branches)]
     public async Task HandleAsync_MapsActionTypeToExpectedCategory(GuildAuditAction actionType, GuildAuditCategory expectedCategory)
     {
         SetupAdmin();

@@ -6,12 +6,12 @@ using RaidOps.Domain.Models.Discord;
 namespace RaidOps.Application.Implementations.Guilds.Settings.Notifications;
 
 /// <summary>
-/// Surfaces <see cref="NotificationType.OfficerThresholdNotConfigured"/> for admins of an
-/// already-configured guild that has no <see cref="Guild.MinOfficerRoleId"/> set yet. Never fires
-/// mid get-started onboarding (guild not yet configured) or for non-admins. No repository lookup
-/// needed — <see cref="Guild.MinOfficerRoleId"/> is already loaded on the guilds the caller passes in.
+/// Surfaces <see cref="NotificationType.BranchOfficerRolesNotConfigured"/> for admins of a guild
+/// that has at least one active <see cref="GuildBranch"/> with no <see cref="GuildBranch.OfficerRoleIds"/>
+/// set yet. Fires once per guild (not per branch) — the front's branches settings tab is where the
+/// admin sees exactly which branch still needs it. Never fires for non-admins.
 /// </summary>
-public class OfficerThresholdNotificationProvider : INotificationSignalProvider
+public class BranchOfficerRolesNotConfiguredProvider : INotificationSignalProvider
 {
     /// <inheritdoc/>
     public Task<List<NotificationResponse>> GetActiveAsync(
@@ -20,16 +20,19 @@ public class OfficerThresholdNotificationProvider : INotificationSignalProvider
         var notifications = new List<NotificationResponse>();
         foreach (var ug in eligibleGuilds)
         {
-            var isConfigured = ug.Guild.Timezone != null && ug.Guild.RosterMode != null;
-            if (!ug.IsAdmin || !ug.Guild.IsRegistered || !isConfigured)
+            if (!ug.IsAdmin || !ug.Guild.IsRegistered)
                 continue;
 
-            if (ug.Guild.MinOfficerRoleId != null)
+            var activeBranches = ug.Guild.Branches.Where(b => b.IsActive).ToList();
+            if (activeBranches.Count == 0)
+                continue;
+
+            if (activeBranches.All(b => b.OfficerRoleIds.Count > 0))
                 continue;
 
             notifications.Add(new NotificationResponse
             {
-                Type = NotificationType.OfficerThresholdNotConfigured,
+                Type = NotificationType.BranchOfficerRolesNotConfigured,
                 GuildId = ug.GuildId,
                 GuildName = ug.Guild.Name,
             });

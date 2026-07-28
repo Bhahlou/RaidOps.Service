@@ -27,6 +27,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="GuildMembership"/> table linking characters to guild rosters.</summary>
     public DbSet<GuildMembership> GuildMemberships => Set<GuildMembership>();
 
+    /// <summary>Gets the <see cref="GuildBranch"/> table (per-guild WoW branch activation and roster/officer role sets).</summary>
+    public DbSet<GuildBranch> GuildBranches => Set<GuildBranch>();
+
     /// <summary>Gets the <see cref="GuildAuditLog"/> table recording guild action history.</summary>
     public DbSet<GuildAuditLog> GuildAuditLogs => Set<GuildAuditLog>();
 
@@ -214,6 +217,26 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne(m => m.Guild)
             .WithMany(g => g.Memberships)
             .HasForeignKey(m => m.GuildId);
+
+        modelBuilder.Entity<GuildMembership>()
+            .HasOne(m => m.GuildBranch)
+            .WithMany(gb => gb.Memberships)
+            .HasForeignKey(m => m.GuildBranchId);
+
+        // GuildBranch — surrogate PK, unique (GuildId, BranchId) so a branch can't be activated twice per guild
+        modelBuilder.Entity<GuildBranch>()
+            .HasIndex(gb => new { gb.GuildId, gb.BranchId })
+            .IsUnique();
+
+        modelBuilder.Entity<GuildBranch>()
+            .HasOne(gb => gb.Guild)
+            .WithMany(g => g.Branches)
+            .HasForeignKey(gb => gb.GuildId);
+
+        modelBuilder.Entity<GuildBranch>()
+            .HasOne(gb => gb.Branch)
+            .WithMany()
+            .HasForeignKey(gb => gb.BranchId);
 
         // GuildAuditLog — FK to Guild; logs are immutable so no cascade delete
         modelBuilder.Entity<GuildAuditLog>()

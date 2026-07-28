@@ -2,7 +2,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Queries;
 using RaidOps.Application.Contracts.Guilds.Memberships.Responses;
-using RaidOps.Application.Implementations.Guilds.Memberships.Helpers;
+using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -11,12 +11,14 @@ namespace RaidOps.Application.Implementations.Guilds.Memberships.QueryHandlers;
 
 /// <summary>
 /// Handles <see cref="GetEligibleGuildsQuery"/> by returning registered guilds that the
-/// character can join: the user is a Discord member, the guild is configured, the character
-/// is not already a member, and the roster mode grants access.
+/// character can join: the user is a Discord member, the character's WoW branch is active and
+/// configured on the guild, the character is not already a member, and the branch's roster mode
+/// grants access.
 /// </summary>
 public class GetEligibleGuildsQueryHandler(
     ICharacterRepository characterRepository,
     IGuildsRepository guildsRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IUserGuildsRepository userGuildsRepository,
     IGuildMembershipRepository membershipRepository,
     IDiscordBotService discordBotService) : IQueryHandlerAsync<GetEligibleGuildsQuery, List<EligibleGuildResponse>>
@@ -46,11 +48,15 @@ public class GetEligibleGuildsQueryHandler(
                 continue;
 
             var guild = await guildsRepository.GetByIdAsync(guildId, cancellationToken);
-            if (guild == null || !guild.IsRegistered || guild.RosterMode == null)
+            if (guild == null || !guild.IsRegistered)
                 continue;
 
-            var isEligible = guild.RosterMode == RosterMode.Open
-                || (guild.MinRosterRoleId != null && DiscordRosterAccessHelper.HasDiscordRoleAccess(discordBotService, guild.Id, guild.MinRosterRoleId, query.RequesterDiscordId, cancellationToken));
+            var branch = await guildBranchesRepository.GetByGuildAndBranchAsync(guildId, character.BranchId, cancellationToken);
+            if (branch == null || !branch.IsActive || branch.RosterMode == null)
+                continue;
+
+            var isEligible = branch.RosterMode == RosterMode.Open
+                || DiscordRoleSetAccessHelper.HasAnyDiscordRole(discordBotService, guild.Id, branch.RosterRoleIds, query.RequesterDiscordId, cancellationToken);
 
             if (isEligible)
             {

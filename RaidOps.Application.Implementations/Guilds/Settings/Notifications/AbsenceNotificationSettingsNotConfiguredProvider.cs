@@ -32,8 +32,7 @@ public class AbsenceNotificationSettingsNotConfiguredProvider(
         var notifications = new List<NotificationResponse>();
         foreach (var ug in eligibleGuilds)
         {
-            var isConfigured = ug.Guild.Timezone != null && ug.Guild.RosterMode != null;
-            if (!ug.IsAdmin || !ug.Guild.IsRegistered || !isConfigured)
+            if (!ug.IsAdmin || !ug.Guild.IsRegistered || ug.Guild.Timezone == null)
                 continue;
 
             var settings = await notificationSettingsRepository.GetAllForGuildAsync(ug.GuildId, cancellationToken);

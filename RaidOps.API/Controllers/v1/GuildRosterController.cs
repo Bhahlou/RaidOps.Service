@@ -23,14 +23,14 @@ public class GuildRosterController(
     /// Returns every active character on the specified guild's roster.
     /// </summary>
     [HttpGet("{guildId}/roster")]
-    public async Task<IActionResult> GetRoster(string guildId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetRoster(string guildId, [FromQuery] int guildBranchId, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
         var result = await QueryDispatcher.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
-            new GetGuildRosterQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            new GetGuildRosterQuery { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId },
             cancellationToken);
 
         return ToActionResult(result);

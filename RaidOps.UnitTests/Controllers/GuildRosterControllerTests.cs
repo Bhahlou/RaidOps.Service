@@ -17,8 +17,9 @@ public class GuildRosterControllerTests
     private readonly Mock<IQueryDispatcher>   _queries  = new();
     private readonly GuildRosterController    _sut;
 
-    private const string DiscordId = "user-1";
-    private const string GuildId   = "guild-1";
+    private const string DiscordId     = "user-1";
+    private const string GuildId       = "guild-1";
+    private const int    GuildBranchId = 1;
 
     public GuildRosterControllerTests()
     {
@@ -35,7 +36,7 @@ public class GuildRosterControllerTests
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
 
-        var result = await _sut.GetRoster(GuildId, default);
+        var result = await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -47,7 +48,7 @@ public class GuildRosterControllerTests
                 It.IsAny<GetGuildRosterQuery>(), default))
             .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Fail(ResponseDetail.RosterAccessDenied));
 
-        var result = await _sut.GetRoster(GuildId, default);
+        var result = await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -78,7 +79,7 @@ public class GuildRosterControllerTests
                 It.IsAny<GetGuildRosterQuery>(), default))
             .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok(response));
 
-        var result = await _sut.GetRoster(GuildId, default);
+        var result = await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(response);
     }
@@ -90,7 +91,7 @@ public class GuildRosterControllerTests
                 It.IsAny<GetGuildRosterQuery>(), default))
             .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok([])); // remplacer [] par new List<...>()
 
-        await _sut.GetRoster(GuildId, default);
+        await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         _queries.Verify(q => q.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
             It.Is<GetGuildRosterQuery>(x => x.GuildId == GuildId && x.RequesterDiscordId == DiscordId),

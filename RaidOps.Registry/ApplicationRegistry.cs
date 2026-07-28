@@ -19,6 +19,7 @@ internal static class ApplicationRegistry
         services.AddScoped<ISpecResolverService, SpecResolverService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IGuildAccessService, GuildAccessService>();
+        services.AddScoped<IGuildJoinEligibilityService, GuildJoinEligibilityService>();
         services.AddScoped<IUserNotificationService, UserNotificationService>();
         services.AddScoped<IAvailabilityResolutionService, AvailabilityResolutionService>();
         services.AddScoped<IGuildNotificationDispatcher, GuildNotificationDispatcher>();

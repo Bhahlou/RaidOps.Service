@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
@@ -24,7 +24,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
     private const string DummyGuildId = "123456789012345678";
 
-    // ── Auth enforcement ────────────────────────────────────────────────────
+    // â”€â”€ Auth enforcement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetAvailability_WithoutToken_Returns401()
@@ -92,7 +92,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // ── Roster access ───────────────────────────────────────────────────────
+    // â”€â”€ Roster access â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetAvailability_WhenNoRosterAccess_Returns400()
@@ -102,7 +102,8 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
@@ -123,7 +124,8 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
@@ -136,7 +138,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         json.GetProperty("error").GetString().Should().Be("Forbidden");
     }
 
-    // ── GetAvailability — end-to-end resolution ─────────────────────────────
+    // â”€â”€ GetAvailability â€” end-to-end resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetAvailability_ResolvesExceptionsAndPatterns_ReturnsExpectedDaysAndOnlyOpenPatternVersion()
@@ -146,7 +148,8 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             db.AvailabilityExceptions.Add(new AvailabilityDeclaration
             {
@@ -222,7 +225,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         patterns[0].GetProperty("label").GetString().Should().Be("Current");
     }
 
-    // ── CreateException ─────────────────────────────────────────────────────
+    // â”€â”€ CreateException â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task CreateException_StartDateInPast_Returns400PastDeclarationLocked()
@@ -302,7 +305,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         json.GetProperty("error").GetString().Should().Be("InvalidRequest");
     }
 
-    // ── DeleteException ─────────────────────────────────────────────────────
+    // â”€â”€ DeleteException â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task DeleteException_AlreadyElapsed_Returns400AndRowStillExists()
@@ -313,7 +316,8 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             seeded = new AvailabilityDeclaration
             {
@@ -389,7 +393,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── CreatePattern ────────────────────────────────────────────────────────
+    // â”€â”€ CreatePattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task CreatePattern_Valid_Returns200AndPersistsDays()
@@ -432,7 +436,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         json.GetProperty("error").GetString().Should().Be("InvalidRequest");
     }
 
-    // ── UpdatePattern ────────────────────────────────────────────────────────
+    // â”€â”€ UpdatePattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task UpdatePattern_SameDayEdit_HardDeletesOldRowAndCreatesNew()
@@ -480,7 +484,8 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             seeded = new RecurringAvailabilityPattern
             {
@@ -549,7 +554,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── DeletePattern ────────────────────────────────────────────────────────
+    // â”€â”€ DeletePattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task DeletePattern_SameDayCreateThenDelete_HardDeletes()
@@ -581,7 +586,8 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             seeded = new RecurringAvailabilityPattern
             {
@@ -637,7 +643,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Audit log ────────────────────────────────────────────────────────────
+    // â”€â”€ Audit log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task CreateException_Success_WritesAuditLogEntry()
@@ -667,7 +673,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     /// Regression test for a real bug hit in production: <c>GuildAuditLog.Details</c> was capped
     /// at 512 characters, which a shift rotation's full day-by-day JSON breakdown blew straight
     /// past (7 non-trivial days is already close to the old limit on its own). A mocked
-    /// <c>IAuditLogService</c> unit test can never catch this — only a real write against Postgres can.
+    /// <c>IAuditLogService</c> unit test can never catch this â€” only a real write against Postgres can.
     /// </summary>
     [Fact]
     public async Task CreatePattern_ManyDaysDetail_WritesAuditLogEntryWithoutTruncation()
@@ -688,7 +694,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
             var log = await db.GuildAuditLogs.FirstOrDefaultAsync(l =>
                 l.GuildId == guildId && l.ActionType == GuildAuditAction.RecurringAvailabilityPatternCreated);
             log.Should().NotBeNull();
-            // Details is a Dictionary<string,string> serialized to JSON — the "days" value is
+            // Details is a Dictionary<string,string> serialized to JSON â€” the "days" value is
             // itself a JSON-encoded string, so it needs a second parse to reach the actual array.
             var parsedDays = JsonDocument.Parse(JsonDocument.Parse(log.Details!).RootElement.GetProperty("days").GetString()!);
             parsedDays.RootElement.GetArrayLength().Should().Be(7);
@@ -696,7 +702,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Cross-user isolation ─────────────────────────────────────────────────
+    // â”€â”€ Cross-user isolation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetAvailability_OnlyReturnsRequestersOwnExceptionsAndPatterns()
@@ -719,9 +725,9 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         json.GetProperty("days")[0].GetProperty("status").GetString().Should().Be("Available");
     }
 
-    // ── Repository — not-found branches ─────────────────────────────────────
+    // â”€â”€ Repository â€” not-found branches â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // The handlers' own pre-checks (existence, ownership) mean these repository-level "not found"
-    // branches are only ever reached in a genuine concurrent-delete race in production — calling
+    // branches are only ever reached in a genuine concurrent-delete race in production â€” calling
     // the repository directly is the only realistic way to exercise them.
 
     [Fact]
@@ -766,7 +772,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Entity relationships (FK / navigation round-trip) ───────────────────
+    // â”€â”€ Entity relationships (FK / navigation round-trip) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task Entities_NavigationPropertiesAndForeignKeys_RoundTripCorrectly()
@@ -796,11 +802,11 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Seeds a user with plain Roster-level access to a registered guild (no admin flag, no
-    /// character/membership rows — a bare <see cref="Domain.Models.Discord.UserGuild"/> row is enough
+    /// character/membership rows â€” a bare <see cref="Domain.Models.Discord.UserGuild"/> row is enough
     /// for every <see cref="RaidOps.API.Controllers.v1.AvailabilityController"/> endpoint).
     /// </summary>
     private async Task SeedRosterAccess(string discordId, string guildId)
@@ -808,13 +814,14 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(discordId));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(discordId, guildId));
             return Task.CompletedTask;
         });
     }
 
-    /// <summary>Adds a second member with Roster access to a guild already seeded by <see cref="SeedRosterAccess"/> — does not re-insert the guild row.</summary>
+    /// <summary>Adds a second member with Roster access to a guild already seeded by <see cref="SeedRosterAccess"/> â€” does not re-insert the guild row.</summary>
     private async Task SeedAdditionalMember(string discordId, string guildId)
     {
         await SeedAsync(db =>
