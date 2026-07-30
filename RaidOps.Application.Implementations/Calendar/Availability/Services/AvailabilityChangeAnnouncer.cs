@@ -10,32 +10,65 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.Services;
 /// <inheritdoc cref="IAvailabilityChangeAnnouncer"/>
 public class AvailabilityChangeAnnouncer(
     IAvailabilityResolutionService resolutionService,
+    IActiveRosterBranchResolver activeRosterBranchResolver,
     IAuditLogService auditLogService,
     IGuildNotificationDispatcher guildNotificationDispatcher,
     IAbsenceNotificationContentBuilder absenceNotificationContentBuilder) : IAvailabilityChangeAnnouncer
 {
     private sealed record DeltaSegment(DateOnly Start, DateOnly End, bool IsAdded, DayAvailabilityStatus Status, TimeOnly? AvailableFrom, TimeOnly? AvailableUntil);
 
+    /// <summary>The before/after exception rows and patterns to diff over a date range — everything <see cref="AnnounceForScopeAsync"/> needs besides the scope itself.</summary>
+    private sealed record ScopeDiffWindow(
+        DateOnly WindowStart,
+        DateOnly WindowEnd,
+        IReadOnlyCollection<AvailabilityDeclaration> BeforeExceptions,
+        IReadOnlyCollection<AvailabilityDeclaration> AfterExceptions,
+        IReadOnlyCollection<RecurringAvailabilityPattern> Patterns);
+
     /// <inheritdoc/>
     public async Task AnnounceAsync(AvailabilityChange change, CancellationToken cancellationToken = default)
     {
-        var (guildId, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns) = change;
+        var (guildId, guildBranchId, requesterDiscordId, windowStart, windowEnd, beforeExceptions, afterExceptions, patterns) = change;
+        var window = new ScopeDiffWindow(windowStart, windowEnd, beforeExceptions, afterExceptions, patterns);
 
-        var before = resolutionService.Resolve(windowStart, windowEnd, beforeExceptions, patterns);
-        var after = resolutionService.Resolve(windowStart, windowEnd, afterExceptions, patterns);
+        if (guildId != null)
+        {
+            await AnnounceForScopeAsync(new ActiveRosterBranch(guildId, guildBranchId!.Value), requesterDiscordId, window, cancellationToken);
+            return;
+        }
+
+        // A Global mutation has no single guild to audit-log or notify against — fan out across
+        // every branch where the member currently has an active roster character, re-resolving the
+        // diff independently per branch (branch scope wins over global via ResolveForScope's own
+        // cascade), and only announcing where that branch's resolved day actually changed.
+        var activeBranches = await activeRosterBranchResolver.GetActiveBranchesAsync(requesterDiscordId, cancellationToken);
+        foreach (var branch in activeBranches)
+        {
+            await AnnounceForScopeAsync(branch, requesterDiscordId, window, cancellationToken);
+        }
+    }
+
+    private async Task AnnounceForScopeAsync(
+        ActiveRosterBranch branch,
+        string requesterDiscordId,
+        ScopeDiffWindow window,
+        CancellationToken cancellationToken)
+    {
+        var before = resolutionService.ResolveForScope(window.WindowStart, window.WindowEnd, window.BeforeExceptions, window.Patterns, branch.GuildId, branch.GuildBranchId);
+        var after = resolutionService.ResolveForScope(window.WindowStart, window.WindowEnd, window.AfterExceptions, window.Patterns, branch.GuildId, branch.GuildBranchId);
 
         var segments = BuildDeltaSegments(before, after);
         if (segments.Count == 0)
             return;
 
-        var language = await absenceNotificationContentBuilder.GetGuildLanguageAsync(guildId, cancellationToken);
+        var language = await absenceNotificationContentBuilder.GetGuildLanguageAsync(branch.GuildId, cancellationToken);
 
         foreach (var segment in segments)
         {
             var action = segment.IsAdded ? GuildAuditAction.AvailabilityExceptionDeclared : GuildAuditAction.AvailabilityExceptionDeleted;
 
             await auditLogService.LogAsync(
-                guildId,
+                branch.GuildId,
                 requesterDiscordId,
                 action,
                 new Dictionary<string, string>
@@ -56,14 +89,14 @@ public class AvailabilityChangeAnnouncer(
             var datesValue = partialSuffix is null ? dateRange : $"{dateRange} · {partialSuffix}";
 
             var embed = await absenceNotificationContentBuilder.BuildAsync(
-                guildId,
+                branch.GuildId,
                 requesterDiscordId,
                 eventType,
                 kind,
                 [new DiscordEmbedField("Dates", datesValue)],
                 cancellationToken);
 
-            await guildNotificationDispatcher.NotifyAsync(guildId, eventType, embed, cancellationToken);
+            await guildNotificationDispatcher.NotifyAsync(branch.GuildId, eventType, branch.GuildBranchId, embed, cancellationToken);
         }
     }
 

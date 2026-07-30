@@ -31,10 +31,10 @@ public class GuildNotificationDispatcherTests
     [Fact]
     public async Task NotifyAsync_NoSettingRow_DoesNotSend()
     {
-        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, default))
+        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, default))
             .ReturnsAsync((GuildNotificationSetting?)null);
 
-        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, Embed);
+        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, Embed);
 
         _messages.Verify(m => m.SendEmbedAsync(It.IsAny<ulong>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
     }
@@ -42,10 +42,10 @@ public class GuildNotificationDispatcherTests
     [Fact]
     public async Task NotifyAsync_SettingDisabled_DoesNotSend()
     {
-        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, default))
+        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, default))
             .ReturnsAsync(new GuildNotificationSetting { GuildId = GuildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = ChannelId });
 
-        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, Embed);
+        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, Embed);
 
         _messages.Verify(m => m.SendEmbedAsync(It.IsAny<ulong>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
     }
@@ -53,10 +53,10 @@ public class GuildNotificationDispatcherTests
     [Fact]
     public async Task NotifyAsync_EnabledWithoutChannel_DoesNotSend()
     {
-        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, default))
+        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, default))
             .ReturnsAsync(new GuildNotificationSetting { GuildId = GuildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = null });
 
-        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, Embed);
+        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, Embed);
 
         _messages.Verify(m => m.SendEmbedAsync(It.IsAny<ulong>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
     }
@@ -64,10 +64,10 @@ public class GuildNotificationDispatcherTests
     [Fact]
     public async Task NotifyAsync_EnabledWithChannel_SendsToParsedChannelId()
     {
-        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, default))
+        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, default))
             .ReturnsAsync(new GuildNotificationSetting { GuildId = GuildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = ChannelId });
 
-        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, Embed);
+        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, Embed);
 
         _messages.Verify(m => m.SendEmbedAsync(ulong.Parse(ChannelId), Embed, default), Times.Once);
     }
@@ -75,13 +75,26 @@ public class GuildNotificationDispatcherTests
     [Fact]
     public async Task NotifyAsync_SendThrows_ExceptionIsSwallowed()
     {
-        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, default))
+        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, default))
             .ReturnsAsync(new GuildNotificationSetting { GuildId = GuildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = ChannelId });
         _messages.Setup(m => m.SendEmbedAsync(It.IsAny<ulong>(), It.IsAny<DiscordEmbedContent>(), default))
             .ThrowsAsync(new InvalidOperationException("missing permissions"));
 
-        var act = async () => await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, Embed);
+        var act = async () => await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, null, Embed);
 
         await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NotifyAsync_WithGuildBranchId_ResolvesSettingForThatBranch()
+    {
+        const int guildBranchId = 42;
+        _settingsRepository.Setup(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, guildBranchId, default))
+            .ReturnsAsync(new GuildNotificationSetting { GuildId = GuildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = ChannelId });
+
+        await _sut.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, guildBranchId, Embed);
+
+        _settingsRepository.Verify(r => r.GetAsync(GuildId, GuildNotificationEventType.AbsenceAdded, guildBranchId, default), Times.Once);
+        _messages.Verify(m => m.SendEmbedAsync(ulong.Parse(ChannelId), Embed, default), Times.Once);
     }
 }

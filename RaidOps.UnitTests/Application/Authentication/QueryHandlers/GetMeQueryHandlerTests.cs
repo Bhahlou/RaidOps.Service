@@ -14,10 +14,11 @@ namespace RaidOps.UnitTests.Application.Authentication.QueryHandlers;
 
 public class GetMeQueryHandlerTests
 {
-    private readonly Mock<IUsersRepository>          _users               = new();
-    private readonly Mock<IGuildAccessService>       _access              = new();
-    private readonly Mock<IUserNotificationService>  _userNotifications   = new();
-    private readonly GetMeQueryHandler               _sut;
+    private readonly Mock<IUsersRepository>              _users               = new();
+    private readonly Mock<IGuildAccessService>           _access              = new();
+    private readonly Mock<IUserNotificationService>      _userNotifications   = new();
+    private readonly Mock<IActiveRosterBranchResolver>   _activeRosterBranches = new();
+    private readonly GetMeQueryHandler                   _sut;
 
     private const string DiscordId = "user-1";
 
@@ -32,7 +33,10 @@ public class GetMeQueryHandlerTests
         _userNotifications.Setup(n => n.GetActiveNotificationsAsync(
                 It.IsAny<string>(), It.IsAny<IReadOnlyList<UserGuild>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object);
+        // No active roster branches by default — individual tests opt in.
+        _activeRosterBranches.Setup(r => r.GetActiveBranchesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object, _activeRosterBranches.Object);
     }
 
     // ── Guard clause ─────────────────────────────────────────────────────────
@@ -214,6 +218,38 @@ public class GetMeQueryHandlerTests
         var result = await _sut.HandleAsync(Query, default);
 
         result.Value!.Guilds.Single().Branches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchInActiveRosterBranches_HasActiveCharacterTrue()
+    {
+        var branch = MakeBranch(branchId: 2, isActive: true);
+        var userGuild = MakeUserGuild("g1", isAdmin: false, isRegistered: true, branches: [branch]);
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([userGuild]));
+        _access.Setup(a => a.ComputeAccessLevel(userGuild, branch, default)).Returns(GuildAccessLevel.Roster);
+        _activeRosterBranches.Setup(r => r.GetActiveBranchesAsync(DiscordId, default))
+            .ReturnsAsync([new ActiveRosterBranch("g1", branch.Id)]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Guilds.Single().Branches.Single().HasActiveCharacter.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchNotInActiveRosterBranches_HasActiveCharacterFalse()
+    {
+        var branch = MakeBranch(branchId: 2, isActive: true);
+        var userGuild = MakeUserGuild("g1", isAdmin: false, isRegistered: true, branches: [branch]);
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([userGuild]));
+        _access.Setup(a => a.ComputeAccessLevel(userGuild, branch, default)).Returns(GuildAccessLevel.Roster);
+        _activeRosterBranches.Setup(r => r.GetActiveBranchesAsync(DiscordId, default))
+            .ReturnsAsync([new ActiveRosterBranch("other-guild", 999)]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Guilds.Single().Branches.Single().HasActiveCharacter.Should().BeFalse();
     }
 
     // ── IsConfigured mapping ──────────────────────────────────────────────

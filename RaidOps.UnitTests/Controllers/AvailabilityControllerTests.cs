@@ -19,6 +19,7 @@ public class AvailabilityControllerTests
 
     private const string DiscordId = "user-1";
     private const string GuildId = "guild-1";
+    private const int GuildBranchId = 10;
 
     public AvailabilityControllerTests()
     {
@@ -35,7 +36,7 @@ public class AvailabilityControllerTests
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
 
-        var result = await _sut.GetMyAvailability(GuildId, default, default, default);
+        var result = await _sut.GetMyAvailability(default, default, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -47,7 +48,7 @@ public class AvailabilityControllerTests
                 It.IsAny<GetMyAvailabilityQuery>(), default))
             .ReturnsAsync(Result<AvailabilityCalendarResponse>.Fail(ResponseDetail.Forbidden));
 
-        var result = await _sut.GetMyAvailability(GuildId, default, default, default);
+        var result = await _sut.GetMyAvailability(default, default, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -60,7 +61,7 @@ public class AvailabilityControllerTests
                 It.IsAny<GetMyAvailabilityQuery>(), default))
             .ReturnsAsync(Result<AvailabilityCalendarResponse>.Ok(response));
 
-        var result = await _sut.GetMyAvailability(GuildId, default, default, default);
+        var result = await _sut.GetMyAvailability(default, default, default);
 
         result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(response);
     }
@@ -74,12 +75,11 @@ public class AvailabilityControllerTests
                 It.IsAny<GetMyAvailabilityQuery>(), default))
             .ReturnsAsync(Result<AvailabilityCalendarResponse>.Ok(new AvailabilityCalendarResponse()));
 
-        await _sut.GetMyAvailability(GuildId, rangeStart, rangeEnd, default);
+        await _sut.GetMyAvailability(rangeStart, rangeEnd, default);
 
         _queries.Verify(q => q.DispatchAsync<GetMyAvailabilityQuery, AvailabilityCalendarResponse>(
             It.Is<GetMyAvailabilityQuery>(x =>
-                x.GuildId == GuildId && x.RequesterDiscordId == DiscordId &&
-                x.RangeStart == rangeStart && x.RangeEnd == rangeEnd),
+                x.RequesterDiscordId == DiscordId && x.RangeStart == rangeStart && x.RangeEnd == rangeEnd),
             default), Times.Once);
     }
 
@@ -94,7 +94,7 @@ public class AvailabilityControllerTests
             StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 1), Status = DayAvailabilityStatus.Absent,
         };
 
-        var result = await _sut.CreateException(GuildId, command, default);
+        var result = await _sut.CreateException(command, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -109,13 +109,32 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<CreateAvailabilityExceptionCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.PastDeclarationLocked));
 
-        var result = await _sut.CreateException(GuildId, command, default);
+        var result = await _sut.CreateException(command, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
-    public async Task CreateException_Success_SetsRouteFieldsAndReturnsOk()
+    public async Task CreateException_BranchScoped_SetsRequesterAndPassesScopeThroughUnchangedThenReturnsOk()
+    {
+        var command = new CreateAvailabilityExceptionCommand
+        {
+            GuildId = GuildId, GuildBranchId = GuildBranchId,
+            StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 1), Status = DayAvailabilityStatus.Absent,
+        };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<CreateAvailabilityExceptionCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        var result = await _sut.CreateException(command, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        command.GuildId.Should().Be(GuildId);
+        command.GuildBranchId.Should().Be(GuildBranchId);
+        command.RequesterDiscordId.Should().Be(DiscordId);
+    }
+
+    [Fact]
+    public async Task CreateException_Global_SetsRequesterAndLeavesScopeNullThenReturnsOk()
     {
         var command = new CreateAvailabilityExceptionCommand
         {
@@ -124,10 +143,11 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<CreateAvailabilityExceptionCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.CreateException(GuildId, command, default);
+        var result = await _sut.CreateException(command, default);
 
         result.Should().BeOfType<OkObjectResult>();
-        command.GuildId.Should().Be(GuildId);
+        command.GuildId.Should().BeNull();
+        command.GuildBranchId.Should().BeNull();
         command.RequesterDiscordId.Should().Be(DiscordId);
     }
 
@@ -138,7 +158,7 @@ public class AvailabilityControllerTests
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
 
-        var result = await _sut.DeleteException(GuildId, 7, default);
+        var result = await _sut.DeleteException(7, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -149,7 +169,7 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<DeleteAvailabilityExceptionCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.AvailabilityExceptionNotFound));
 
-        var result = await _sut.DeleteException(GuildId, 7, default);
+        var result = await _sut.DeleteException(7, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -160,11 +180,11 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<DeleteAvailabilityExceptionCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.DeleteException(GuildId, 7, default);
+        var result = await _sut.DeleteException(7, default);
 
         result.Should().BeOfType<OkObjectResult>();
         _commands.Verify(c => c.DispatchAsync(
-            It.Is<DeleteAvailabilityExceptionCommand>(x => x.GuildId == GuildId && x.RequesterDiscordId == DiscordId && x.ExceptionId == 7),
+            It.Is<DeleteAvailabilityExceptionCommand>(x => x.RequesterDiscordId == DiscordId && x.ExceptionId == 7),
             default), Times.Once);
     }
 
@@ -179,7 +199,7 @@ public class AvailabilityControllerTests
             StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 1), Status = DayAvailabilityStatus.Absent,
         };
 
-        var result = await _sut.UpdateException(GuildId, 7, command, default);
+        var result = await _sut.UpdateException(7, command, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -194,7 +214,7 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateAvailabilityExceptionCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest));
 
-        var result = await _sut.UpdateException(GuildId, 7, command, default);
+        var result = await _sut.UpdateException(7, command, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -209,10 +229,9 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateAvailabilityExceptionCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.UpdateException(GuildId, 7, command, default);
+        var result = await _sut.UpdateException(7, command, default);
 
         result.Should().BeOfType<OkObjectResult>();
-        command.GuildId.Should().Be(GuildId);
         command.RequesterDiscordId.Should().Be(DiscordId);
         command.ExceptionId.Should().Be(7);
     }
@@ -225,7 +244,7 @@ public class AvailabilityControllerTests
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
         var command = new RemoveAvailabilityExceptionDayCommand { Date = new DateOnly(2026, 1, 2) };
 
-        var result = await _sut.RemoveExceptionDay(GuildId, 7, command, default);
+        var result = await _sut.RemoveExceptionDay(7, command, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -237,7 +256,7 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<RemoveAvailabilityExceptionDayCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest));
 
-        var result = await _sut.RemoveExceptionDay(GuildId, 7, command, default);
+        var result = await _sut.RemoveExceptionDay(7, command, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -249,10 +268,9 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<RemoveAvailabilityExceptionDayCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.RemoveExceptionDay(GuildId, 7, command, default);
+        var result = await _sut.RemoveExceptionDay(7, command, default);
 
         result.Should().BeOfType<OkObjectResult>();
-        command.GuildId.Should().Be(GuildId);
         command.RequesterDiscordId.Should().Be(DiscordId);
         command.ExceptionId.Should().Be(7);
     }
@@ -265,7 +283,7 @@ public class AvailabilityControllerTests
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
         var command = new CreateRecurringAvailabilityPatternCommand { CycleLengthDays = 7, AnchorDate = new DateOnly(2026, 1, 1), Days = [] };
 
-        var result = await _sut.CreatePattern(GuildId, command, default);
+        var result = await _sut.CreatePattern(command, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -277,22 +295,42 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<CreateRecurringAvailabilityPatternCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest));
 
-        var result = await _sut.CreatePattern(GuildId, command, default);
+        var result = await _sut.CreatePattern(command, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
-    public async Task CreatePattern_Success_SetsRouteFieldsAndReturnsOk()
+    public async Task CreatePattern_BranchScoped_SetsRequesterAndPassesScopeThroughUnchangedThenReturnsOk()
+    {
+        var command = new CreateRecurringAvailabilityPatternCommand
+        {
+            GuildId = GuildId, GuildBranchId = GuildBranchId,
+            CycleLengthDays = 7, AnchorDate = new DateOnly(2026, 1, 1), Days = [],
+        };
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<CreateRecurringAvailabilityPatternCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        var result = await _sut.CreatePattern(command, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        command.GuildId.Should().Be(GuildId);
+        command.GuildBranchId.Should().Be(GuildBranchId);
+        command.RequesterDiscordId.Should().Be(DiscordId);
+    }
+
+    [Fact]
+    public async Task CreatePattern_Global_SetsRequesterAndLeavesScopeNullThenReturnsOk()
     {
         var command = new CreateRecurringAvailabilityPatternCommand { CycleLengthDays = 7, AnchorDate = new DateOnly(2026, 1, 1), Days = [] };
         _commands.Setup(c => c.DispatchAsync(It.IsAny<CreateRecurringAvailabilityPatternCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.CreatePattern(GuildId, command, default);
+        var result = await _sut.CreatePattern(command, default);
 
         result.Should().BeOfType<OkObjectResult>();
-        command.GuildId.Should().Be(GuildId);
+        command.GuildId.Should().BeNull();
+        command.GuildBranchId.Should().BeNull();
         command.RequesterDiscordId.Should().Be(DiscordId);
     }
 
@@ -304,7 +342,7 @@ public class AvailabilityControllerTests
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
         var command = new UpdateRecurringAvailabilityPatternCommand { CycleLengthDays = 7, AnchorDate = new DateOnly(2026, 1, 1), Days = [] };
 
-        var result = await _sut.UpdatePattern(GuildId, 5, command, default);
+        var result = await _sut.UpdatePattern(5, command, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -316,7 +354,7 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateRecurringAvailabilityPatternCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.RecurringAvailabilityPatternNotFound));
 
-        var result = await _sut.UpdatePattern(GuildId, 5, command, default);
+        var result = await _sut.UpdatePattern(5, command, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -328,10 +366,9 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateRecurringAvailabilityPatternCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.UpdatePattern(GuildId, 5, command, default);
+        var result = await _sut.UpdatePattern(5, command, default);
 
         result.Should().BeOfType<OkObjectResult>();
-        command.GuildId.Should().Be(GuildId);
         command.RequesterDiscordId.Should().Be(DiscordId);
         command.PatternId.Should().Be(5);
     }
@@ -343,7 +380,7 @@ public class AvailabilityControllerTests
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
 
-        var result = await _sut.DeletePattern(GuildId, 5, default);
+        var result = await _sut.DeletePattern(5, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -354,7 +391,7 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<DeleteRecurringAvailabilityPatternCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.RecurringAvailabilityPatternNotFound));
 
-        var result = await _sut.DeletePattern(GuildId, 5, default);
+        var result = await _sut.DeletePattern(5, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -365,11 +402,11 @@ public class AvailabilityControllerTests
         _commands.Setup(c => c.DispatchAsync(It.IsAny<DeleteRecurringAvailabilityPatternCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
-        var result = await _sut.DeletePattern(GuildId, 5, default);
+        var result = await _sut.DeletePattern(5, default);
 
         result.Should().BeOfType<OkObjectResult>();
         _commands.Verify(c => c.DispatchAsync(
-            It.Is<DeleteRecurringAvailabilityPatternCommand>(x => x.GuildId == GuildId && x.RequesterDiscordId == DiscordId && x.PatternId == 5),
+            It.Is<DeleteRecurringAvailabilityPatternCommand>(x => x.RequesterDiscordId == DiscordId && x.PatternId == 5),
             default), Times.Once);
     }
 }

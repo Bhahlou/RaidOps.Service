@@ -19,4 +19,12 @@ public class UserGuildBranchResponse
 
     /// <summary>The user's access level on this specific branch (Public/Roster/Officer).</summary>
     public GuildAccessLevel AccessLevel { get; set; }
+
+    /// <summary>
+    /// Whether the user has at least one active roster character on this branch. Unlike
+    /// <see cref="AccessLevel"/> (derived from Discord roles), this reflects an actual
+    /// <see cref="RaidOps.Domain.Models.Discord.GuildMembership"/> row — a branch can grant
+    /// Roster-level Discord access without the user ever having registered a character on it.
+    /// </summary>
+    public bool HasActiveCharacter { get; set; }
 }

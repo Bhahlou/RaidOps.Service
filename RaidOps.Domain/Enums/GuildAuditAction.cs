@@ -52,4 +52,7 @@ public enum GuildAuditAction
 
     /// <summary>A guild branch's roster/officer role-set configuration was updated.</summary>
     BranchRosterSettingsUpdated = 16,
+
+    /// <summary>A branch's Discord notification settings overrides were reset, reverting it to the guild-wide fallback.</summary>
+    NotificationSettingsReset = 17,
 }

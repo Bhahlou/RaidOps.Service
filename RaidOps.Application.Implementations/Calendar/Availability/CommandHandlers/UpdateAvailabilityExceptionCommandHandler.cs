@@ -12,21 +12,20 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandl
 /// Handles <see cref="UpdateAvailabilityExceptionCommand"/> by replacing the exception in place
 /// (internally a delete + re-create — the same non-atomic pattern already used for recurring
 /// pattern edits) and announcing only the net change via <see cref="IAvailabilityChangeAnnouncer"/>,
-/// instead of the raw delete/create pair a caller doing this itself would produce.
+/// instead of the raw delete/create pair a caller doing this itself would produce. Scope
+/// (Global/branch) is immutable after creation — only Create chooses it — so the new row is
+/// re-created with <paramref name="command"/>'s existing scope, not a resubmitted one. Ownership
+/// (id + <see cref="UpdateAvailabilityExceptionCommand.RequesterDiscordId"/>) is the only
+/// authorization needed; no separate guild access check applies.
 /// </summary>
 public class UpdateAvailabilityExceptionCommandHandler(
-    IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
     IAvailabilityChangeAnnouncer availabilityChangeAnnouncer) : ICommandHandlerAsync<UpdateAvailabilityExceptionCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateAvailabilityExceptionCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
-        if (accessLevel < GuildAccessLevel.Roster)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
-
-        var existing = await availabilityRepository.GetExceptionByIdAsync(command.ExceptionId, command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var existing = await availabilityRepository.GetExceptionByIdAsync(command.ExceptionId, command.RequesterDiscordId, cancellationToken);
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.AvailabilityExceptionNotFound, $"Exception '{command.ExceptionId}' does not exist.");
 
@@ -46,14 +45,15 @@ public class UpdateAvailabilityExceptionCommandHandler(
         var windowEnd = existing.EndDate > command.EndDate ? existing.EndDate : command.EndDate;
 
         var beforeExceptions = await availabilityRepository.GetExceptionsOverlappingAsync(
-            command.RequesterDiscordId, command.GuildId, windowStart, windowEnd, cancellationToken);
-        var patterns = await availabilityRepository.GetPatternsAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+            command.RequesterDiscordId, windowStart, windowEnd, cancellationToken);
+        var patterns = await availabilityRepository.GetPatternsAsync(command.RequesterDiscordId, cancellationToken);
 
-        await availabilityRepository.DeleteExceptionAsync(command.ExceptionId, command.RequesterDiscordId, command.GuildId, cancellationToken);
+        await availabilityRepository.DeleteExceptionAsync(command.ExceptionId, command.RequesterDiscordId, cancellationToken);
         var updated = await availabilityRepository.AddExceptionAsync(new AvailabilityDeclaration
         {
             UserDiscordId = command.RequesterDiscordId,
-            GuildId = command.GuildId,
+            GuildId = existing.GuildId,
+            GuildBranchId = existing.GuildBranchId,
             StartDate = command.StartDate,
             EndDate = command.EndDate,
             Status = command.Status,
@@ -66,7 +66,8 @@ public class UpdateAvailabilityExceptionCommandHandler(
 
         await availabilityChangeAnnouncer.AnnounceAsync(
             new AvailabilityChange(
-                command.GuildId,
+                existing.GuildId,
+                existing.GuildBranchId,
                 command.RequesterDiscordId,
                 windowStart,
                 windowEnd,

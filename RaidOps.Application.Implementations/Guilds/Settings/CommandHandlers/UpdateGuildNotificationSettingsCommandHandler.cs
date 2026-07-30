@@ -21,9 +21,11 @@ public class UpdateGuildNotificationSettingsCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateGuildNotificationSettingsCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = command.GuildBranchId != null
+            ? await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId.Value, cancellationToken)
+            : await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild/branch.");
 
         var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
         if (guild == null)
@@ -35,12 +37,13 @@ public class UpdateGuildNotificationSettingsCommandHandler(
         var settings = command.Settings.Select(s => new GuildNotificationSetting
         {
             GuildId = command.GuildId,
+            GuildBranchId = command.GuildBranchId,
             EventType = s.EventType,
             Enabled = s.Enabled,
             ChannelId = s.Enabled ? s.ChannelId : null,
         });
 
-        await notificationSettingsRepository.UpsertRangeAsync(command.GuildId, settings, cancellationToken);
+        await notificationSettingsRepository.UpsertRangeAsync(command.GuildId, command.GuildBranchId, settings, cancellationToken);
 
         await auditLogService.LogAsync(
             command.GuildId,

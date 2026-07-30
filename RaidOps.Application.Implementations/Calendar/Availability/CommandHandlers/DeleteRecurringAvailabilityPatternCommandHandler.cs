@@ -8,14 +8,18 @@ using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandlers;
 
 /// <summary>
-/// Handles <see cref="DeleteRecurringAvailabilityPatternCommand"/> by verifying roster access and
-/// stopping the pattern non-retroactively: closed as of yesterday if it has already applied to at
-/// least one past date (past resolved days stay exactly as they were), or deleted outright if it was
-/// created and removed on the same day, with no history to protect.
+/// Handles <see cref="DeleteRecurringAvailabilityPatternCommand"/> by stopping the pattern
+/// non-retroactively: closed as of yesterday if it has already applied to at least one past date
+/// (past resolved days stay exactly as they were), or deleted outright if it was created and
+/// removed on the same day, with no history to protect. Ownership (id + <see cref="DeleteRecurringAvailabilityPatternCommand.RequesterDiscordId"/>)
+/// is the only authorization needed; no separate guild access check applies. A branch-scoped
+/// pattern audit-logs/notifies that one branch; a Global pattern has no single guild to log/notify
+/// against, so it fans out identically to every branch where the member currently has an active
+/// roster character.
 /// </summary>
 public class DeleteRecurringAvailabilityPatternCommandHandler(
-    IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
+    IActiveRosterBranchResolver activeRosterBranchResolver,
     IAuditLogService auditLogService,
     IGuildNotificationDispatcher guildNotificationDispatcher,
     IAbsenceNotificationContentBuilder absenceNotificationContentBuilder) : ICommandHandlerAsync<DeleteRecurringAvailabilityPatternCommand>
@@ -23,42 +27,49 @@ public class DeleteRecurringAvailabilityPatternCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeleteRecurringAvailabilityPatternCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
-        if (accessLevel < GuildAccessLevel.Roster)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
-
-        var existing = await availabilityRepository.GetPatternByIdAsync(command.PatternId, command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var existing = await availabilityRepository.GetPatternByIdAsync(command.PatternId, command.RequesterDiscordId, cancellationToken);
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RecurringAvailabilityPatternNotFound, $"Pattern '{command.PatternId}' does not exist.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var stopped = existing.EffectiveFrom < today
-            ? await availabilityRepository.ClosePatternAsync(command.PatternId, command.RequesterDiscordId, command.GuildId, today.AddDays(-1), cancellationToken)
-            : await availabilityRepository.DeletePatternAsync(command.PatternId, command.RequesterDiscordId, command.GuildId, cancellationToken);
+            ? await availabilityRepository.ClosePatternAsync(command.PatternId, command.RequesterDiscordId, today.AddDays(-1), cancellationToken)
+            : await availabilityRepository.DeletePatternAsync(command.PatternId, command.RequesterDiscordId, cancellationToken);
 
         if (!stopped)
             return Result<CommandResponse>.Fail(ResponseDetail.RecurringAvailabilityPatternNotFound, $"Pattern '{command.PatternId}' does not exist.");
 
-        await auditLogService.LogAsync(
-            command.GuildId,
-            command.RequesterDiscordId,
-            GuildAuditAction.RecurringAvailabilityPatternStopped,
-            RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(existing.Label, existing.CycleLengthDays, existing.AnchorDate, existing.Days),
-            cancellationToken);
+        var auditVariables = RecurringAvailabilityPatternRequestHelper.BuildAuditVariables(existing.Label, existing.CycleLengthDays, existing.AnchorDate, existing.Days);
+        List<PatternDayNotification> days = [.. existing.Days.Select(d => new PatternDayNotification(d.OffsetInCycle, d.Status, d.Reason, d.AvailableFrom, d.AvailableUntil))];
+        var announcement = new PatternAnnouncement(existing.AnchorDate, existing.CycleLengthDays, days, auditVariables);
+
+        if (existing.GuildId != null)
+        {
+            await AnnouncePatternStoppedAsync(new ActiveRosterBranch(existing.GuildId, existing.GuildBranchId!.Value), command.RequesterDiscordId, announcement, cancellationToken);
+        }
+        else
+        {
+            var activeBranches = await activeRosterBranchResolver.GetActiveBranchesAsync(command.RequesterDiscordId, cancellationToken);
+            foreach (var branch in activeBranches)
+                await AnnouncePatternStoppedAsync(branch, command.RequesterDiscordId, announcement, cancellationToken);
+        }
+
+        return Result<CommandResponse>.Ok(new CommandResponse("Recurring availability pattern stopped successfully."));
+    }
+
+    private async Task AnnouncePatternStoppedAsync(
+        ActiveRosterBranch branch,
+        string requesterDiscordId,
+        PatternAnnouncement announcement,
+        CancellationToken cancellationToken)
+    {
+        await auditLogService.LogAsync(branch.GuildId, requesterDiscordId, GuildAuditAction.RecurringAvailabilityPatternStopped, announcement.AuditVariables, cancellationToken);
 
         var eventType = GuildNotificationEventType.AbsenceRemoved;
 
         var embed = await absenceNotificationContentBuilder.BuildPatternAsync(
-            command.GuildId,
-            command.RequesterDiscordId,
-            eventType,
-            existing.AnchorDate,
-            existing.CycleLengthDays,
-            [.. existing.Days.Select(d => new PatternDayNotification(d.OffsetInCycle, d.Status, d.Reason, d.AvailableFrom, d.AvailableUntil))],
-            cancellationToken);
+            branch.GuildId, requesterDiscordId, eventType, announcement.AnchorDate, announcement.CycleLengthDays, announcement.Days, cancellationToken);
 
-        await guildNotificationDispatcher.NotifyAsync(command.GuildId, eventType, embed, cancellationToken);
-
-        return Result<CommandResponse>.Ok(new CommandResponse("Recurring availability pattern stopped successfully."));
+        await guildNotificationDispatcher.NotifyAsync(branch.GuildId, eventType, branch.GuildBranchId, embed, cancellationToken);
     }
 }
