@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.2...v1.4.0) (2026-07-30)
+
+
+### 🚀 Features
+
+* Calendar global availability ([#59](https://github.com/Bhahlou/RaidOps.Service/issues/59)) ([39bc433](https://github.com/Bhahlou/RaidOps.Service/commit/39bc43300dea90459f153b53a91e32e4935f0032))
+* Guild now support multi-branch. You can play several wow branch on a single discord server ([#57](https://github.com/Bhahlou/RaidOps.Service/issues/57)) ([5c3ab75](https://github.com/Bhahlou/RaidOps.Service/commit/5c3ab75acea257e21614e9663e3742395a8f3f5a))
+
 ## [1.3.2](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.1...v1.3.2) (2026-07-25)
 
 
