@@ -27,6 +27,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="GuildMembership"/> table linking characters to guild rosters.</summary>
     public DbSet<GuildMembership> GuildMemberships => Set<GuildMembership>();
 
+    /// <summary>Gets the <see cref="GuildBranch"/> table (per-guild WoW branch activation and roster/officer role sets).</summary>
+    public DbSet<GuildBranch> GuildBranches => Set<GuildBranch>();
+
     /// <summary>Gets the <see cref="GuildAuditLog"/> table recording guild action history.</summary>
     public DbSet<GuildAuditLog> GuildAuditLogs => Set<GuildAuditLog>();
 
@@ -215,6 +218,26 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .WithMany(g => g.Memberships)
             .HasForeignKey(m => m.GuildId);
 
+        modelBuilder.Entity<GuildMembership>()
+            .HasOne(m => m.GuildBranch)
+            .WithMany(gb => gb.Memberships)
+            .HasForeignKey(m => m.GuildBranchId);
+
+        // GuildBranch — surrogate PK, unique (GuildId, BranchId) so a branch can't be activated twice per guild
+        modelBuilder.Entity<GuildBranch>()
+            .HasIndex(gb => new { gb.GuildId, gb.BranchId })
+            .IsUnique();
+
+        modelBuilder.Entity<GuildBranch>()
+            .HasOne(gb => gb.Guild)
+            .WithMany(g => g.Branches)
+            .HasForeignKey(gb => gb.GuildId);
+
+        modelBuilder.Entity<GuildBranch>()
+            .HasOne(gb => gb.Branch)
+            .WithMany()
+            .HasForeignKey(gb => gb.BranchId);
+
         // GuildAuditLog — FK to Guild; logs are immutable so no cascade delete
         modelBuilder.Entity<GuildAuditLog>()
             .HasOne(l => l.Guild)
@@ -234,16 +257,34 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .WithMany()
             .HasForeignKey(nd => nd.UserDiscordId);
 
-        // GuildNotificationSetting — composite PK (GuildId, EventType)
-        modelBuilder.Entity<GuildNotificationSetting>()
-            .HasKey(s => new { s.GuildId, s.EventType });
-
+        // GuildNotificationSetting — surrogate PK (Postgres primary keys can't contain a nullable
+        // column, and GuildBranchId null = guild-wide fallback row is exactly that column).
+        // Uniqueness of (GuildId, EventType, GuildBranchId) enforced by two partial unique indexes
+        // instead: one per branch override, one for the single guild-wide fallback row.
         modelBuilder.Entity<GuildNotificationSetting>()
             .HasOne<Guild>()
             .WithMany()
             .HasForeignKey(s => s.GuildId);
 
-        // AvailabilityDeclaration — FK to User/Guild, no cascade (a departing member's history stays)
+        modelBuilder.Entity<GuildNotificationSetting>()
+            .HasOne<GuildBranch>()
+            .WithMany()
+            .HasForeignKey(s => s.GuildBranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GuildNotificationSetting>()
+            .HasIndex(s => new { s.GuildId, s.EventType, s.GuildBranchId })
+            .IsUnique()
+            .HasFilter("""("GuildBranchId" IS NOT NULL)""");
+
+        modelBuilder.Entity<GuildNotificationSetting>()
+            .HasIndex(s => new { s.GuildId, s.EventType })
+            .IsUnique()
+            .HasFilter("""("GuildBranchId" IS NULL)""");
+
+        // AvailabilityDeclaration — FK to User (required)/Guild/GuildBranch (both optional, no
+        // cascade); scope is Global (both null) or a specific branch (both set), enforced by a
+        // check constraint below
         modelBuilder.Entity<AvailabilityDeclaration>()
             .HasOne(e => e.User)
             .WithMany()
@@ -257,9 +298,21 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<AvailabilityDeclaration>()
+            .HasOne(e => e.GuildBranch)
+            .WithMany()
+            .HasForeignKey(e => e.GuildBranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AvailabilityDeclaration>()
             .HasIndex(e => new { e.UserDiscordId, e.GuildId, e.StartDate, e.EndDate });
 
-        // RecurringAvailabilityPattern — FK to User/Guild, no cascade; Days cascade with their pattern
+        modelBuilder.Entity<AvailabilityDeclaration>()
+            .ToTable(t => t.HasCheckConstraint(
+                "CK_AvailabilityExceptions_ScopeBothOrNeither",
+                """("GuildId" IS NULL AND "GuildBranchId" IS NULL) OR ("GuildId" IS NOT NULL AND "GuildBranchId" IS NOT NULL)"""));
+
+        // RecurringAvailabilityPattern — FK to User (required)/Guild/GuildBranch (both optional, no
+        // cascade); Days cascade with their pattern; same Global-or-branch scope constraint as above
         modelBuilder.Entity<RecurringAvailabilityPattern>()
             .HasOne(p => p.User)
             .WithMany()
@@ -273,7 +326,18 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<RecurringAvailabilityPattern>()
+            .HasOne(p => p.GuildBranch)
+            .WithMany()
+            .HasForeignKey(p => p.GuildBranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RecurringAvailabilityPattern>()
             .HasIndex(p => new { p.UserDiscordId, p.GuildId });
+
+        modelBuilder.Entity<RecurringAvailabilityPattern>()
+            .ToTable(t => t.HasCheckConstraint(
+                "CK_RecurringAvailabilityPatterns_ScopeBothOrNeither",
+                """("GuildId" IS NULL AND "GuildBranchId" IS NULL) OR ("GuildId" IS NOT NULL AND "GuildBranchId" IS NOT NULL)"""));
 
         modelBuilder.Entity<RecurringAvailabilityPatternDay>()
             .HasOne(d => d.Pattern)

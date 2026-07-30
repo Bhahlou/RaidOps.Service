@@ -77,7 +77,8 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80031);
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             return Task.CompletedTask;
         });
@@ -98,11 +99,13 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80032);
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -167,6 +170,27 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
     }
 
     [Fact]
+    public async Task JoinGuild_WhenBranchNotActiveOnGuild_Returns400()
+    {
+        const string id      = "400000000000000045";
+        const string guildId = "820000000000000045";
+        var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80045);
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild { Id = guildId, Name = "No Branch Guild", IsRegistered = true });
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/characters/{charId}/memberships/{guildId}",
+            new { characterRank = 1 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task JoinGuild_WhenAlreadyMember_Returns400()
     {
         const string id      = "400000000000000043";
@@ -174,11 +198,13 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80043);
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -200,7 +226,8 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80044);
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             return Task.CompletedTask;
         });
@@ -217,6 +244,7 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
             var membership = await db.GuildMemberships.FindAsync(charId, guildId);
             membership.Should().NotBeNull();
             membership!.CharacterRank.Should().Be(CharacterRank.Main);
+            membership.GuildBranchId.Should().BeGreaterThan(0);
         }
     }
 
@@ -250,9 +278,11 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         await SeedAsync(db =>
         {
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -282,10 +312,12 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         {
             db.Users.Add(TestDataBuilder.CreateUser(officerId));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -315,10 +347,12 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         {
             db.Users.Add(TestDataBuilder.CreateUser(strangerId));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(strangerId, guildId, isAdmin: false));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -360,9 +394,11 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         await SeedAsync(db =>
         {
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -391,10 +427,12 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         {
             db.Users.Add(TestDataBuilder.CreateUser(officerId));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -421,7 +459,7 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
     public async Task LeaveGuild_AdminKickingAnotherAdmin_Returns200()
     {
         // Discord admins bypass the role hierarchy entirely — an admin can exclude anyone,
-        // including another admin.
+        // including another admin (but never the real owner, see OutranksAsync unit tests).
         const string ownerId   = "400000000000000064";
         const string adminId   = "400000000000000164";
         const string guildId   = "820000000000000064";
@@ -430,11 +468,13 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         {
             db.Users.Add(TestDataBuilder.CreateUser(adminId));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(ownerId, guildId, isAdmin: true));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(adminId, guildId, isAdmin: true));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -463,10 +503,12 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         {
             db.Users.Add(TestDataBuilder.CreateUser(strangerId));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(strangerId, guildId, isAdmin: false));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -494,7 +536,8 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80080);
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             return Task.CompletedTask;
         });
@@ -523,9 +566,11 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         await SeedAsync(db =>
         {
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -553,9 +598,11 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         await SeedAsync(db =>
         {
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -618,7 +665,8 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var char2Id = await SeedUserWithCharacter2ndChar(id, bnetCharacterId: 80092, name: "Bhahlheal");
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Iron Council", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Iron Council", IsRegistered = true });
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             return Task.CompletedTask;
         });
@@ -643,11 +691,13 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var char2Id = await SeedUserWithCharacter2ndChar(id, bnetCharacterId: 80094, name: "AltChar");
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = char1Id, GuildId = guildId,
+                CharacterId = char1Id, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;
@@ -671,11 +721,13 @@ public class GuildMembershipControllerTests(RaidOpsWebApplicationFactory factory
         var charId = await SeedUserWithCharacter(id, bnetCharacterId: 80095, name: "OnlyChar");
         await SeedAsync(db =>
         {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             db.GuildMemberships.Add(new GuildMembership
             {
-                CharacterId = charId, GuildId = guildId,
+                CharacterId = charId, GuildId = guildId, GuildBranch = branch,
                 CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
             });
             return Task.CompletedTask;

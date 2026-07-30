@@ -10,6 +10,12 @@ public class AvailabilityExceptionResponse
     /// <summary>The exception's identifier.</summary>
     public int Id { get; set; }
 
+    /// <summary>The guild of this exception's branch scope, or <c>null</c> if it's Global.</summary>
+    public string? GuildId { get; set; }
+
+    /// <summary>This exception's specific branch scope, or <c>null</c> if it's Global.</summary>
+    public int? GuildBranchId { get; set; }
+
     /// <summary>First date covered by this exception (inclusive).</summary>
     public DateOnly StartDate { get; set; }
 

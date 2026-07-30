@@ -2,6 +2,7 @@ using FluentAssertions;
 using NetCord;
 using NetCord.Gateway;
 using NetCord.JsonModels;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.ExternalApplication.Implementations.Bot;
 
 namespace RaidOps.UnitTests.ExternalApplication.Bot;
@@ -290,7 +291,7 @@ public class GuildServiceTests
     private static JsonRole EveryoneRole => NetCordTestHelpers.MakeJsonRole(GuildId, (Permissions)0);
 
     [Fact]
-    public void GetChannels_BotHasAdministratorRole_ReturnsChannelsWithBotCanSendMessagesTrueAndCategoryResolved()
+    public void GetChannels_BotHasAdministratorRole_ReturnsChannelsWithNoMissingPermissionsAndCategoryResolved()
     {
         var adminRole = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.Administrator, managed: false);
         var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
@@ -308,11 +309,39 @@ public class GuildServiceTests
 
         var result = sut.GetChannels(GuildId.ToString()).ToList();
 
-        result.Should().ContainSingle(c => c.ChannelId == ChannelId1 && c.Name == "general" && c.BotCanSendMessages && c.CategoryName == "Raid");
+        result.Should().ContainSingle(c => c.ChannelId == ChannelId1 && c.Name == "general" && c.MissingPermissions.Count == 0 && c.CategoryName == "Raid");
     }
 
     [Fact]
-    public void GetChannels_BotHasNoRoles_ReturnsChannelsWithBotCanSendMessagesFalse()
+    public void GetChannels_BotUserNotInGuildMemberCache_ReturnsChannelsWithAllThreeMissingPermissions()
+    {
+        // Bot user is cached at the Gateway level (no "Bot user not yet available" exception), but
+        // its own GuildUser member entry hasn't synced into this guild's cache yet — distinct from
+        // "has no roles", this exercises the `botMember is not null ? ... : default` fallback itself.
+        var channel = NetCordTestHelpers.MakeTextChannel(ChannelId2, "mod-only", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), // no entry for BotUserId
+            roles: [EveryoneRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [ChannelId2] = channel });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetChannels(GuildId.ToString()).ToList();
+
+        var found = result.Should().ContainSingle(c => c.ChannelId == ChannelId2 && c.CategoryName == null).Subject;
+        found.MissingPermissions.Should().BeEquivalentTo(
+        [
+            DiscordChannelPermissionFlag.ViewChannel,
+            DiscordChannelPermissionFlag.SendMessages,
+            DiscordChannelPermissionFlag.EmbedLinks,
+        ]);
+    }
+
+    [Fact]
+    public void GetChannels_BotHasNoRoles_ReturnsChannelsWithAllThreeMissingPermissions()
     {
         var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, []);
         var channel = NetCordTestHelpers.MakeTextChannel(ChannelId2, "mod-only", GuildId);
@@ -328,11 +357,17 @@ public class GuildServiceTests
 
         var result = sut.GetChannels(GuildId.ToString()).ToList();
 
-        result.Should().ContainSingle(c => c.ChannelId == ChannelId2 && !c.BotCanSendMessages && c.CategoryName == null);
+        var found = result.Should().ContainSingle(c => c.ChannelId == ChannelId2 && c.CategoryName == null).Subject;
+        found.MissingPermissions.Should().BeEquivalentTo(
+        [
+            DiscordChannelPermissionFlag.ViewChannel,
+            DiscordChannelPermissionFlag.SendMessages,
+            DiscordChannelPermissionFlag.EmbedLinks,
+        ]);
     }
 
     [Fact]
-    public void GetChannels_BotCanViewAndSendButNotEmbedLinks_ReturnsChannelsWithBotCanSendMessagesFalse()
+    public void GetChannels_BotCanViewAndSendButNotEmbedLinks_ReturnsChannelsWithOnlyEmbedLinksMissing()
     {
         var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.ViewChannel | Permissions.SendMessages, managed: false);
         var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
@@ -349,7 +384,8 @@ public class GuildServiceTests
 
         var result = sut.GetChannels(GuildId.ToString()).ToList();
 
-        result.Should().ContainSingle(c => c.ChannelId == ChannelId1 && !c.BotCanSendMessages);
+        var found = result.Should().ContainSingle(c => c.ChannelId == ChannelId1).Subject;
+        found.MissingPermissions.Should().BeEquivalentTo([DiscordChannelPermissionFlag.EmbedLinks]);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

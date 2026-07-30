@@ -8,11 +8,11 @@ namespace RaidOps.Domain.Enums;
 public enum NotificationType
 {
     /// <summary>
-    /// The user is an admin of an already-configured guild that has no
-    /// <see cref="Models.Discord.Guild.MinOfficerRoleId"/> set yet, i.e. no Discord role has
-    /// been designated as granting Officer access.
+    /// The user is an admin of a guild that has at least one active
+    /// <see cref="Models.Discord.GuildBranch"/> with no <see cref="Models.Discord.GuildBranch.OfficerRoleIds"/>
+    /// set yet, i.e. no Discord role has been designated as granting Officer access on that branch.
     /// </summary>
-    OfficerThresholdNotConfigured = 1,
+    BranchOfficerRolesNotConfigured = 1,
 
     /// <summary>
     /// The user is an admin of an already-configured guild that has no

@@ -16,14 +16,14 @@ namespace RaidOps.Application.Implementations.Guilds.Access;
 public class GuildAccessService(
     IUserGuildsRepository userGuildsRepository,
     IGuildsRepository guildsRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IDiscordBotService discordBotService,
     ILogger<GuildAccessService> logger) : IGuildAccessService
 {
     /// <inheritdoc/>
     public async Task<GuildAccessLevel> GetAccessLevelAsync(string discordId, string guildId, CancellationToken cancellationToken = default)
     {
-        var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(discordId, cancellationToken);
-        var membership = userGuilds.FirstOrDefault(ug => ug.GuildId == guildId);
+        var membership = await GetMembershipAsync(discordId, guildId, cancellationToken);
         if (membership == null)
             return GuildAccessLevel.None;
 
@@ -34,25 +34,53 @@ public class GuildAccessService(
         if (guild == null || !guild.IsRegistered)
             return GuildAccessLevel.None;
 
-        return ComputeAccessLevel(membership, guild, cancellationToken);
+        var branches = await guildBranchesRepository.GetActiveForGuildAsync(guildId, cancellationToken);
+
+        var highest = GuildAccessLevel.Public;
+        foreach (var branch in branches)
+        {
+            var level = ComputeAccessLevel(membership, branch, cancellationToken);
+            if (level > highest)
+                highest = level;
+        }
+
+        return highest;
     }
 
     /// <inheritdoc/>
-    public GuildAccessLevel ComputeAccessLevel(UserGuild membership, Guild guild, CancellationToken cancellationToken = default)
+    public async Task<GuildAccessLevel> GetAccessLevelAsync(string discordId, string guildId, int guildBranchId, CancellationToken cancellationToken = default)
+    {
+        var membership = await GetMembershipAsync(discordId, guildId, cancellationToken);
+        if (membership == null)
+            return GuildAccessLevel.None;
+
+        if (membership.IsAdmin)
+            return GuildAccessLevel.Officer;
+
+        var branch = await guildBranchesRepository.GetByIdAsync(guildBranchId, cancellationToken);
+        if (branch == null || branch.GuildId != guildId || !branch.IsActive)
+            return GuildAccessLevel.None;
+
+        var guild = await guildsRepository.GetByIdAsync(guildId, cancellationToken);
+        if (guild == null || !guild.IsRegistered)
+            return GuildAccessLevel.None;
+
+        return ComputeAccessLevel(membership, branch, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public GuildAccessLevel ComputeAccessLevel(UserGuild membership, GuildBranch branch, CancellationToken cancellationToken = default)
     {
         if (membership.IsAdmin)
             return GuildAccessLevel.Officer;
 
-        if (!guild.IsRegistered)
-            return GuildAccessLevel.None;
-
-        if (HasRequiredDiscordRole(guild.Id, guild.MinOfficerRoleId, membership.UserDiscordId, cancellationToken))
+        if (DiscordRoleSetAccessHelper.HasAnyDiscordRole(discordBotService, branch.GuildId, branch.OfficerRoleIds, membership.UserDiscordId, cancellationToken))
             return GuildAccessLevel.Officer;
 
-        var hasRosterAccess = guild.RosterMode switch
+        var hasRosterAccess = branch.RosterMode switch
         {
             RosterMode.Open => true,
-            RosterMode.DiscordRoleOnly => HasRequiredDiscordRole(guild.Id, guild.MinRosterRoleId, membership.UserDiscordId, cancellationToken),
+            RosterMode.DiscordRoleOnly => DiscordRoleSetAccessHelper.HasAnyDiscordRole(discordBotService, branch.GuildId, branch.RosterRoleIds, membership.UserDiscordId, cancellationToken),
             _ => false,
         };
 
@@ -60,15 +88,29 @@ public class GuildAccessService(
     }
 
     /// <inheritdoc/>
-    public async Task<bool> OutranksAsync(string guildId, string requesterDiscordId, string targetDiscordId, CancellationToken cancellationToken = default)
+    public async Task<bool> OutranksAsync(string guildId, int guildBranchId, string requesterDiscordId, string targetDiscordId, CancellationToken cancellationToken = default)
     {
         var requesterMembership = await GetMembershipAsync(requesterDiscordId, guildId, cancellationToken);
+        var targetMembership = await GetMembershipAsync(targetDiscordId, guildId, cancellationToken);
+
+        // The owner is never outranked, not even by another admin.
+        if (targetMembership?.IsOwner == true)
+            return false;
+
         if (requesterMembership?.IsAdmin == true)
             return true;
-
-        var targetMembership = await GetMembershipAsync(targetDiscordId, guildId, cancellationToken);
         if (targetMembership?.IsAdmin == true)
             return false;
+
+        var branch = await guildBranchesRepository.GetByIdAsync(guildBranchId, cancellationToken);
+        if (branch != null)
+        {
+            var requesterIsOfficer = DiscordRoleSetAccessHelper.HasAnyDiscordRole(discordBotService, guildId, branch.OfficerRoleIds, requesterDiscordId, cancellationToken);
+            var targetIsOfficer = DiscordRoleSetAccessHelper.HasAnyDiscordRole(discordBotService, guildId, branch.OfficerRoleIds, targetDiscordId, cancellationToken);
+
+            if (requesterIsOfficer != targetIsOfficer)
+                return requesterIsOfficer;
+        }
 
         var requesterPosition = GetHighestRolePosition(guildId, requesterDiscordId, cancellationToken);
         var targetPosition = GetHighestRolePosition(guildId, targetDiscordId, cancellationToken);
@@ -85,45 +127,6 @@ public class GuildAccessService(
     {
         var userGuilds = await userGuildsRepository.GetByUserDiscordIdAsync(discordId, cancellationToken);
         return userGuilds.FirstOrDefault(ug => ug.GuildId == guildId);
-    }
-
-    /// <summary>
-    /// Checks whether the requester holds a Discord role at or above <paramref name="minRoleId"/>'s
-    /// position. Used for both the roster threshold and the Officer threshold — same "this role or
-    /// anything higher in the hierarchy" semantics either way. Silently denies access if the bot
-    /// isn't in the guild or the role/member can't be found — callers that need to distinguish
-    /// those failure modes should not rely on this method.
-    /// </summary>
-    private bool HasRequiredDiscordRole(string guildId, string? minRoleId, string discordId, CancellationToken cancellationToken)
-    {
-        if (minRoleId == null)
-            return false;
-
-        try
-        {
-            var roles = discordBotService.Guilds.GetRoles(guildId, cancellationToken)
-                .ToDictionary(r => r.Id.ToString());
-
-            if (!roles.TryGetValue(minRoleId, out var minRole))
-                return false;
-
-            var guildUser = discordBotService.Guilds.GetUsers(guildId, cancellationToken)
-                .FirstOrDefault(u => u.Id.ToString() == discordId);
-
-            if (guildUser == null)
-                return false;
-
-            return guildUser.RoleIds.Any(rid =>
-                roles.TryGetValue(rid.ToString(), out var role) && role.Position >= minRole.Position);
-        }
-        catch (InvalidOperationException ex)
-        {
-            // Bot not in this guild — no threshold-based access to grant.
-            logger.LogWarning(ex,
-                "Discord role access check failed for discord user {DiscordId} in guild {GuildId}: RaidOps bot is not present in this guild",
-                discordId, guildId);
-            return false;
-        }
     }
 
     /// <summary>

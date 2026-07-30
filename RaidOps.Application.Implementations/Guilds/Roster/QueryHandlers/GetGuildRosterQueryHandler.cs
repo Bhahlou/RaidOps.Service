@@ -14,6 +14,7 @@ namespace RaidOps.Application.Implementations.Guilds.Roster.QueryHandlers;
 /// </summary>
 public class GetGuildRosterQueryHandler(
     IGuildsRepository guildsRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IGuildAccessService guildAccessService,
     IGuildMembershipRepository membershipRepository,
     IUsersRepository usersRepository) : IQueryHandlerAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>
@@ -25,11 +26,15 @@ public class GetGuildRosterQueryHandler(
         if (guild == null || !guild.IsRegistered)
             return Result<List<GuildRosterMemberResponse>>.Fail(ResponseDetail.GuildNotFound, $"Guild '{query.GuildId}' does not exist or is not registered.");
 
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+        var branch = await guildBranchesRepository.GetByIdAsync(query.GuildBranchId, cancellationToken);
+        if (branch == null || branch.GuildId != query.GuildId || !branch.IsActive)
+            return Result<List<GuildRosterMemberResponse>>.Fail(ResponseDetail.GuildBranchNotFound, "This guild branch does not exist or is not active.");
+
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, query.GuildBranchId, cancellationToken);
         if (accessLevel < GuildAccessLevel.Roster)
             return Result<List<GuildRosterMemberResponse>>.Fail(ResponseDetail.RosterAccessDenied, "You do not have access to this guild's roster.");
 
-        var memberships = await membershipRepository.GetByGuildIdAsync(query.GuildId, cancellationToken);
+        var memberships = await membershipRepository.GetByGuildBranchIdAsync(query.GuildBranchId, cancellationToken);
 
         var playerIds = memberships.Select(m => m.Character.UserDiscordId).Distinct().ToList();
         var players = await usersRepository.FindAsync(u => playerIds.Contains(u.DiscordId), cancellationToken);
@@ -42,7 +47,7 @@ public class GetGuildRosterQueryHandler(
         {
             var isOwnRow = membership.Character.UserDiscordId == query.RequesterDiscordId;
             var canExclude = isOfficerOrAbove
-                && (isOwnRow || await guildAccessService.OutranksAsync(query.GuildId, query.RequesterDiscordId, membership.Character.UserDiscordId, cancellationToken));
+                && (isOwnRow || await guildAccessService.OutranksAsync(query.GuildId, query.GuildBranchId, query.RequesterDiscordId, membership.Character.UserDiscordId, cancellationToken));
 
             roster.Add(GuildRosterMapper.ToDto(membership, playersById, canExclude));
         }

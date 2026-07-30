@@ -16,9 +16,9 @@ public class GuildNotificationDispatcher(
     ILogger<GuildNotificationDispatcher> logger) : IGuildNotificationDispatcher
 {
     /// <inheritdoc/>
-    public async Task NotifyAsync(string guildId, GuildNotificationEventType eventType, DiscordEmbedContent embed, CancellationToken cancellationToken = default)
+    public async Task NotifyAsync(string guildId, GuildNotificationEventType eventType, int? guildBranchId, DiscordEmbedContent embed, CancellationToken cancellationToken = default)
     {
-        var setting = await notificationSettingsRepository.GetAsync(guildId, eventType, cancellationToken);
+        var setting = await notificationSettingsRepository.GetAsync(guildId, eventType, guildBranchId, cancellationToken);
         if (setting is not { Enabled: true, ChannelId: not null })
             return;
 
@@ -32,8 +32,8 @@ public class GuildNotificationDispatcher(
             // never fail the domain command that triggered it.
             logger.LogWarning(
                 ex,
-                "Failed to post Discord notification for guild {GuildId}, event {EventType}, channel {ChannelId}",
-                guildId, eventType, setting.ChannelId);
+                "Failed to post Discord notification for guild {GuildId}, branch {GuildBranchId}, event {EventType}, channel {ChannelId}",
+                guildId, guildBranchId, eventType, setting.ChannelId);
         }
     }
 }

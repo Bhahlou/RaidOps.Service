@@ -7,11 +7,14 @@ namespace RaidOps.Application.Contracts.Calendar.Availability.Commands;
 /// </summary>
 public class CreateRecurringAvailabilityPatternCommand : ICommandRequest
 {
-    /// <summary>The Discord snowflake ID of the guild this pattern applies to. Set by the controller, not from the request body.</summary>
-    public string GuildId { get; set; } = string.Empty;
-
     /// <summary>The Discord snowflake ID of the member this pattern belongs to. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
+
+    /// <summary>The guild of the target branch scope, or <c>null</c> for a Global pattern. Set together with <see cref="GuildBranchId"/>.</summary>
+    public string? GuildId { get; set; }
+
+    /// <summary>The specific branch scope, or <c>null</c> for a Global pattern. Set together with <see cref="GuildId"/>.</summary>
+    public int? GuildBranchId { get; set; }
 
     /// <summary>Optional friendly name for the member's own reference.</summary>
     public string? Label { get; set; }

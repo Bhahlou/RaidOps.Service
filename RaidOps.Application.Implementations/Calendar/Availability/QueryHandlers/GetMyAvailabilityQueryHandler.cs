@@ -11,10 +11,11 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.QueryHandler
 
 /// <summary>
 /// Handles <see cref="GetMyAvailabilityQuery"/> by loading the requester's exceptions and
-/// recurring patterns and resolving them into a day-by-day calendar for the requested range.
+/// recurring patterns across every scope and resolving them into a day-by-day personal overview for
+/// the requested range. Purely self-scoped — no guild access check applies, since a member's own
+/// declarations (whichever scope they belong to) are always theirs to read.
 /// </summary>
 public class GetMyAvailabilityQueryHandler(
-    IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
     IAvailabilityResolutionService availabilityResolutionService)
     : IQueryHandlerAsync<GetMyAvailabilityQuery, AvailabilityCalendarResponse>
@@ -22,16 +23,12 @@ public class GetMyAvailabilityQueryHandler(
     /// <inheritdoc/>
     public async Task<Result<AvailabilityCalendarResponse>> HandleAsync(GetMyAvailabilityQuery query, CancellationToken cancellationToken)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
-        if (accessLevel < GuildAccessLevel.Roster)
-            return Result<AvailabilityCalendarResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
-
         if (query.RangeEnd < query.RangeStart)
             return Result<AvailabilityCalendarResponse>.Fail(ResponseDetail.InvalidRequest, "RangeEnd must be on or after RangeStart.");
 
         var exceptions = await availabilityRepository.GetExceptionsOverlappingAsync(
-            query.RequesterDiscordId, query.GuildId, query.RangeStart, query.RangeEnd, cancellationToken);
-        var patterns = await availabilityRepository.GetPatternsAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+            query.RequesterDiscordId, query.RangeStart, query.RangeEnd, cancellationToken);
+        var patterns = await availabilityRepository.GetPatternsAsync(query.RequesterDiscordId, cancellationToken);
 
         var resolvedDays = availabilityResolutionService.Resolve(query.RangeStart, query.RangeEnd, exceptions, patterns);
 
@@ -48,6 +45,8 @@ public class GetMyAvailabilityQueryHandler(
     private static AvailabilityExceptionResponse MapException(AvailabilityDeclaration exception) => new()
     {
         Id = exception.Id,
+        GuildId = exception.GuildId,
+        GuildBranchId = exception.GuildBranchId,
         StartDate = exception.StartDate,
         EndDate = exception.EndDate,
         Status = exception.Status,
@@ -59,6 +58,8 @@ public class GetMyAvailabilityQueryHandler(
     private static RecurringAvailabilityPatternResponse MapPattern(RecurringAvailabilityPattern pattern) => new()
     {
         Id = pattern.Id,
+        GuildId = pattern.GuildId,
+        GuildBranchId = pattern.GuildBranchId,
         Label = pattern.Label,
         CycleLengthDays = pattern.CycleLengthDays,
         AnchorDate = pattern.AnchorDate,

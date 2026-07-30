@@ -15,4 +15,10 @@ public class GetGuildNotificationSettingsQuery : IQueryRequest<List<GuildNotific
 
     /// <summary>The Discord snowflake ID of the requesting user.</summary>
     public required string RequesterDiscordId { get; set; }
+
+    /// <summary>
+    /// The branch to resolve settings for (branch override falling back to the guild-wide row), or
+    /// <c>null</c> to read the guild-wide row directly.
+    /// </summary>
+    public int? GuildBranchId { get; set; }
 }

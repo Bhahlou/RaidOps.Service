@@ -260,4 +260,136 @@ public class AvailabilityResolutionServiceTests
         result[3].Status.Should().Be(DayAvailabilityStatus.Available); // Jan 4 — after
         result[4].Status.Should().Be(DayAvailabilityStatus.Available); // Jan 5 — still after
     }
+
+    // ── ResolveForScope: precedence cascade (branch exception > Global exception > branch
+    // pattern > Global pattern) — every fixture above leaves GuildBranchId implicitly null even
+    // when GuildId is set, so scope-specificity itself was never actually exercised. These tests
+    // set both explicitly and call ResolveForScope directly for a real branch scope.
+
+    private const string GuildId = "guild-1";
+    private const int GuildBranchId = 10;
+    private const string RequesterId = "user-1";
+
+    [Fact]
+    public void ResolveForScope_BranchExceptionBeatsGlobalException()
+    {
+        var date = new DateOnly(2026, 1, 12);
+        var globalException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = null, GuildBranchId = null,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Partial,
+        };
+        var branchException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = GuildId, GuildBranchId = GuildBranchId,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Absent,
+        };
+
+        var result = _sut.ResolveForScope(date, date, [globalException, branchException], [], GuildId, GuildBranchId);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Absent);
+    }
+
+    [Fact]
+    public void ResolveForScope_GlobalExceptionBeatsBranchPattern()
+    {
+        var date = new DateOnly(2026, 1, 12);
+        var globalException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = null, GuildBranchId = null,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Partial,
+        };
+        var branchPattern = new RecurringAvailabilityPattern
+        {
+            UserDiscordId = RequesterId, GuildId = GuildId, GuildBranchId = GuildBranchId,
+            CycleLengthDays = 7, AnchorDate = date, EffectiveFrom = new DateOnly(2025, 1, 1), EffectiveUntil = null,
+            Days = [new RecurringAvailabilityPatternDay { OffsetInCycle = 0, Status = DayAvailabilityStatus.Absent }],
+        };
+
+        var result = _sut.ResolveForScope(date, date, [globalException], [branchPattern], GuildId, GuildBranchId);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Partial);
+    }
+
+    [Fact]
+    public void ResolveForScope_BranchPatternBeatsGlobalPattern()
+    {
+        var date = new DateOnly(2026, 1, 12);
+        var globalPattern = new RecurringAvailabilityPattern
+        {
+            UserDiscordId = RequesterId, GuildId = null, GuildBranchId = null,
+            CycleLengthDays = 7, AnchorDate = date, EffectiveFrom = new DateOnly(2025, 1, 1), EffectiveUntil = null,
+            Days = [new RecurringAvailabilityPatternDay { OffsetInCycle = 0, Status = DayAvailabilityStatus.Partial }],
+        };
+        var branchPattern = new RecurringAvailabilityPattern
+        {
+            UserDiscordId = RequesterId, GuildId = GuildId, GuildBranchId = GuildBranchId,
+            CycleLengthDays = 7, AnchorDate = date, EffectiveFrom = new DateOnly(2025, 1, 1), EffectiveUntil = null,
+            Days = [new RecurringAvailabilityPatternDay { OffsetInCycle = 0, Status = DayAvailabilityStatus.Absent }],
+        };
+
+        var result = _sut.ResolveForScope(date, date, [], [globalPattern, branchPattern], GuildId, GuildBranchId);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Absent);
+    }
+
+    [Fact]
+    public void ResolveForScope_DeclarationsBelongToADifferentBranch_AreIgnored()
+    {
+        var date = new DateOnly(2026, 1, 12);
+        var otherBranchException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = GuildId, GuildBranchId = GuildBranchId,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Absent,
+        };
+
+        var result = _sut.ResolveForScope(date, date, [otherBranchException], [], "guild-2", 20);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Available);
+    }
+
+    // ── Resolve: multi-scope merge (most-restrictive-across-every-scope wins) ─────────────────
+
+    [Fact]
+    public void Resolve_MultipleScopesSameDate_MostRestrictiveAcrossScopesWins()
+    {
+        var date = new DateOnly(2026, 1, 12);
+        var globalException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = null, GuildBranchId = null,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Partial,
+        };
+        var branchException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = GuildId, GuildBranchId = GuildBranchId,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Absent,
+        };
+
+        var result = _sut.Resolve(date, date, [globalException, branchException], []);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Absent);
+    }
+
+    [Fact]
+    public void Resolve_BranchScopeLessRestrictiveThanGlobal_GlobalStillWinsInTheAggregateOverview()
+    {
+        // A branch-scoped "Available" exception intentionally overriding a restrictive pattern for
+        // that one branch must not leak an "everything's fine" signal into the personal overview
+        // when another scope (here, Global) is independently more restrictive on the same date.
+        var date = new DateOnly(2026, 1, 12);
+        var globalException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = null, GuildBranchId = null,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Absent,
+        };
+        var branchException = new AvailabilityDeclaration
+        {
+            UserDiscordId = RequesterId, GuildId = GuildId, GuildBranchId = GuildBranchId,
+            StartDate = date, EndDate = date, Status = DayAvailabilityStatus.Available,
+        };
+
+        var result = _sut.Resolve(date, date, [globalException, branchException], []);
+
+        result[0].Status.Should().Be(DayAvailabilityStatus.Absent);
+    }
 }

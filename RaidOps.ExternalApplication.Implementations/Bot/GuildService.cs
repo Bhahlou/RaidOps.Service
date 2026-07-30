@@ -80,18 +80,21 @@ public class GuildService(GatewayClient gatewayClient) : IGuildService
             .Where(c => c is TextGuildChannel or AnnouncementGuildChannel)
             .Select(c =>
             {
-                var canSend = botMember is not null
-                    && PartialGuildUserExtensions.GetChannelPermissions(botMember, guild, c.Id) is var permissions
-                    && permissions.HasFlag(Permissions.ViewChannel)
-                    && permissions.HasFlag(Permissions.SendMessages)
-                    && permissions.HasFlag(Permissions.EmbedLinks);
+                var permissions = botMember is not null
+                    ? PartialGuildUserExtensions.GetChannelPermissions(botMember, guild, c.Id)
+                    : default;
+
+                List<DiscordChannelPermissionFlag> missingPermissions = [];
+                if (!permissions.HasFlag(Permissions.ViewChannel)) missingPermissions.Add(DiscordChannelPermissionFlag.ViewChannel);
+                if (!permissions.HasFlag(Permissions.SendMessages)) missingPermissions.Add(DiscordChannelPermissionFlag.SendMessages);
+                if (!permissions.HasFlag(Permissions.EmbedLinks)) missingPermissions.Add(DiscordChannelPermissionFlag.EmbedLinks);
 
                 var categoryName = c is TextGuildChannel { ParentId: { } parentId }
                     && guild.Channels.TryGetValue(parentId, out var parent)
                         ? parent.Name
                         : null;
 
-                return new DiscordChannelInfo(c.Id, c.Name, canSend, categoryName);
+                return new DiscordChannelInfo(c.Id, c.Name, missingPermissions, categoryName);
             })];
     }
 

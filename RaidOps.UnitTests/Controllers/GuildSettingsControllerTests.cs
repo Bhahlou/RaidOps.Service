@@ -55,7 +55,7 @@ public class GuildSettingsControllerTests
     [Fact]
     public async Task GetSettings_Success_ReturnsOkWithResponse()
     {
-        var response = new GuildSettingsResponse { Timezone = "Europe/Paris", RosterMode = RosterMode.Open };
+        var response = new GuildSettingsResponse { Timezone = "Europe/Paris" };
         _queries.Setup(q => q.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
                 It.IsAny<GetGuildSettingsQuery>(), default))
             .ReturnsAsync(Result<GuildSettingsResponse>.Ok(response));
@@ -122,7 +122,7 @@ public class GuildSettingsControllerTests
     public async Task UpdateSettings_SubMissing_ReturnsUnauthorized()
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
-        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", RosterMode = RosterMode.Open, Language = "en" };
+        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", Language = "en" };
 
         var result = await _sut.UpdateSettings(GuildId, command, default);
 
@@ -132,7 +132,7 @@ public class GuildSettingsControllerTests
     [Fact]
     public async Task UpdateSettings_CommandFails_ReturnsBadRequest()
     {
-        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", RosterMode = RosterMode.Open, Language = "en" };
+        var command = new UpdateGuildSettingsCommand { Timezone = "UTC", Language = "en" };
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateGuildSettingsCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.Forbidden));
 
@@ -144,7 +144,7 @@ public class GuildSettingsControllerTests
     [Fact]
     public async Task UpdateSettings_Success_SetsRouteFieldsAndReturnsOk()
     {
-        var command = new UpdateGuildSettingsCommand { Timezone = "Europe/Paris", RosterMode = RosterMode.Open, Language = "en" };
+        var command = new UpdateGuildSettingsCommand { Timezone = "Europe/Paris", Language = "en" };
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpdateGuildSettingsCommand>(), default))
             .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
 
@@ -162,7 +162,7 @@ public class GuildSettingsControllerTests
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
 
-        var result = await _sut.GetNotificationSettings(GuildId, default);
+        var result = await _sut.GetNotificationSettings(GuildId, null, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -174,7 +174,7 @@ public class GuildSettingsControllerTests
                 It.IsAny<GetGuildNotificationSettingsQuery>(), default))
             .ReturnsAsync(Result<List<GuildNotificationSettingResponse>>.Fail(ResponseDetail.Forbidden));
 
-        var result = await _sut.GetNotificationSettings(GuildId, default);
+        var result = await _sut.GetNotificationSettings(GuildId, null, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -187,7 +187,7 @@ public class GuildSettingsControllerTests
                 It.IsAny<GetGuildNotificationSettingsQuery>(), default))
             .ReturnsAsync(Result<List<GuildNotificationSettingResponse>>.Ok(response));
 
-        var result = await _sut.GetNotificationSettings(GuildId, default);
+        var result = await _sut.GetNotificationSettings(GuildId, null, default);
 
         result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(response);
     }
@@ -199,7 +199,7 @@ public class GuildSettingsControllerTests
                 It.IsAny<GetGuildNotificationSettingsQuery>(), default))
             .ReturnsAsync(Result<List<GuildNotificationSettingResponse>>.Ok([]));
 
-        await _sut.GetNotificationSettings(GuildId, default);
+        await _sut.GetNotificationSettings(GuildId, null, default);
 
         _queries.Verify(q => q.DispatchAsync<GetGuildNotificationSettingsQuery, List<GuildNotificationSettingResponse>>(
             It.Is<GetGuildNotificationSettingsQuery>(x => x.GuildId == GuildId && x.RequesterDiscordId == DiscordId),
@@ -280,5 +280,46 @@ public class GuildSettingsControllerTests
         result.Should().BeOfType<OkObjectResult>();
         command.GuildId.Should().Be(GuildId);
         command.RequesterDiscordId.Should().Be(DiscordId);
+    }
+
+    // ── ResetNotificationSetting ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task ResetNotificationSetting_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+
+        var result = await _sut.ResetNotificationSetting(GuildId, 1, GuildNotificationEventType.AbsenceAdded, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task ResetNotificationSetting_CommandFails_ReturnsBadRequest()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<ResetGuildNotificationSettingsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.Forbidden));
+
+        var result = await _sut.ResetNotificationSetting(GuildId, 1, GuildNotificationEventType.AbsenceAdded, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task ResetNotificationSetting_Success_SetsRouteFieldsAndReturnsOk()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<ResetGuildNotificationSettingsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        var result = await _sut.ResetNotificationSetting(GuildId, 1, GuildNotificationEventType.AbsenceAdded, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        _commands.Verify(c => c.DispatchAsync(
+            It.Is<ResetGuildNotificationSettingsCommand>(x =>
+                x.GuildId == GuildId &&
+                x.GuildBranchId == 1 &&
+                x.EventType == GuildNotificationEventType.AbsenceAdded &&
+                x.RequesterDiscordId == DiscordId),
+            default), Times.Once);
     }
 }

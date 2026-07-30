@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using RaidOps.Domain.Enums;
 
 namespace RaidOps.Domain.Models.Discord;
 
@@ -35,28 +34,6 @@ public class Guild
     public string? Timezone { get; set; }
 
     /// <summary>
-    /// Controls who may join the guild's roster.
-    /// Null until the guild owner completes the settings step of the registration flow.
-    /// </summary>
-    public RosterMode? RosterMode { get; set; }
-
-    /// <summary>
-    /// Discord snowflake ID of the minimum role required to join the roster.
-    /// Members with this role <em>or any role with a higher position</em> are granted access.
-    /// Only relevant when <see cref="RosterMode"/> is <see cref="RosterMode.DiscordRoleOnly"/>.
-    /// </summary>
-    public string? MinRosterRoleId { get; set; }
-
-    /// <summary>
-    /// Discord snowflake ID of the minimum role that grants Officer access in RaidOps.
-    /// Members with this role <em>or any role with a higher position</em> are granted Officer
-    /// access, independently of <see cref="RosterMode"/>. Null until the admin explicitly saves
-    /// a choice — every guild is expected to designate one (the Discord Administrator/owner
-    /// safety net always applies on top, so this can never lock an admin out).
-    /// </summary>
-    public string? MinOfficerRoleId { get; set; }
-
-    /// <summary>
     /// Language RaidOps communicates in for this guild (e.g. Discord bot messages) — one of the
     /// front-end's supported locale codes ("en", "fr", "de"). Pre-filled from the Discord guild's
     /// <c>preferred_locale</c> at registration when it maps to a supported language (only
@@ -72,4 +49,7 @@ public class Guild
 
     /// <summary>Character roster memberships for this guild.</summary>
     public virtual ICollection<GuildMembership> Memberships { get; set; } = [];
+
+    /// <summary>WoW game-version branches activated on this guild (active and deactivated).</summary>
+    public virtual ICollection<GuildBranch> Branches { get; set; } = [];
 }

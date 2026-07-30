@@ -23,10 +23,11 @@ public class UpdateCharacterRankCommandHandlerTests
     private readonly Mock<IAuditLogService>           _auditLog    = new();
     private readonly UpdateCharacterRankCommandHandler _sut;
 
-    private const int    CharacterId = 1;
-    private const string GuildId     = "guild-1";
-    private const string DiscordId   = "user-1";
-    private const string OwnerId     = "owner-1";
+    private const int    CharacterId   = 1;
+    private const string GuildId       = "guild-1";
+    private const string DiscordId     = "user-1";
+    private const string OwnerId       = "owner-1";
+    private const int    GuildBranchId = 42;
 
     private static readonly UpdateCharacterRankCommand Command = new()
     {
@@ -54,23 +55,7 @@ public class UpdateCharacterRankCommandHandlerTests
         result.Error.Should().Be(ResponseDetail.CharacterNotFound);
     }
 
-    // ── Not owner, not officer ───────────────────────────────────────────
-
-    [Fact]
-    public async Task HandleAsync_NotOwnerAndNotOfficer_ReturnsForbidden()
-    {
-        _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
-            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = OwnerId });
-        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-
-        var result = await _sut.HandleAsync(Command);
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.Forbidden);
-        _memberships.Verify(r => r.UpdateRankAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CharacterRank>(), default), Times.Never);
-    }
-
-    // ── NotAMember ────────────────────────────────────────────────────────
+    // ── NotAMember (looked up before the owner/officer gate) ──────────────
 
     [Fact]
     public async Task HandleAsync_NotAMember_ReturnsNotAMember()
@@ -84,19 +69,30 @@ public class UpdateCharacterRankCommandHandlerTests
         result.Error.Should().Be(ResponseDetail.NotAMember);
     }
 
+    // ── Not owner, not officer ───────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_NotOwnerAndNotOfficer_ReturnsForbidden()
+    {
+        _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
+            .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = OwnerId });
+        SetupMembership(CharacterRank.Main);
+        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _memberships.Verify(r => r.UpdateRankAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CharacterRank>(), default), Times.Never);
+    }
+
     // ── RankUnchanged ─────────────────────────────────────────────────────
 
     [Fact]
     public async Task HandleAsync_RankUnchanged_ReturnsOkWithoutUpdating()
     {
         SetupCharacter();
-        _memberships.Setup(r => r.GetAsync(CharacterId, GuildId, default))
-            .ReturnsAsync(new GuildMembership
-            {
-                CharacterId   = CharacterId,
-                GuildId       = GuildId,
-                CharacterRank = CharacterRank.Alt, // same as command
-            });
+        SetupMembership(CharacterRank.Alt); // same as command
 
         var result = await _sut.HandleAsync(Command);
 
@@ -111,13 +107,7 @@ public class UpdateCharacterRankCommandHandlerTests
     public async Task HandleAsync_Owner_UpdatesAndLogs()
     {
         SetupCharacter();
-        _memberships.Setup(r => r.GetAsync(CharacterId, GuildId, default))
-            .ReturnsAsync(new GuildMembership
-            {
-                CharacterId   = CharacterId,
-                GuildId       = GuildId,
-                CharacterRank = CharacterRank.Main, // different from command's Alt
-            });
+        SetupMembership(CharacterRank.Main); // different from command's Alt
 
         var result = await _sut.HandleAsync(Command);
 
@@ -128,7 +118,7 @@ public class UpdateCharacterRankCommandHandlerTests
             It.Is<Dictionary<string, string>?>(d =>
                 d != null && d["oldRank"] == "Main" && d["newRank"] == "Alt" && d["characterClassId"] == "2"),
             default), Times.Once);
-        _guildAccess.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _guildAccess.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
     }
 
     // ── Success — officer updating someone else's rank ───────────────────
@@ -138,9 +128,8 @@ public class UpdateCharacterRankCommandHandlerTests
     {
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
             .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = OwnerId, ClassId = 2 });
-        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _memberships.Setup(r => r.GetAsync(CharacterId, GuildId, default))
-            .ReturnsAsync(new GuildMembership { CharacterId = CharacterId, GuildId = GuildId, CharacterRank = CharacterRank.Main });
+        SetupMembership(CharacterRank.Main);
+        _guildAccess.Setup(a => a.GetAccessLevelAsync(DiscordId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -154,4 +143,8 @@ public class UpdateCharacterRankCommandHandlerTests
     private void SetupCharacter() =>
         _characters.Setup(r => r.GetByIdAsync(CharacterId, default))
             .ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", UserDiscordId = DiscordId, ClassId = 2 });
+
+    private void SetupMembership(CharacterRank currentRank) =>
+        _memberships.Setup(r => r.GetAsync(CharacterId, GuildId, default))
+            .ReturnsAsync(new GuildMembership { CharacterId = CharacterId, GuildId = GuildId, GuildBranchId = GuildBranchId, CharacterRank = currentRank });
 }

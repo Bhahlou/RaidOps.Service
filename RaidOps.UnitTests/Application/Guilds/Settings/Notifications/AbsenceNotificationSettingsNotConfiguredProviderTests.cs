@@ -24,8 +24,7 @@ public class AbsenceNotificationSettingsNotConfiguredProviderTests
         bool isAdmin,
         bool isRegistered,
         string name = "Guild Name",
-        string? timezone = "Europe/Paris",
-        RosterMode? rosterMode = RosterMode.Open) => new()
+        string? timezone = "Europe/Paris") => new()
     {
         UserDiscordId = DiscordId,
         GuildId = guildId,
@@ -36,7 +35,6 @@ public class AbsenceNotificationSettingsNotConfiguredProviderTests
             Name = name,
             IsRegistered = isRegistered,
             Timezone = timezone,
-            RosterMode = rosterMode,
         },
     };
 
@@ -105,16 +103,6 @@ public class AbsenceNotificationSettingsNotConfiguredProviderTests
     public async Task GetActiveAsync_GuildStillOnboarding_TimezoneNull_NoNotification()
     {
         var guild = MakeUserGuild("g1", isAdmin: true, isRegistered: true, timezone: null);
-
-        var result = await _sut.GetActiveAsync(DiscordId, [guild], default);
-
-        result.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetActiveAsync_GuildStillOnboarding_RosterModeNull_NoNotification()
-    {
-        var guild = MakeUserGuild("g1", isAdmin: true, isRegistered: true, rosterMode: null);
 
         var result = await _sut.GetActiveAsync(DiscordId, [guild], default);
 

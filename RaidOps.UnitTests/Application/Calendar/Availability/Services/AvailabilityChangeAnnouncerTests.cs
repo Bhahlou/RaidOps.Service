@@ -12,12 +12,14 @@ namespace RaidOps.UnitTests.Application.Calendar.Availability.Services;
 public class AvailabilityChangeAnnouncerTests
 {
     private readonly Mock<IAvailabilityResolutionService> _resolution = new();
+    private readonly Mock<IActiveRosterBranchResolver> _activeRosterResolver = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
     private readonly Mock<IGuildNotificationDispatcher> _dispatcher = new();
     private readonly Mock<IAbsenceNotificationContentBuilder> _contentBuilder = new();
     private readonly AvailabilityChangeAnnouncer _sut;
 
     private const string GuildId = "guild-1";
+    private const int GuildBranchId = 10;
     private const string RequesterId = "user-1";
 
     private static readonly DateOnly Day1 = new(2026, 7, 1);
@@ -32,8 +34,9 @@ public class AvailabilityChangeAnnouncerTests
 
     public AvailabilityChangeAnnouncerTests()
     {
-        _contentBuilder.Setup(b => b.GetGuildLanguageAsync(GuildId, default)).ReturnsAsync("en");
-        _sut = new AvailabilityChangeAnnouncer(_resolution.Object, _auditLog.Object, _dispatcher.Object, _contentBuilder.Object);
+        _contentBuilder.Setup(b => b.GetGuildLanguageAsync(It.IsAny<string>(), default)).ReturnsAsync("en");
+        _activeRosterResolver.Setup(r => r.GetActiveBranchesAsync(RequesterId, default)).ReturnsAsync([]);
+        _sut = new AvailabilityChangeAnnouncer(_resolution.Object, _activeRosterResolver.Object, _auditLog.Object, _dispatcher.Object, _contentBuilder.Object);
     }
 
     private static ResolvedDayAvailabilityResponse Resolved(
@@ -48,14 +51,22 @@ public class AvailabilityChangeAnnouncerTests
         AvailableUntil = until,
     };
 
-    private void SetupResolve(DateOnly windowStart, DateOnly windowEnd, List<ResolvedDayAvailabilityResponse> before, List<ResolvedDayAvailabilityResponse> after)
+    private void SetupResolveForScope(
+        string? guildId, int? guildBranchId, DateOnly windowStart, DateOnly windowEnd,
+        List<ResolvedDayAvailabilityResponse> before, List<ResolvedDayAvailabilityResponse> after)
     {
-        _resolution.Setup(r => r.Resolve(windowStart, windowEnd, _beforeExceptions, _patterns)).Returns(before);
-        _resolution.Setup(r => r.Resolve(windowStart, windowEnd, _afterExceptions, _patterns)).Returns(after);
+        _resolution.Setup(r => r.ResolveForScope(windowStart, windowEnd, _beforeExceptions, _patterns, guildId, guildBranchId)).Returns(before);
+        _resolution.Setup(r => r.ResolveForScope(windowStart, windowEnd, _afterExceptions, _patterns, guildId, guildBranchId)).Returns(after);
     }
 
+    private void SetupResolve(DateOnly windowStart, DateOnly windowEnd, List<ResolvedDayAvailabilityResponse> before, List<ResolvedDayAvailabilityResponse> after)
+        => SetupResolveForScope(GuildId, GuildBranchId, windowStart, windowEnd, before, after);
+
     private AvailabilityChange MakeChange(DateOnly windowStart, DateOnly windowEnd) => new(
-        GuildId, RequesterId, windowStart, windowEnd, _beforeExceptions, _afterExceptions, _patterns);
+        GuildId, GuildBranchId, RequesterId, windowStart, windowEnd, _beforeExceptions, _afterExceptions, _patterns);
+
+    private AvailabilityChange MakeGlobalChange(DateOnly windowStart, DateOnly windowEnd) => new(
+        null, null, RequesterId, windowStart, windowEnd, _beforeExceptions, _afterExceptions, _patterns);
 
     [Fact]
     public async Task AnnounceAsync_NothingChanged_NoAuditLogOrNotification()
@@ -67,7 +78,7 @@ public class AvailabilityChangeAnnouncerTests
         await _sut.AnnounceAsync(MakeChange(Day1, Day1));
 
         _auditLog.Verify(a => a.LogAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GuildAuditAction>(), It.IsAny<Dictionary<string, string>>(), default), Times.Never);
-        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
         _contentBuilder.Verify(b => b.GetGuildLanguageAsync(It.IsAny<string>(), default), Times.Never);
     }
 
@@ -92,7 +103,7 @@ public class AvailabilityChangeAnnouncerTests
             It.Is<IReadOnlyList<DiscordEmbedField>>(f => f.Single().Name == "Dates" && f.Single().Value == "7/1/2026"),
             default), Times.Once);
 
-        _dispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, It.IsAny<DiscordEmbedContent>(), default), Times.Once);
+        _dispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceAdded, GuildBranchId, It.IsAny<DiscordEmbedContent>(), default), Times.Once);
     }
 
     [Fact]
@@ -112,7 +123,7 @@ public class AvailabilityChangeAnnouncerTests
             GuildId, RequesterId, GuildNotificationEventType.AbsenceRemoved, AbsenceKind.FullDay,
             It.IsAny<IReadOnlyList<DiscordEmbedField>>(), default), Times.Once);
 
-        _dispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceRemoved, It.IsAny<DiscordEmbedContent>(), default), Times.Once);
+        _dispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceRemoved, GuildBranchId, It.IsAny<DiscordEmbedContent>(), default), Times.Once);
     }
 
     [Fact]
@@ -129,7 +140,7 @@ public class AvailabilityChangeAnnouncerTests
             It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-01" && v["endDate"] == "2026-07-03"),
             default), Times.Once);
 
-        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<DiscordEmbedContent>(), default), Times.Once);
+        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Once);
     }
 
     [Fact]
@@ -152,7 +163,7 @@ public class AvailabilityChangeAnnouncerTests
             It.Is<Dictionary<string, string>>(v => v["startDate"] == "2026-07-03" && v["endDate"] == "2026-07-03"),
             default), Times.Once);
 
-        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<DiscordEmbedContent>(), default), Times.Exactly(2));
+        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Exactly(2));
     }
 
     [Fact]
@@ -190,7 +201,7 @@ public class AvailabilityChangeAnnouncerTests
         await _sut.AnnounceAsync(MakeChange(Day1, Day1));
 
         _auditLog.Verify(a => a.LogAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GuildAuditAction>(), It.IsAny<Dictionary<string, string>>(), default), Times.Never);
-        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
     }
 
     [Fact]
@@ -341,5 +352,43 @@ public class AvailabilityChangeAnnouncerTests
         await _sut.AnnounceAsync(MakeChange(Day1, Day3));
 
         _contentBuilder.Verify(b => b.GetGuildLanguageAsync(GuildId, default), Times.Once);
+    }
+
+    // ── Global fan-out ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnnounceAsync_Global_NoActiveBranches_NeverResolvesOrAnnounces()
+    {
+        await _sut.AnnounceAsync(MakeGlobalChange(Day1, Day1));
+
+        _resolution.Verify(r => r.ResolveForScope(
+            It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<IReadOnlyCollection<AvailabilityDeclaration>>(),
+            It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+        _auditLog.Verify(a => a.LogAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GuildAuditAction>(), It.IsAny<Dictionary<string, string>>(), default), Times.Never);
+        _dispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnnounceAsync_Global_AnnouncesOncePerActiveBranchThatActuallyChanged()
+    {
+        // Branch A's resolved day actually flips (Available -> Absent) and should be announced;
+        // branch B's is unchanged (Absent both before and after) and must produce no
+        // audit/notify at all for that branch — this is the "skip branches without a visible
+        // change" half of the fan-out contract, not just "loop over every active branch".
+        _activeRosterResolver.Setup(r => r.GetActiveBranchesAsync(RequesterId, default))
+            .ReturnsAsync([new ActiveRosterBranch("guild-a", 1), new ActiveRosterBranch("guild-b", 2)]);
+        SetupResolveForScope("guild-a", 1, Day1, Day1,
+            before: [Resolved(Day1, DayAvailabilityStatus.Available)],
+            after: [Resolved(Day1, DayAvailabilityStatus.Absent)]);
+        SetupResolveForScope("guild-b", 2, Day1, Day1,
+            before: [Resolved(Day1, DayAvailabilityStatus.Absent)],
+            after: [Resolved(Day1, DayAvailabilityStatus.Absent)]);
+
+        await _sut.AnnounceAsync(MakeGlobalChange(Day1, Day1));
+
+        _auditLog.Verify(a => a.LogAsync("guild-a", RequesterId, GuildAuditAction.AvailabilityExceptionDeclared, It.IsAny<Dictionary<string, string>>(), default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync("guild-b", It.IsAny<string>(), It.IsAny<GuildAuditAction>(), It.IsAny<Dictionary<string, string>>(), default), Times.Never);
+        _dispatcher.Verify(d => d.NotifyAsync("guild-a", GuildNotificationEventType.AbsenceAdded, 1, It.IsAny<DiscordEmbedContent>(), default), Times.Once);
+        _dispatcher.Verify(d => d.NotifyAsync("guild-b", It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
     }
 }

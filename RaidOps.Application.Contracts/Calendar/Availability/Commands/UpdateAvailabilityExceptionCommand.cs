@@ -9,9 +9,6 @@ namespace RaidOps.Application.Contracts.Calendar.Availability.Commands;
 /// </summary>
 public class UpdateAvailabilityExceptionCommand : ICommandRequest
 {
-    /// <summary>The Discord snowflake ID of the guild this exception applies to. Set by the controller, not from the request body.</summary>
-    public string GuildId { get; set; } = string.Empty;
-
     /// <summary>The Discord snowflake ID of the requesting member. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 
