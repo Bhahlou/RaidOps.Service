@@ -80,4 +80,10 @@ public class GuildNotificationSettingsRepository(RaidOpsDbContext context) : IGu
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    /// <inheritdoc/>
+    public async Task DeleteAsync(string guildId, int guildBranchId, GuildNotificationEventType eventType, CancellationToken cancellationToken = default)
+        => await context.GuildNotificationSettings
+            .Where(s => s.GuildId == guildId && s.GuildBranchId == guildBranchId && s.EventType == eventType)
+            .ExecuteDeleteAsync(cancellationToken);
 }

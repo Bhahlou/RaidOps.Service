@@ -1,3 +1,5 @@
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
+
 namespace RaidOps.Application.Contracts.Guilds.Settings.Responses;
 
 /// <summary>
@@ -13,11 +15,11 @@ public class DiscordChannelResponse
     public required string Name { get; set; }
 
     /// <summary>
-    /// Whether the bot currently has permission to post messages in this channel. The front end
-    /// still lists channels where this is <c>false</c>, with a warning, so an admin can pick one
-    /// ahead of granting the bot access.
+    /// Which permissions the bot currently lacks in this channel — empty when it can post there.
+    /// The front end still lists channels with a non-empty list, with a warning naming the exact
+    /// flags, so an admin can pick one ahead of granting the bot access.
     /// </summary>
-    public bool BotCanSendMessages { get; set; }
+    public List<DiscordChannelPermissionFlag> MissingPermissions { get; set; } = [];
 
     /// <summary>Name of the category this channel is nested under, or <c>null</c> if it isn't in one.</summary>
     public string? CategoryName { get; set; }

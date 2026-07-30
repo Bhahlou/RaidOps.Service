@@ -53,4 +53,15 @@ public interface IGuildNotificationSettingsRepository
     /// <param name="settings">The settings to upsert.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
     Task UpsertRangeAsync(string guildId, int? guildBranchId, IEnumerable<GuildNotificationSetting> settings, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the branch-specific override row for one event type, reverting that single setting
+    /// to inheriting the guild-wide fallback. A no-op if no override row exists for it. The
+    /// guild-wide row (<see cref="GuildNotificationSetting.GuildBranchId"/> <c>null</c>) is never touched.
+    /// </summary>
+    /// <param name="guildId">The Discord snowflake ID of the guild.</param>
+    /// <param name="guildBranchId">The branch whose override to remove.</param>
+    /// <param name="eventType">The event type whose override to remove.</param>
+    /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
+    Task DeleteAsync(string guildId, int guildBranchId, GuildNotificationEventType eventType, CancellationToken cancellationToken = default);
 }

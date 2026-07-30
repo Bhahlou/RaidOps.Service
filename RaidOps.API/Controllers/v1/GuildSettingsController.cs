@@ -6,6 +6,7 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
 using RaidOps.Application.Contracts.Guilds.Settings.Queries;
 using RaidOps.Application.Contracts.Guilds.Settings.Responses;
+using RaidOps.Domain.Enums;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace RaidOps.API.Controllers.v1;
@@ -128,6 +129,28 @@ public class GuildSettingsController(
         command.RequesterDiscordId = discordId;
 
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Removes the branch's notification-settings override for one event type, reverting just
+    /// that setting to inheriting the guild-wide fallback.
+    /// </summary>
+    [HttpDelete("{guildId}/notification-settings/{guildBranchId:int}/{eventType}")]
+    public async Task<IActionResult> ResetNotificationSetting(
+        string guildId,
+        int guildBranchId,
+        GuildNotificationEventType eventType,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await CommandDispatcher.DispatchAsync(
+            new ResetGuildNotificationSettingsCommand { GuildId = guildId, GuildBranchId = guildBranchId, EventType = eventType, RequesterDiscordId = discordId },
+            cancellationToken);
+
         return ToActionResult(result);
     }
 }
