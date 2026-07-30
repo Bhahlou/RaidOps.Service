@@ -313,6 +313,34 @@ public class GuildServiceTests
     }
 
     [Fact]
+    public void GetChannels_BotUserNotInGuildMemberCache_ReturnsChannelsWithAllThreeMissingPermissions()
+    {
+        // Bot user is cached at the Gateway level (no "Bot user not yet available" exception), but
+        // its own GuildUser member entry hasn't synced into this guild's cache yet — distinct from
+        // "has no roles", this exercises the `botMember is not null ? ... : default` fallback itself.
+        var channel = NetCordTestHelpers.MakeTextChannel(ChannelId2, "mod-only", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), // no entry for BotUserId
+            roles: [EveryoneRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [ChannelId2] = channel });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetChannels(GuildId.ToString()).ToList();
+
+        var found = result.Should().ContainSingle(c => c.ChannelId == ChannelId2 && c.CategoryName == null).Subject;
+        found.MissingPermissions.Should().BeEquivalentTo(
+        [
+            DiscordChannelPermissionFlag.ViewChannel,
+            DiscordChannelPermissionFlag.SendMessages,
+            DiscordChannelPermissionFlag.EmbedLinks,
+        ]);
+    }
+
+    [Fact]
     public void GetChannels_BotHasNoRoles_ReturnsChannelsWithAllThreeMissingPermissions()
     {
         var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, []);

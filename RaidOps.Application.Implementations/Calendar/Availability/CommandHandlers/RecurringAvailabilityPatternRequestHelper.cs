@@ -1,10 +1,24 @@
 using System.Text.Json;
 using RaidOps.Application.Contracts.Calendar.Availability.Commands;
 using RaidOps.Application.Contracts.Common;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
 
 namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandlers;
+
+/// <summary>
+/// Everything needed to audit-log and Discord-notify a single scope for a created/stopped
+/// recurring pattern, bundled together so <c>AnnouncePatternAsync</c>/<c>AnnouncePatternStoppedAsync</c>
+/// in <see cref="CreateRecurringAvailabilityPatternCommandHandler"/>/
+/// <see cref="DeleteRecurringAvailabilityPatternCommandHandler"/> don't each need to take the
+/// guild/branch scope, requester, pattern shape, and audit variables as 8 separate parameters.
+/// </summary>
+internal sealed record PatternAnnouncement(
+    DateOnly AnchorDate,
+    int CycleLengthDays,
+    IReadOnlyList<PatternDayNotification> Days,
+    Dictionary<string, string> AuditVariables);
 
 /// <summary>
 /// Shared request handling for creating/updating a recurring availability pattern — the

@@ -820,9 +820,10 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
             exception.Guild!.Id.Should().Be(guildId);
             exception.GuildBranch!.Id.Should().Be(guildBranchId);
 
-            var pattern = await db.RecurringAvailabilityPatterns.Include(p => p.User).Include(p => p.Guild).FirstAsync(p => p.Id == patternId);
+            var pattern = await db.RecurringAvailabilityPatterns.Include(p => p.User).Include(p => p.Guild).Include(p => p.GuildBranch).FirstAsync(p => p.Id == patternId);
             pattern.User.DiscordId.Should().Be(id);
             pattern.Guild!.Id.Should().Be(guildId);
+            pattern.GuildBranch!.Id.Should().Be(guildBranchId);
 
             var day = await db.RecurringAvailabilityPatternDays.Include(d => d.Pattern).FirstAsync(d => d.PatternId == patternId);
             day.Id.Should().BeGreaterThan(0);

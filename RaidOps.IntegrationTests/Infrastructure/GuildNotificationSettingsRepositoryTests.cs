@@ -70,6 +70,7 @@ public class GuildNotificationSettingsRepositoryTests(RaidOpsWebApplicationFacto
             rows.Should().HaveCount(2);
             rows.Should().ContainSingle(s => s.EventType == GuildNotificationEventType.AbsenceAdded && s.Enabled && s.ChannelId == "chan-1");
             rows.Should().ContainSingle(s => s.EventType == GuildNotificationEventType.AbsenceRemoved && !s.Enabled && s.ChannelId == null);
+            rows.Should().OnlyContain(s => s.Id > 0, "each row should have been assigned a generated surrogate ID");
         }
     }
 
@@ -126,6 +127,35 @@ public class GuildNotificationSettingsRepositoryTests(RaidOpsWebApplicationFacto
             result.Should().NotBeNull();
             result!.Enabled.Should().BeTrue();
             result.ChannelId.Should().Be("chan-3");
+        }
+    }
+
+    [Fact]
+    public async Task GetAsync_BranchOverrideExists_ReturnsBranchRowNotGuildWideFallback()
+    {
+        const string guildId = "930000000000000009";
+        var guildBranchId = await SeedGuildWithBranchAsync(guildId);
+        await SeedAsync(db =>
+        {
+            db.GuildNotificationSettings.Add(new GuildNotificationSetting
+            {
+                GuildId = guildId, GuildBranchId = null, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "chan-guild-wide",
+            });
+            db.GuildNotificationSettings.Add(new GuildNotificationSetting
+            {
+                GuildId = guildId, GuildBranchId = guildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "chan-branch-override",
+            });
+            return Task.CompletedTask;
+        });
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildNotificationSettingsRepository>();
+            var result = await repo.GetAsync(guildId, GuildNotificationEventType.AbsenceAdded, guildBranchId);
+
+            result.Should().NotBeNull();
+            result!.ChannelId.Should().Be("chan-branch-override");
         }
     }
 

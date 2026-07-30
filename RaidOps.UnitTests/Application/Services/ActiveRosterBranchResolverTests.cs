@@ -16,6 +16,9 @@ public class ActiveRosterBranchResolverTests
 
     private const string RequesterId = "user-1";
 
+    private static readonly int[] TwoCharacterIds = [1, 2];
+    private static readonly int[] ThreeCharacterIds = [1, 2, 3];
+
     public ActiveRosterBranchResolverTests()
     {
         _sut = new ActiveRosterBranchResolver(_characters.Object, _memberships.Object);
@@ -37,7 +40,7 @@ public class ActiveRosterBranchResolverTests
     {
         _characters.Setup(c => c.GetByUserWithDetailsAsync(RequesterId, true, default))
             .ReturnsAsync([new Character { Id = 1 }, new Character { Id = 2 }]);
-        _memberships.Setup(m => m.GetByCharacterIdsAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 1, 2 })), default))
+        _memberships.Setup(m => m.GetByCharacterIdsAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(TwoCharacterIds)), default))
             .ReturnsAsync([
                 new GuildMembership { CharacterId = 1, GuildId = "guild-1", GuildBranchId = 10 },
                 new GuildMembership { CharacterId = 2, GuildId = "guild-1", GuildBranchId = 10 },
@@ -55,7 +58,7 @@ public class ActiveRosterBranchResolverTests
     {
         _characters.Setup(c => c.GetByUserWithDetailsAsync(RequesterId, true, default))
             .ReturnsAsync([new Character { Id = 1 }, new Character { Id = 2 }, new Character { Id = 3 }]);
-        _memberships.Setup(m => m.GetByCharacterIdsAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 1, 2, 3 })), default))
+        _memberships.Setup(m => m.GetByCharacterIdsAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(ThreeCharacterIds)), default))
             .ReturnsAsync([
                 new GuildMembership { CharacterId = 1, GuildId = "guild-1", GuildBranchId = 10 },
                 new GuildMembership { CharacterId = 2, GuildId = "guild-1", GuildBranchId = 20 },
