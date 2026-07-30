@@ -21,17 +21,19 @@ public class GetGuildNotificationSettingsQueryHandler(
     /// <inheritdoc/>
     public async Task<Result<List<GuildNotificationSettingResponse>>> HandleAsync(GetGuildNotificationSettingsQuery query, CancellationToken cancellationToken)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+        var accessLevel = query.GuildBranchId != null
+            ? await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, query.GuildBranchId.Value, cancellationToken)
+            : await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<List<GuildNotificationSettingResponse>>.Fail(ResponseDetail.Forbidden, "User is not an admin of this guild.");
+            return Result<List<GuildNotificationSettingResponse>>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild/branch.");
 
-        var persisted = await notificationSettingsRepository.GetAllForGuildAsync(query.GuildId, cancellationToken);
+        var persisted = await notificationSettingsRepository.GetEffectiveForGuildAsync(query.GuildId, query.GuildBranchId, cancellationToken);
         var persistedByEventType = persisted.ToDictionary(s => s.EventType);
 
         var response = Enum.GetValues<GuildNotificationEventType>()
             .Select(eventType => persistedByEventType.TryGetValue(eventType, out var setting)
-                ? new GuildNotificationSettingResponse { EventType = eventType, Enabled = setting.Enabled, ChannelId = setting.ChannelId }
-                : new GuildNotificationSettingResponse { EventType = eventType, Enabled = false, ChannelId = null })
+                ? new GuildNotificationSettingResponse { EventType = eventType, Enabled = setting.Enabled, ChannelId = setting.ChannelId, GuildBranchId = setting.GuildBranchId }
+                : new GuildNotificationSettingResponse { EventType = eventType, Enabled = false, ChannelId = null, GuildBranchId = null })
             .ToList();
 
         return Result<List<GuildNotificationSettingResponse>>.Ok(response);

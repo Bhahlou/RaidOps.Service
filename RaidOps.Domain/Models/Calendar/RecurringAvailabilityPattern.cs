@@ -5,12 +5,14 @@ using RaidOps.Domain.Models.Discord;
 namespace RaidOps.Domain.Models.Calendar;
 
 /// <summary>
-/// A recurring availability pattern for a member's participation in a specific guild, defined as a
-/// fixed-length cycle of days anchored to a reference date. Covers both simple weekly recurrence
-/// (<see cref="CycleLengthDays"/> = 7) and arbitrary shift rotations (e.g. a 5x8 work schedule) with
-/// the same mechanism — <see cref="RecurringAvailabilityPatternDay"/> rows mark which offsets in the
-/// cycle are not fully available. A one-off <see cref="AvailabilityDeclaration"/> on a given date always
-/// takes precedence over this pattern.
+/// A recurring availability pattern, defined as a fixed-length cycle of days anchored to a
+/// reference date. Scope is either Global (<see cref="GuildId"/> and <see cref="GuildBranchId"/>
+/// both null — applies everywhere the member has an active character) or a specific
+/// <see cref="Discord.GuildBranch"/> (both set) — no intermediate "whole guild" scope. Covers both
+/// simple weekly recurrence (<see cref="CycleLengthDays"/> = 7) and arbitrary shift rotations
+/// (e.g. a 5x8 work schedule) with the same mechanism — <see cref="RecurringAvailabilityPatternDay"/>
+/// rows mark which offsets in the cycle are not fully available. A one-off
+/// <see cref="AvailabilityDeclaration"/> on a given date always takes precedence over this pattern.
 ///
 /// Each row is an immutable version valid over <see cref="EffectiveFrom"/>..<see cref="EffectiveUntil"/>
 /// — editing or stopping a pattern never mutates a version that has already applied to a past date;
@@ -29,9 +31,11 @@ public class RecurringAvailabilityPattern
     [Required]
     public string UserDiscordId { get; set; } = string.Empty;
 
-    /// <summary>Discord snowflake ID of the guild this pattern applies to.</summary>
-    [Required]
-    public string GuildId { get; set; } = string.Empty;
+    /// <summary>Discord snowflake ID of the guild this pattern is scoped to, or <c>null</c> for a Global pattern. Set together with <see cref="GuildBranchId"/>.</summary>
+    public string? GuildId { get; set; }
+
+    /// <summary>FK to the specific branch this pattern is scoped to, or <c>null</c> for a Global pattern. Set together with <see cref="GuildId"/>.</summary>
+    public int? GuildBranchId { get; set; }
 
     /// <summary>Optional friendly name for the member's own reference (e.g. "Rotation 5x8").</summary>
     [MaxLength(128)]
@@ -54,8 +58,11 @@ public class RecurringAvailabilityPattern
     /// <summary>The member this pattern belongs to.</summary>
     public virtual User User { get; set; } = null!;
 
-    /// <summary>The guild this pattern applies to.</summary>
-    public virtual Guild Guild { get; set; } = null!;
+    /// <summary>The guild this pattern is scoped to, or <c>null</c> for a Global pattern.</summary>
+    public virtual Guild? Guild { get; set; }
+
+    /// <summary>The specific branch this pattern is scoped to, or <c>null</c> for a Global pattern.</summary>
+    public virtual GuildBranch? GuildBranch { get; set; }
 
     /// <summary>The days within the cycle that are not fully available. A missing offset means fully available.</summary>
     public virtual ICollection<RecurringAvailabilityPatternDay> Days { get; set; } = [];

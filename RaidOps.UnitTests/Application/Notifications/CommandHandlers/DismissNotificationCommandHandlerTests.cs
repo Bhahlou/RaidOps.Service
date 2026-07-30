@@ -26,13 +26,13 @@ public class DismissNotificationCommandHandlerTests
         var command = new DismissNotificationCommand
         {
             RequesterDiscordId = RequesterId,
-            Type               = NotificationType.OfficerThresholdNotConfigured,
+            Type               = NotificationType.BranchOfficerRolesNotConfigured,
             GuildId            = GuildId,
         };
 
         var result = await _sut.HandleAsync(command);
 
         result.IsSuccess.Should().BeTrue();
-        _dismissals.Verify(d => d.DismissAsync(RequesterId, NotificationType.OfficerThresholdNotConfigured, GuildId, default), Times.Once);
+        _dismissals.Verify(d => d.DismissAsync(RequesterId, NotificationType.BranchOfficerRolesNotConfigured, GuildId, default), Times.Once);
     }
 }

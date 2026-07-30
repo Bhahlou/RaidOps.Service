@@ -30,7 +30,7 @@ public class GetGuildNotificationChannelsQueryHandler(
                 {
                     Id = c.ChannelId.ToString(),
                     Name = c.Name,
-                    BotCanSendMessages = c.BotCanSendMessages,
+                    MissingPermissions = [.. c.MissingPermissions],
                     CategoryName = c.CategoryName,
                 })
                 .ToList();

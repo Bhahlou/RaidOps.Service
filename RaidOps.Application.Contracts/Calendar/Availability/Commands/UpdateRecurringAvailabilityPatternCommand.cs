@@ -10,9 +10,6 @@ namespace RaidOps.Application.Contracts.Calendar.Availability.Commands;
 /// </summary>
 public class UpdateRecurringAvailabilityPatternCommand : ICommandRequest
 {
-    /// <summary>The Discord snowflake ID of the guild this pattern applies to. Set by the controller, not from the request body.</summary>
-    public string GuildId { get; set; } = string.Empty;
-
     /// <summary>The Discord snowflake ID of the member this pattern belongs to. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 

@@ -28,9 +28,12 @@ public interface IAvailabilityChangeAnnouncer
 /// The before/after snapshot an <see cref="IAvailabilityChangeAnnouncer"/> diffs to determine what
 /// actually changed. Bundled into one type rather than passed as separate parameters — callers just
 /// supply the exception rows as they stood immediately before and immediately after their own
-/// mutation, plus the patterns that fill in the gaps.
+/// mutation, plus the patterns that fill in the gaps. <see cref="BeforeExceptions"/>/
+/// <see cref="AfterExceptions"/>/<see cref="Patterns"/> may span every scope the member has
+/// declarations in — the announcer itself narrows down to what's relevant per affected branch.
 /// </summary>
-/// <param name="GuildId">The guild the change happened in.</param>
+/// <param name="GuildId">The guild of the branch the mutation was scoped to, or <c>null</c> if it was a Global mutation.</param>
+/// <param name="GuildBranchId">The specific branch the mutation was scoped to, or <c>null</c> if it was a Global mutation.</param>
 /// <param name="RequesterDiscordId">The member whose availability changed.</param>
 /// <param name="WindowStart">Start of the date range to diff, inclusive.</param>
 /// <param name="WindowEnd">End of the date range to diff, inclusive.</param>
@@ -38,7 +41,8 @@ public interface IAvailabilityChangeAnnouncer
 /// <param name="AfterExceptions">Exception rows as they stand immediately after the mutation.</param>
 /// <param name="Patterns">Recurring patterns in effect, used to resolve each day's baseline status.</param>
 public record AvailabilityChange(
-    string GuildId,
+    string? GuildId,
+    int? GuildBranchId,
     string RequesterDiscordId,
     DateOnly WindowStart,
     DateOnly WindowEnd,

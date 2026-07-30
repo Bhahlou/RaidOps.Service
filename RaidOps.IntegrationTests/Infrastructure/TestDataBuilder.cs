@@ -43,11 +43,34 @@ public static class TestDataBuilder
     public static UserGuild CreateUserGuild(
         string userDiscordId,
         string guildId,
-        bool isAdmin = false) => new()
+        bool isAdmin = false,
+        bool isOwner = false) => new()
     {
         UserDiscordId = userDiscordId,
         GuildId = guildId,
         IsAdmin = isAdmin,
+        IsOwner = isOwner,
+    };
+
+    /// <summary>
+    /// Creates an active <see cref="GuildBranch"/> for the given guild.
+    /// BranchId=1 (Retail) matches <see cref="CreateCharacter"/>'s default BranchId.
+    /// </summary>
+    public static GuildBranch CreateGuildBranch(
+        string guildId,
+        int branchId = 1,
+        RosterMode? rosterMode = RosterMode.Open,
+        List<string>? rosterRoleIds = null,
+        List<string>? officerRoleIds = null,
+        bool isActive = true) => new()
+    {
+        GuildId = guildId,
+        BranchId = branchId,
+        RosterMode = rosterMode,
+        RosterRoleIds = rosterRoleIds ?? [],
+        OfficerRoleIds = officerRoleIds ?? [],
+        IsActive = isActive,
+        CreatedAt = DateTime.UtcNow,
     };
 
     /// <summary>

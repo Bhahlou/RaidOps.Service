@@ -1,10 +1,11 @@
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Domain.Enums;
 
 namespace RaidOps.Application.Contracts.Guilds.Settings.Commands;
 
 /// <summary>
-/// Command that persists the settings for a registered guild (timezone, roster mode, role threshold).
+/// Command that persists the guild-level identity settings (timezone, language) for a registered
+/// guild. Roster/officer role-set configuration is per-branch now — see
+/// <see cref="Branches.Commands.UpdateGuildBranchRosterSettingsCommand"/>.
 /// The requesting user must be an admin of the target guild.
 /// </summary>
 public class UpdateGuildSettingsCommand : ICommandRequest
@@ -17,15 +18,6 @@ public class UpdateGuildSettingsCommand : ICommandRequest
 
     /// <summary>IANA timezone identifier (e.g. <c>"Europe/Paris"</c>).</summary>
     public required string Timezone { get; set; }
-
-    /// <summary>Controls who may join the guild's roster.</summary>
-    public required RosterMode RosterMode { get; set; }
-
-    /// <summary>
-    /// Discord snowflake ID of the minimum role required to join the roster.
-    /// Only relevant when <see cref="RosterMode"/> is <see cref="RosterMode.DiscordRoleOnly"/>.
-    /// </summary>
-    public string? MinRosterRoleId { get; set; }
 
     /// <summary>Language RaidOps communicates in for this guild (e.g. Discord bot messages) — "en", "fr", or "de".</summary>
     public required string Language { get; set; }

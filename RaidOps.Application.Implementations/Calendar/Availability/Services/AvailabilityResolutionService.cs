@@ -17,17 +17,69 @@ public class AvailabilityResolutionService : IAvailabilityResolutionService
         IReadOnlyCollection<AvailabilityDeclaration> exceptions,
         IReadOnlyCollection<RecurringAvailabilityPattern> patterns)
     {
+        var branchScopes = exceptions
+            .Where(e => e.GuildId != null)
+            .Select(e => (e.GuildId, e.GuildBranchId))
+            .Concat(patterns.Where(p => p.GuildId != null).Select(p => (p.GuildId, p.GuildBranchId)))
+            .Distinct()
+            .ToList();
+
+        var globalDays = ResolveForScope(rangeStart, rangeEnd, exceptions, patterns, null, null);
+        var results = globalDays;
+
+        foreach (var (guildId, guildBranchId) in branchScopes)
+        {
+            var branchDays = ResolveForScope(rangeStart, rangeEnd, exceptions, patterns, guildId, guildBranchId);
+            for (var i = 0; i < results.Count; i++)
+            {
+                if (Restrictiveness(branchDays[i].Status) > Restrictiveness(results[i].Status))
+                    results[i] = branchDays[i];
+            }
+        }
+
+        return results;
+    }
+
+    /// <inheritdoc/>
+    public List<ResolvedDayAvailabilityResponse> ResolveForScope(
+        DateOnly rangeStart,
+        DateOnly rangeEnd,
+        IReadOnlyCollection<AvailabilityDeclaration> exceptions,
+        IReadOnlyCollection<RecurringAvailabilityPattern> patterns,
+        string? guildId,
+        int? guildBranchId)
+    {
         var results = new List<ResolvedDayAvailabilityResponse>();
 
         for (var date = rangeStart; date <= rangeEnd; date = date.AddDays(1))
         {
-            var exception = exceptions.FirstOrDefault(e => date >= e.StartDate && date <= e.EndDate);
+            var exception = ScopedException(exceptions, date, guildId, guildBranchId);
             results.Add(exception != null
                 ? ResolveFromException(date, exception)
-                : ResolveFromPatterns(date, patterns));
+                : ResolveFromPatterns(date, patterns, guildId, guildBranchId));
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Picks the exception covering <paramref name="date"/> for this scope — the branch-scoped one
+    /// if one exists (when <paramref name="guildId"/> is set), otherwise the Global one. Exceptions
+    /// belonging to any other branch are never considered.
+    /// </summary>
+    private static AvailabilityDeclaration? ScopedException(
+        IEnumerable<AvailabilityDeclaration> exceptions, DateOnly date, string? guildId, int? guildBranchId)
+    {
+        bool Covers(AvailabilityDeclaration e) => date >= e.StartDate && date <= e.EndDate;
+
+        if (guildId != null)
+        {
+            var branchMatch = exceptions.FirstOrDefault(e => Covers(e) && e.GuildId == guildId && e.GuildBranchId == guildBranchId);
+            if (branchMatch != null)
+                return branchMatch;
+        }
+
+        return exceptions.FirstOrDefault(e => Covers(e) && e.GuildId == null);
     }
 
     private static ResolvedDayAvailabilityResponse ResolveFromException(DateOnly date, AvailabilityDeclaration exception) => new()
@@ -40,7 +92,29 @@ public class AvailabilityResolutionService : IAvailabilityResolutionService
         IsException = true,
     };
 
-    private static ResolvedDayAvailabilityResponse ResolveFromPatterns(DateOnly date, IReadOnlyCollection<RecurringAvailabilityPattern> patterns)
+    private static ResolvedDayAvailabilityResponse ResolveFromPatterns(
+        DateOnly date, IReadOnlyCollection<RecurringAvailabilityPattern> patterns, string? guildId, int? guildBranchId)
+    {
+        var mostRestrictive = guildId != null
+            ? MostRestrictiveDay(date, patterns.Where(p => p.GuildId == guildId && p.GuildBranchId == guildBranchId))
+            : null;
+
+        mostRestrictive ??= MostRestrictiveDay(date, patterns.Where(p => p.GuildId == null));
+
+        return mostRestrictive == null
+            ? new ResolvedDayAvailabilityResponse { Date = date, Status = DayAvailabilityStatus.Available }
+            : new ResolvedDayAvailabilityResponse
+            {
+                Date = date,
+                Status = mostRestrictive.Status,
+                Reason = mostRestrictive.Reason,
+                AvailableFrom = mostRestrictive.AvailableFrom,
+                AvailableUntil = mostRestrictive.AvailableUntil,
+                IsException = false,
+            };
+    }
+
+    private static RecurringAvailabilityPatternDay? MostRestrictiveDay(DateOnly date, IEnumerable<RecurringAvailabilityPattern> patterns)
     {
         RecurringAvailabilityPatternDay? mostRestrictive = null;
 
@@ -55,17 +129,7 @@ public class AvailabilityResolutionService : IAvailabilityResolutionService
                 mostRestrictive = day;
         }
 
-        return mostRestrictive == null
-            ? new ResolvedDayAvailabilityResponse { Date = date, Status = DayAvailabilityStatus.Available }
-            : new ResolvedDayAvailabilityResponse
-            {
-                Date = date,
-                Status = mostRestrictive.Status,
-                Reason = mostRestrictive.Reason,
-                AvailableFrom = mostRestrictive.AvailableFrom,
-                AvailableUntil = mostRestrictive.AvailableUntil,
-                IsException = false,
-            };
+        return mostRestrictive;
     }
 
     /// <summary>Zero-based offset of <paramref name="date"/> within a cycle of <paramref name="cycleLengthDays"/> anchored at <paramref name="anchorDate"/>.</summary>

@@ -13,7 +13,6 @@ namespace RaidOps.UnitTests.Application.Calendar.Availability.QueryHandlers;
 
 public class GetMyAvailabilityQueryHandlerTests
 {
-    private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IAvailabilityRepository> _repository = new();
     private readonly Mock<IAvailabilityResolutionService> _resolutionService = new();
     private readonly GetMyAvailabilityQueryHandler _sut;
@@ -23,7 +22,6 @@ public class GetMyAvailabilityQueryHandlerTests
 
     private static readonly GetMyAvailabilityQuery Query = new()
     {
-        GuildId = GuildId,
         RequesterDiscordId = RequesterId,
         RangeStart = new DateOnly(2026, 1, 1),
         RangeEnd = new DateOnly(2026, 1, 7),
@@ -31,27 +29,15 @@ public class GetMyAvailabilityQueryHandlerTests
 
     public GetMyAvailabilityQueryHandlerTests()
     {
-        _sut = new GetMyAvailabilityQueryHandler(_access.Object, _repository.Object, _resolutionService.Object);
-    }
-
-    [Fact]
-    public async Task HandleAsync_AccessBelowRoster_ReturnsForbidden()
-    {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Public);
-
-        var result = await _sut.HandleAsync(Query, default);
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _sut = new GetMyAvailabilityQueryHandler(_repository.Object, _resolutionService.Object);
     }
 
     [Fact]
     public async Task HandleAsync_RangeEndBeforeRangeStart_ReturnsInvalidRequest()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
         var query = new GetMyAvailabilityQuery
         {
-            GuildId = GuildId, RequesterDiscordId = RequesterId,
+            RequesterDiscordId = RequesterId,
             RangeStart = new DateOnly(2026, 1, 7), RangeEnd = new DateOnly(2026, 1, 1),
         };
 
@@ -64,8 +50,6 @@ public class GetMyAvailabilityQueryHandlerTests
     [Fact]
     public async Task HandleAsync_Success_ReturnsResolvedDaysAndMappedExceptionsAndOnlyOpenPatterns()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-
         var exception = new AvailabilityDeclaration
         {
             Id = 1, UserDiscordId = RequesterId, GuildId = GuildId,
@@ -74,7 +58,7 @@ public class GetMyAvailabilityQueryHandlerTests
             AvailableFrom = new TimeOnly(8, 0), AvailableUntil = new TimeOnly(16, 0),
         };
         var exceptions = new List<AvailabilityDeclaration> { exception };
-        _repository.Setup(r => r.GetExceptionsOverlappingAsync(RequesterId, GuildId, Query.RangeStart, Query.RangeEnd, default))
+        _repository.Setup(r => r.GetExceptionsOverlappingAsync(RequesterId, Query.RangeStart, Query.RangeEnd, default))
             .ReturnsAsync(exceptions);
 
         var closedPattern = new RecurringAvailabilityPattern
@@ -96,7 +80,7 @@ public class GetMyAvailabilityQueryHandlerTests
             }],
         };
         var patterns = new List<RecurringAvailabilityPattern> { closedPattern, openPattern };
-        _repository.Setup(r => r.GetPatternsAsync(RequesterId, GuildId, default)).ReturnsAsync(patterns);
+        _repository.Setup(r => r.GetPatternsAsync(RequesterId, default)).ReturnsAsync(patterns);
 
         var resolvedDays = new List<ResolvedDayAvailabilityResponse>
         {

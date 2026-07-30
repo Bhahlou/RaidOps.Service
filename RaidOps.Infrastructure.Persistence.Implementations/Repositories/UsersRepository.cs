@@ -29,5 +29,7 @@ public class UsersRepository(RaidOpsDbContext dbContext) : BaseRepository<User>(
         => await _dbContext.Users
             .Include(u => u.UserGuilds)
             .ThenInclude(ug => ug.Guild)
+            .ThenInclude(g => g.Branches)
+            .ThenInclude(gb => gb.Branch)
             .FirstOrDefaultAsync(u => u.DiscordId == discordId, cancellationToken);
 }

@@ -14,20 +14,17 @@ namespace RaidOps.Application.Implementations.Calendar.Availability.CommandHandl
 /// the middle, or deleting it outright if it was the only day covered — then announcing only the
 /// net change via <see cref="IAvailabilityChangeAnnouncer"/> (a single "1 day removed" instead of
 /// the raw "N days deleted" + up to two "M days added" a naive delete + re-create would produce).
+/// Ownership (id + <see cref="RemoveAvailabilityExceptionDayCommand.RequesterDiscordId"/>) is the
+/// only authorization needed; no separate guild access check applies.
 /// </summary>
 public class RemoveAvailabilityExceptionDayCommandHandler(
-    IGuildAccessService guildAccessService,
     IAvailabilityRepository availabilityRepository,
     IAvailabilityChangeAnnouncer availabilityChangeAnnouncer) : ICommandHandlerAsync<RemoveAvailabilityExceptionDayCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(RemoveAvailabilityExceptionDayCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
-        if (accessLevel < GuildAccessLevel.Roster)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
-
-        var existing = await availabilityRepository.GetExceptionByIdAsync(command.ExceptionId, command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var existing = await availabilityRepository.GetExceptionByIdAsync(command.ExceptionId, command.RequesterDiscordId, cancellationToken);
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.AvailabilityExceptionNotFound, $"Exception '{command.ExceptionId}' does not exist.");
 
@@ -41,10 +38,10 @@ public class RemoveAvailabilityExceptionDayCommandHandler(
         var windowEnd = existing.EndDate;
 
         var beforeExceptions = await availabilityRepository.GetExceptionsOverlappingAsync(
-            command.RequesterDiscordId, command.GuildId, windowStart, windowEnd, cancellationToken);
-        var patterns = await availabilityRepository.GetPatternsAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+            command.RequesterDiscordId, windowStart, windowEnd, cancellationToken);
+        var patterns = await availabilityRepository.GetPatternsAsync(command.RequesterDiscordId, cancellationToken);
 
-        await availabilityRepository.DeleteExceptionAsync(command.ExceptionId, command.RequesterDiscordId, command.GuildId, cancellationToken);
+        await availabilityRepository.DeleteExceptionAsync(command.ExceptionId, command.RequesterDiscordId, cancellationToken);
 
         var remainingFragments = new List<AvailabilityDeclaration>();
         if (command.Date > existing.StartDate)
@@ -63,7 +60,8 @@ public class RemoveAvailabilityExceptionDayCommandHandler(
 
         await availabilityChangeAnnouncer.AnnounceAsync(
             new AvailabilityChange(
-                command.GuildId,
+                existing.GuildId,
+                existing.GuildBranchId,
                 command.RequesterDiscordId,
                 windowStart,
                 windowEnd,
@@ -79,6 +77,7 @@ public class RemoveAvailabilityExceptionDayCommandHandler(
     {
         UserDiscordId = source.UserDiscordId,
         GuildId = source.GuildId,
+        GuildBranchId = source.GuildBranchId,
         StartDate = startDate,
         EndDate = endDate,
         Status = source.Status,

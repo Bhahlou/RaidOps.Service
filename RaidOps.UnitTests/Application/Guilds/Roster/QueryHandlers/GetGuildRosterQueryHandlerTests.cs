@@ -17,27 +17,35 @@ namespace RaidOps.UnitTests.Application.Guilds.Roster.QueryHandlers;
 /// </summary>
 public class GetGuildRosterQueryHandlerTests
 {
-    private readonly Mock<IGuildsRepository>          _guilds      = new();
-    private readonly Mock<IGuildAccessService>        _access      = new();
-    private readonly Mock<IGuildMembershipRepository> _memberships = new();
-    private readonly Mock<IUsersRepository>           _users       = new();
+    private readonly Mock<IGuildsRepository>          _guilds        = new();
+    private readonly Mock<IGuildBranchesRepository>   _guildBranches = new();
+    private readonly Mock<IGuildAccessService>        _access        = new();
+    private readonly Mock<IGuildMembershipRepository> _memberships   = new();
+    private readonly Mock<IUsersRepository>           _users         = new();
     private readonly GetGuildRosterQueryHandler       _sut;
 
-    private const string GuildId     = "guild-1";
-    private const string RequesterId = "user-1";
+    private const string GuildId       = "guild-1";
+    private const string RequesterId   = "user-1";
+    private const int    GuildBranchId = 1;
 
     private static readonly GetGuildRosterQuery Query = new()
     {
         GuildId            = GuildId,
+        GuildBranchId      = GuildBranchId,
         RequesterDiscordId = RequesterId,
     };
 
     public GetGuildRosterQueryHandlerTests()
     {
-        _sut = new GetGuildRosterQueryHandler(_guilds.Object, _access.Object, _memberships.Object, _users.Object);
+        _sut = new GetGuildRosterQueryHandler(_guilds.Object, _guildBranches.Object, _access.Object, _memberships.Object, _users.Object);
         _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
             .ReturnsAsync([]);
     }
+
+    private static GuildBranch MakeBranch(bool isActive = true) => new()
+    {
+        Id = GuildBranchId, GuildId = GuildId, BranchId = 1, IsActive = isActive,
+    };
 
     [Fact]
     public async Task HandleAsync_GuildNotFound_ReturnsGuildNotFound()
@@ -63,11 +71,38 @@ public class GetGuildRosterQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BranchNotFound_ReturnsGuildBranchNotFound()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync((GuildBranch?)null);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.GuildBranchNotFound);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchInactive_ReturnsGuildBranchNotFound()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch(isActive: false));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.GuildBranchNotFound);
+    }
+
+    [Fact]
     public async Task HandleAsync_RequesterBelowRosterAccess_ReturnsRosterAccessDenied()
     {
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Public);
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Public);
 
         var result = await _sut.HandleAsync(Query, default);
 
@@ -80,8 +115,9 @@ public class GetGuildRosterQueryHandlerTests
     {
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
         [
             BuildMembership(id: 1, name: "Zed", rank: CharacterRank.Main),
             BuildMembership(id: 2, name: "Aaron", rank: CharacterRank.Alt),
@@ -100,8 +136,9 @@ public class GetGuildRosterQueryHandlerTests
         const string ownerId = "owner-1";
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
         [
             BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Split, ownerId: ownerId),
         ]);
@@ -125,6 +162,48 @@ public class GetGuildRosterQueryHandlerTests
         member.CharacterRank.Should().Be(CharacterRank.Split);
     }
 
+    [Fact]
+    public async Task HandleAsync_Success_NoActiveExpansionState_FallsBackToHighestLevel()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var membership = BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main);
+        // No expansion state is marked IsActive — the character never activated a version yet,
+        // so the mapper must fall back to the highest-level state instead of returning Level 0.
+        membership.Character.ExpansionStates =
+        [
+            new CharacterExpansionState { CharacterId = 1, IsActive = false, Level = 60, ItemLevel = 200 },
+            new CharacterExpansionState { CharacterId = 1, IsActive = false, Level = 80, ItemLevel = 620 },
+        ];
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([membership]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Single().Level.Should().Be(80);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_NoExpansionStatesAtAll_LevelDefaultsToZero()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        var membership = BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main);
+        // A never-synced character has no expansion state rows at all — activeState resolves to
+        // null, exercising the `?? 0` default rather than the fallback-by-level path.
+        membership.Character.ExpansionStates = [];
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([membership]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Single().Level.Should().Be(0);
+    }
+
     // ── CanExclude ────────────────────────────────────────────────────────
 
     [Fact]
@@ -133,9 +212,10 @@ public class GetGuildRosterQueryHandlerTests
         const string ownerId = "owner-1";
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _access.Setup(a => a.OutranksAsync(GuildId, RequesterId, ownerId, default)).ReturnsAsync(true);
-        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _access.Setup(a => a.OutranksAsync(GuildId, GuildBranchId, RequesterId, ownerId, default)).ReturnsAsync(true);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
         [
             BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
         ]);
@@ -151,9 +231,10 @@ public class GetGuildRosterQueryHandlerTests
         const string ownerId = "owner-1";
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _access.Setup(a => a.OutranksAsync(GuildId, RequesterId, ownerId, default)).ReturnsAsync(false);
-        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _access.Setup(a => a.OutranksAsync(GuildId, GuildBranchId, RequesterId, ownerId, default)).ReturnsAsync(false);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
         [
             BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
         ]);
@@ -168,8 +249,9 @@ public class GetGuildRosterQueryHandlerTests
     {
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
         [
             BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: RequesterId),
         ]);
@@ -177,7 +259,7 @@ public class GetGuildRosterQueryHandlerTests
         var result = await _sut.HandleAsync(Query, default);
 
         result.Value!.Single().CanExclude.Should().BeTrue();
-        _access.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _access.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
 
     [Fact]
@@ -186,8 +268,9 @@ public class GetGuildRosterQueryHandlerTests
         const string ownerId = "owner-1";
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _memberships.Setup(m => m.GetByGuildIdAsync(GuildId, default)).ReturnsAsync(
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
         [
             BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: RequesterId),
             BuildMembership(id: 2, name: "Jaina", rank: CharacterRank.Main, ownerId: ownerId),
@@ -196,7 +279,7 @@ public class GetGuildRosterQueryHandlerTests
         var result = await _sut.HandleAsync(Query, default);
 
         result.Value!.Should().OnlyContain(m => !m.CanExclude);
-        _access.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _access.Verify(a => a.OutranksAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
 
     private static GuildMembership BuildMembership(int id, string name, CharacterRank rank, string ownerId = "owner-1")
@@ -206,6 +289,7 @@ public class GetGuildRosterQueryHandlerTests
         {
             CharacterId   = id,
             GuildId       = GuildId,
+            GuildBranchId = GuildBranchId,
             CharacterRank = rank,
             JoinedAt      = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             Character = new Character

@@ -42,6 +42,9 @@ public static class ResponseDetail
 
     // ── Branch ────────────────────────────────────────────────────────────
     public const string BranchNotFound = nameof(BranchNotFound);
+    public const string GuildBranchNotFound = nameof(GuildBranchNotFound);
+    public const string GuildBranchNotActive = nameof(GuildBranchNotActive);
+    public const string GuildBranchAlreadyActive = nameof(GuildBranchAlreadyActive);
 
     // ── Calendar ──────────────────────────────────────────────────────────
     public const string AvailabilityExceptionNotFound = nameof(AvailabilityExceptionNotFound);

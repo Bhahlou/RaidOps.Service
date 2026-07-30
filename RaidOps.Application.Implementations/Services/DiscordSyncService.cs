@@ -133,7 +133,8 @@ public class DiscordSyncService(
         {
             UserDiscordId = discordId,
             GuildId = g.Id,
-            IsAdmin = g.IsAdmin
+            IsAdmin = g.IsAdmin,
+            IsOwner = g.Owner
         }).ToList();
 
         await userGuildsRepository.ReplaceUserGuildsAsync(discordId, userGuilds, cancellationToken);

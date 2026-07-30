@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.Characters.Responses;
@@ -24,7 +24,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
     private static readonly int[] ThreeViableSpecs = [62, 63, 64];
     private static readonly int[] ReplacementViableSpec = [64];
 
-    // ── Auth enforcement ────────────────────────────────────────────────────
+    // â”€â”€ Auth enforcement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetAll_WithoutToken_Returns401()
@@ -83,7 +83,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // ── Business logic — GetAll / GetSynced ─────────────────────────────────
+    // â”€â”€ Business logic â€” GetAll / GetSynced â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetAll_WhenNoCharacters_ReturnsEmptyList()
@@ -124,10 +124,13 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         {
             db.BattleNetAccounts.Add(TestDataBuilder.CreateBnetAccount(id));
             db.Guilds.Add(TestDataBuilder.CreateGuild(id: "400000000000000001", name: "Dah Boo", isRegistered: true));
+            var branch = TestDataBuilder.CreateGuildBranch("400000000000000001");
+            db.GuildBranches.Add(branch);
             db.GuildMemberships.Add(new GuildMembership
             {
                 CharacterId = charId,
                 GuildId = "400000000000000001",
+                GuildBranch = branch,
                 CharacterRank = CharacterRank.Main,
                 JoinedAt = DateTime.UtcNow,
             });
@@ -175,7 +178,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         body.Should().ContainSingle(c => c.Name == "TestMage" && c.ClassName == "Mage" && c.IsActive);
     }
 
-    // ── Business logic — Sync ───────────────────────────────────────────────
+    // â”€â”€ Business logic â€” Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task Sync_WithNoBnetAccount_Returns400()
@@ -225,7 +228,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         body.Should().Contain("synced successfully");
     }
 
-    // ── Business logic — Activate ───────────────────────────────────────────
+    // â”€â”€ Business logic â€” Activate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task Activate_WithNoMatchingCharacters_Returns200()
@@ -259,7 +262,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Business logic — Deactivate ─────────────────────────────────────────
+    // â”€â”€ Business logic â€” Deactivate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task Deactivate_WhenCharacterExists_Returns200()
@@ -285,7 +288,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // ── Business logic — Resync ─────────────────────────────────────────────
+    // â”€â”€ Business logic â€” Resync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task Resync_WhenCharacterNotFound_Returns400()
@@ -316,7 +319,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // ── Business logic — SetRaidSpecs ───────────────────────────────────────
+    // â”€â”€ Business logic â€” SetRaidSpecs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task SetRaidSpecs_WhenCharacterNotFound_Returns400()
@@ -338,7 +341,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         var charId = await SeedUserWithActiveCharacter(id, bnetCharacterId: 90061); // Mage (ClassId=8)
         var client = CreateAuthenticatedClient(discordId: id);
 
-        // 71 = Arms (Warrior, ClassId=1) — invalid for a Mage character.
+        // 71 = Arms (Warrior, ClassId=1) â€” invalid for a Mage character.
         var response = await client.PostAsJsonAsync($"/api/v1/characters/{charId}/raid-specs",
             new { mainSpecId = 71, viableSpecIds = WrongClassViableSpec });
 
@@ -422,7 +425,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Business logic — GetCharacter ───────────────────────────────────────
+    // â”€â”€ Business logic â€” GetCharacter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task GetCharacter_Owner_Returns200WithIsOwnerTrue()
@@ -476,9 +479,11 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(teammateId));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(teammateId, guildId, isAdmin: false));
-            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, GuildBranch = branch, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: teammateId);
@@ -501,9 +506,11 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(officerId));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
-            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, GuildBranch = branch, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: officerId);
@@ -516,7 +523,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         body.CanEditRaidSpecs.Should().BeTrue();
     }
 
-    // ── Business logic — SetRaidSpecs as officer ────────────────────────────
+    // â”€â”€ Business logic â€” SetRaidSpecs as officer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task SetRaidSpecs_OfficerNotOwner_Returns200AndPersists()
@@ -528,9 +535,11 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(officerId));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true, RosterMode = RosterMode.Open });
+            db.Guilds.Add(new Guild { Id = guildId, Name = "Open Guild", IsRegistered = true });
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(officerId, guildId, isAdmin: true));
-            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
+            db.GuildMemberships.Add(new GuildMembership { CharacterId = charId, GuildId = guildId, GuildBranch = branch, CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow });
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: officerId);
@@ -562,7 +571,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // ── Domain — BnetCharacterSpec relationship ─────────────────────────────
+    // â”€â”€ Domain â€” BnetCharacterSpec relationship â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task BnetCharacterSpec_NavigatesBackToItsExpansionState()
@@ -593,7 +602,7 @@ public class CharactersControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task<int> SeedUserWithActiveCharacter(string discordId, long bnetCharacterId = 90001)
     {

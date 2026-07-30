@@ -26,14 +26,18 @@ public class LeaveGuildCommandHandler(
         if (character == null)
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotFound, $"Character '{command.CharacterId}' does not exist.");
 
+        var membership = await membershipRepository.GetAsync(command.CharacterId, command.GuildId, cancellationToken);
+        if (membership == null)
+            return Result<CommandResponse>.Fail(ResponseDetail.NotAMember, "This character is not on this guild's roster.");
+
         var isOwner = character.UserDiscordId == command.RequesterDiscordId;
         if (!isOwner)
         {
-            var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+            var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, membership.GuildBranchId, cancellationToken);
             if (accessLevel < GuildAccessLevel.Officer)
                 return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of this guild.");
 
-            var outranksTarget = await guildAccessService.OutranksAsync(command.GuildId, command.RequesterDiscordId, character.UserDiscordId, cancellationToken);
+            var outranksTarget = await guildAccessService.OutranksAsync(command.GuildId, membership.GuildBranchId, command.RequesterDiscordId, character.UserDiscordId, cancellationToken);
             if (!outranksTarget)
                 return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You cannot exclude a member with an equal or higher role than yours.");
         }
