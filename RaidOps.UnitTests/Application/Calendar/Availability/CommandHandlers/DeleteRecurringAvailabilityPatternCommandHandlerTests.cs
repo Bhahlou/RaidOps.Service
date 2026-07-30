@@ -13,14 +13,15 @@ namespace RaidOps.UnitTests.Application.Calendar.Availability.CommandHandlers;
 
 public class DeleteRecurringAvailabilityPatternCommandHandlerTests
 {
-    private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IAvailabilityRepository> _repository = new();
+    private readonly Mock<IActiveRosterBranchResolver> _activeRosterResolver = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
     private readonly Mock<IGuildNotificationDispatcher> _notificationDispatcher = new();
     private readonly Mock<IAbsenceNotificationContentBuilder> _absenceContentBuilder = new();
     private readonly DeleteRecurringAvailabilityPatternCommandHandler _sut;
 
     private const string GuildId = "guild-1";
+    private const int GuildBranchId = 10;
     private const string RequesterId = "user-1";
     private const int PatternId = 5;
 
@@ -29,19 +30,20 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
 
     private static readonly DeleteRecurringAvailabilityPatternCommand Command = new()
     {
-        GuildId = GuildId,
         RequesterDiscordId = RequesterId,
         PatternId = PatternId,
     };
 
     public DeleteRecurringAvailabilityPatternCommandHandlerTests()
     {
-        _sut = new DeleteRecurringAvailabilityPatternCommandHandler(_access.Object, _repository.Object, _auditLog.Object, _notificationDispatcher.Object, _absenceContentBuilder.Object);
+        _activeRosterResolver.Setup(r => r.GetActiveBranchesAsync(RequesterId, default)).ReturnsAsync([]);
+        _sut = new DeleteRecurringAvailabilityPatternCommandHandler(
+            _repository.Object, _activeRosterResolver.Object, _auditLog.Object, _notificationDispatcher.Object, _absenceContentBuilder.Object);
     }
 
-    private static RecurringAvailabilityPattern MakeExistingPattern(DateOnly effectiveFrom) => new()
+    private static RecurringAvailabilityPattern MakeExistingPattern(DateOnly effectiveFrom, string? guildId = GuildId, int? guildBranchId = GuildBranchId) => new()
     {
-        Id = PatternId, UserDiscordId = RequesterId, GuildId = GuildId,
+        Id = PatternId, UserDiscordId = RequesterId, GuildId = guildId, GuildBranchId = guildBranchId,
         CycleLengthDays = 7, AnchorDate = Anchor, EffectiveFrom = effectiveFrom, EffectiveUntil = null,
         Days =
         [
@@ -55,21 +57,9 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
     };
 
     [Fact]
-    public async Task HandleAsync_AccessBelowRoster_ReturnsForbidden()
-    {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Public);
-
-        var result = await _sut.HandleAsync(Command);
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.Forbidden);
-    }
-
-    [Fact]
     public async Task HandleAsync_PatternNotFound_ReturnsRecurringAvailabilityPatternNotFound()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default)).ReturnsAsync((RecurringAvailabilityPattern?)null);
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default)).ReturnsAsync((RecurringAvailabilityPattern?)null);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -80,40 +70,37 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
     [Fact]
     public async Task HandleAsync_EffectiveFromInPast_ClosesPatternAndNeverDeletesThenReturnsOk()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
             .ReturnsAsync(MakeExistingPattern(Today.AddDays(-5)));
-        _repository.Setup(r => r.ClosePatternAsync(PatternId, RequesterId, GuildId, Today.AddDays(-1), default)).ReturnsAsync(true);
+        _repository.Setup(r => r.ClosePatternAsync(PatternId, RequesterId, Today.AddDays(-1), default)).ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsSuccess.Should().BeTrue();
-        _repository.Verify(r => r.ClosePatternAsync(PatternId, RequesterId, GuildId, Today.AddDays(-1), default), Times.Once);
-        _repository.Verify(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default), Times.Never);
+        _repository.Verify(r => r.ClosePatternAsync(PatternId, RequesterId, Today.AddDays(-1), default), Times.Once);
+        _repository.Verify(r => r.DeletePatternAsync(PatternId, RequesterId, default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_EffectiveFromToday_DeletesPatternAndNeverClosesThenReturnsOk()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
             .ReturnsAsync(MakeExistingPattern(Today));
-        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default)).ReturnsAsync(true);
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, default)).ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsSuccess.Should().BeTrue();
-        _repository.Verify(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default), Times.Once);
-        _repository.Verify(r => r.ClosePatternAsync(PatternId, RequesterId, GuildId, It.IsAny<DateOnly>(), default), Times.Never);
+        _repository.Verify(r => r.DeletePatternAsync(PatternId, RequesterId, default), Times.Once);
+        _repository.Verify(r => r.ClosePatternAsync(PatternId, RequesterId, It.IsAny<DateOnly>(), default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_Success_LogsAuditVariablesIncludingEachDaysStatusAndTimes()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
             .ReturnsAsync(MakeExistingPattern(Today));
-        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default)).ReturnsAsync(true);
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, default)).ReturnsAsync(true);
 
         await _sut.HandleAsync(Command);
 
@@ -129,10 +116,9 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Success_BuildsPatternEmbedFromExistingDaysAndNotifiesAbsenceRemoved()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
             .ReturnsAsync(MakeExistingPattern(Today));
-        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default)).ReturnsAsync(true);
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, default)).ReturnsAsync(true);
         var embed = new DiscordEmbedContent("Recurring absences removed");
         _absenceContentBuilder.Setup(b => b.BuildPatternAsync(
                 GuildId, RequesterId, GuildNotificationEventType.AbsenceRemoved, Anchor, 7,
@@ -150,20 +136,56 @@ public class DeleteRecurringAvailabilityPatternCommandHandlerTests
                                  d.AvailableFrom == new TimeOnly(18, 0) && d.AvailableUntil == new TimeOnly(22, 0))),
             default), Times.Once);
 
-        _notificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceRemoved, embed, default), Times.Once);
+        _notificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.AbsenceRemoved, GuildBranchId, embed, default), Times.Once);
     }
 
     [Fact]
     public async Task HandleAsync_StopCallReturnsFalse_ReturnsRecurringAvailabilityPatternNotFound()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
             .ReturnsAsync(MakeExistingPattern(Today));
-        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, GuildId, default)).ReturnsAsync(false);
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, default)).ReturnsAsync(false);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.RecurringAvailabilityPatternNotFound);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Global_NeverAuditsOrNotifiesWhenNoActiveBranches()
+    {
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
+            .ReturnsAsync(MakeExistingPattern(Today, guildId: null, guildBranchId: null));
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GuildAuditAction>(), It.IsAny<Dictionary<string, string>>(), default), Times.Never);
+        _notificationDispatcher.Verify(d => d.NotifyAsync(It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Global_AnnouncesOncePerActiveBranch()
+    {
+        _repository.Setup(r => r.GetPatternByIdAsync(PatternId, RequesterId, default))
+            .ReturnsAsync(MakeExistingPattern(Today, guildId: null, guildBranchId: null));
+        _repository.Setup(r => r.DeletePatternAsync(PatternId, RequesterId, default)).ReturnsAsync(true);
+        _activeRosterResolver.Setup(r => r.GetActiveBranchesAsync(RequesterId, default))
+            .ReturnsAsync([new ActiveRosterBranch("guild-a", 1), new ActiveRosterBranch("guild-b", 2)]);
+        var embed = new DiscordEmbedContent("Recurring absences removed");
+        _absenceContentBuilder.Setup(b => b.BuildPatternAsync(
+                It.IsAny<string>(), RequesterId, GuildNotificationEventType.AbsenceRemoved, Anchor, 7,
+                It.IsAny<IReadOnlyList<PatternDayNotification>>(), default))
+            .ReturnsAsync(embed);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync("guild-a", RequesterId, GuildAuditAction.RecurringAvailabilityPatternStopped, It.IsAny<Dictionary<string, string>>(), default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync("guild-b", RequesterId, GuildAuditAction.RecurringAvailabilityPatternStopped, It.IsAny<Dictionary<string, string>>(), default), Times.Once);
+        _notificationDispatcher.Verify(d => d.NotifyAsync("guild-a", GuildNotificationEventType.AbsenceRemoved, 1, embed, default), Times.Once);
+        _notificationDispatcher.Verify(d => d.NotifyAsync("guild-b", GuildNotificationEventType.AbsenceRemoved, 2, embed, default), Times.Once);
     }
 }

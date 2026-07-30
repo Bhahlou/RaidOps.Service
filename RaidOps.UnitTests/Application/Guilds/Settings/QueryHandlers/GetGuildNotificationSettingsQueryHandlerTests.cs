@@ -41,7 +41,7 @@ public class GetGuildNotificationSettingsQueryHandlerTests
     public async Task HandleAsync_Success_ReturnsOneRowPerEventTypeDefaultingUnpersistedToDisabled()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        _notificationSettings.Setup(r => r.GetEffectiveForGuildAsync(GuildId, null, default)).ReturnsAsync(
         [
             new GuildNotificationSetting { GuildId = GuildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "chan-1" },
         ]);
@@ -52,5 +52,22 @@ public class GetGuildNotificationSettingsQueryHandlerTests
         result.Value.Should().HaveCount(Enum.GetValues<GuildNotificationEventType>().Length);
         result.Value.Should().ContainSingle(r => r.EventType == GuildNotificationEventType.AbsenceAdded && r.Enabled && r.ChannelId == "chan-1");
         result.Value.Should().ContainSingle(r => r.EventType == GuildNotificationEventType.AbsenceRemoved && !r.Enabled && r.ChannelId == null);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchScoped_ReturnsBranchsEffectiveSettings()
+    {
+        const int guildBranchId = 7;
+        var query = new GetGuildNotificationSettingsQuery { GuildId = GuildId, RequesterDiscordId = RequesterId, GuildBranchId = guildBranchId };
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, guildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetEffectiveForGuildAsync(GuildId, guildBranchId, default)).ReturnsAsync(
+        [
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = guildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "chan-branch" },
+        ]);
+
+        var result = await _sut.HandleAsync(query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(r => r.EventType == GuildNotificationEventType.AbsenceAdded && r.Enabled && r.ChannelId == "chan-branch" && r.GuildBranchId == guildBranchId);
     }
 }

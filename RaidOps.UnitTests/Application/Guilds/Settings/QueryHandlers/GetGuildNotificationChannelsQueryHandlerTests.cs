@@ -56,15 +56,30 @@ public class GetGuildNotificationChannelsQueryHandlerTests
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
         [
-            new DiscordChannelInfo(111, "general", true, "Text Channels"),
-            new DiscordChannelInfo(222, "mod-only", false, null),
+            new DiscordChannelInfo(111, "general", [], "Text Channels"),
+            new DiscordChannelInfo(222, "mod-only", [DiscordChannelPermissionFlag.EmbedLinks], null),
         ]);
 
         var result = await _sut.HandleAsync(Query, default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(2);
-        result.Value.Should().ContainSingle(c => c.Id == "111" && c.Name == "general" && c.BotCanSendMessages && c.CategoryName == "Text Channels");
-        result.Value.Should().ContainSingle(c => c.Id == "222" && c.Name == "mod-only" && !c.BotCanSendMessages && c.CategoryName == null);
+        result.Value.Should().ContainSingle(c => c.Id == "111" && c.Name == "general" && c.MissingPermissions.Count == 0 && c.CategoryName == "Text Channels");
+        result.Value.Should().ContainSingle(c => c.Id == "222" && c.Name == "mod-only" && c.MissingPermissions.Count == 1 && c.CategoryName == null);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_MissingPermissionsSurviveMappingUnchanged()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
+        [
+            new DiscordChannelInfo(333, "announcements", [DiscordChannelPermissionFlag.EmbedLinks]),
+        ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle().Which.MissingPermissions.Should().Equal(DiscordChannelPermissionFlag.EmbedLinks);
     }
 }

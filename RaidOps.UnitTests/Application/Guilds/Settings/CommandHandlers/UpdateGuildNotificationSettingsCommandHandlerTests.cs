@@ -87,6 +87,7 @@ public class UpdateGuildNotificationSettingsCommandHandlerTests
 
         _notificationSettings.Verify(r => r.UpsertRangeAsync(
             GuildId,
+            null,
             It.Is<IEnumerable<GuildNotificationSetting>>(rows =>
                 rows.Any(x => x.EventType == GuildNotificationEventType.AbsenceAdded && x.Enabled && x.ChannelId == "chan-1") &&
                 rows.Any(x => x.EventType == GuildNotificationEventType.AbsenceRemoved && !x.Enabled && x.ChannelId == null)),
@@ -95,6 +96,47 @@ public class UpdateGuildNotificationSettingsCommandHandlerTests
         _auditLog.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.NotificationSettingsUpdated,
             It.Is<Dictionary<string, string>>(v => v["eventCount"] == "2"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchScoped_RequesterNotBranchOfficer_ReturnsForbidden()
+    {
+        const int guildBranchId = 7;
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, guildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+
+        var command = MakeCommand([]);
+        command.GuildBranchId = guildBranchId;
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BranchScoped_Success_UpsertsSettingsForThatBranch()
+    {
+        const int guildBranchId = 7;
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, guildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", IsRegistered = true });
+
+        var settings = new List<GuildNotificationSettingInput>
+        {
+            new() { EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "chan-1" },
+        };
+        var command = MakeCommand(settings);
+        command.GuildBranchId = guildBranchId;
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+
+        _notificationSettings.Verify(r => r.UpsertRangeAsync(
+            GuildId,
+            guildBranchId,
+            It.Is<IEnumerable<GuildNotificationSetting>>(rows =>
+                rows.Any(x => x.EventType == GuildNotificationEventType.AbsenceAdded && x.Enabled && x.ChannelId == "chan-1" && x.GuildBranchId == guildBranchId)),
             default), Times.Once);
     }
 }

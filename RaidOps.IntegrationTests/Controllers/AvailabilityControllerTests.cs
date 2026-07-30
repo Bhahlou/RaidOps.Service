@@ -1,8 +1,10 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
@@ -22,15 +24,14 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
-    private const string DummyGuildId = "123456789012345678";
 
-    // â”€â”€ Auth enforcement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Auth enforcement ─────────────────────────────────────────────────────
 
     [Fact]
     public async Task GetAvailability_WithoutToken_Returns401()
     {
         var response = await Client.GetAsync(
-            $"/api/v1/guilds/{DummyGuildId}/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={Today:yyyy-MM-dd}");
+            $"/api/v1/me/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={Today:yyyy-MM-dd}");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -40,7 +41,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         var body = JsonContent.Create(new { startDate = Today, endDate = Today, status = "Available" });
 
-        var response = await Client.PostAsync($"/api/v1/guilds/{DummyGuildId}/availability/exceptions", body);
+        var response = await Client.PostAsync("/api/v1/me/availability/exceptions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -48,7 +49,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task DeleteException_WithoutToken_Returns401()
     {
-        var response = await Client.DeleteAsync($"/api/v1/guilds/{DummyGuildId}/availability/exceptions/1");
+        var response = await Client.DeleteAsync("/api/v1/me/availability/exceptions/1");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -58,7 +59,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         var body = JsonContent.Create(new { cycleLengthDays = 7, anchorDate = Today, days = Array.Empty<object>() });
 
-        var response = await Client.PostAsync($"/api/v1/guilds/{DummyGuildId}/availability/patterns", body);
+        var response = await Client.PostAsync("/api/v1/me/availability/patterns", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -68,7 +69,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         var body = JsonContent.Create(new { cycleLengthDays = 7, anchorDate = Today, days = Array.Empty<object>() });
 
-        var response = await Client.PatchAsync($"/api/v1/guilds/{DummyGuildId}/availability/patterns/1", body);
+        var response = await Client.PatchAsync("/api/v1/me/availability/patterns/1", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -76,7 +77,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task DeletePattern_WithoutToken_Returns401()
     {
-        var response = await Client.DeleteAsync($"/api/v1/guilds/{DummyGuildId}/availability/patterns/1");
+        var response = await Client.DeleteAsync("/api/v1/me/availability/patterns/1");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -87,74 +88,53 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateClientWithoutSubClaim();
         var body = JsonContent.Create(new { startDate = Today, endDate = Today, status = "Available" });
 
-        var response = await client.PostAsync($"/api/v1/guilds/{DummyGuildId}/availability/exceptions", body);
+        var response = await client.PostAsync("/api/v1/me/availability/exceptions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // â”€â”€ Roster access â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Roster access (branch-scoped declarations only — GetMyAvailability and a Global
+    // declaration are purely self-scoped, with no guild access check at all) ────────────────────
 
     [Fact]
-    public async Task GetAvailability_WhenNoRosterAccess_Returns400()
-    {
-        const string id      = "980000000000000001";
-        const string guildId = "950000000000000001";
-        await SeedAsync(db =>
-        {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
-            return Task.CompletedTask;
-        });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync(
-            $"/api/v1/guilds/{guildId}/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={Today:yyyy-MM-dd}");
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        json.GetProperty("error").GetString().Should().Be("Forbidden");
-    }
-
-    [Fact]
-    public async Task CreateException_WhenNoRosterAccess_Returns400()
+    public async Task CreateException_BranchScopedWhenNoRosterAccess_Returns400()
     {
         const string id      = "980000000000000002";
         const string guildId = "950000000000000002";
+        GuildBranch? branch = null;
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
+            branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { startDate = Today, endDate = Today, status = "Available" });
+        var body = JsonContent.Create(new { guildId, guildBranchId = branch!.Id, startDate = Today, endDate = Today, status = "Available" });
 
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/exceptions", body);
+        var response = await client.PostAsync("/api/v1/me/availability/exceptions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         json.GetProperty("error").GetString().Should().Be("Forbidden");
     }
 
-    // â”€â”€ GetAvailability â€” end-to-end resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── GetAvailability — end-to-end resolution ─────────────────────────────
 
     [Fact]
     public async Task GetAvailability_ResolvesExceptionsAndPatterns_ReturnsExpectedDaysAndOnlyOpenPatternVersion()
     {
         const string id      = "980000000000000003";
         const string guildId = "950000000000000003";
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         await SeedAsync(db =>
         {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             db.AvailabilityExceptions.Add(new AvailabilityDeclaration
             {
                 UserDiscordId = id,
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 StartDate = Today,
                 EndDate = Today,
                 Status = DayAvailabilityStatus.Absent,
@@ -164,6 +144,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
             {
                 UserDiscordId = id,
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 Label = "Current",
                 CycleLengthDays = 7,
                 AnchorDate = Today,
@@ -184,6 +165,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
             {
                 UserDiscordId = id,
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 Label = "Old",
                 CycleLengthDays = 7,
                 AnchorDate = Today.AddDays(-30),
@@ -196,7 +178,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         var rangeEnd = Today.AddDays(2);
 
         var response = await client.GetAsync(
-            $"/api/v1/guilds/{guildId}/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={rangeEnd:yyyy-MM-dd}");
+            $"/api/v1/me/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={rangeEnd:yyyy-MM-dd}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -225,19 +207,19 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         patterns[0].GetProperty("label").GetString().Should().Be("Current");
     }
 
-    // â”€â”€ CreateException â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── CreateException ──────────────────────────────────────────────────────
 
     [Fact]
     public async Task CreateException_StartDateInPast_Returns400PastDeclarationLocked()
     {
         const string id      = "980000000000000004";
         const string guildId = "950000000000000004";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var yesterday = Today.AddDays(-1);
-        var body = JsonContent.Create(new { startDate = yesterday, endDate = yesterday, status = "Absent" });
+        var body = JsonContent.Create(new { guildId, guildBranchId, startDate = yesterday, endDate = yesterday, status = "Absent" });
 
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/exceptions", body);
+        var response = await client.PostAsync("/api/v1/me/availability/exceptions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -249,12 +231,12 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000005";
         const string guildId = "950000000000000005";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var tomorrow = Today.AddDays(1);
-        var body = JsonContent.Create(new { startDate = tomorrow, endDate = Today, status = "Absent" });
+        var body = JsonContent.Create(new { guildId, guildBranchId, startDate = tomorrow, endDate = Today, status = "Absent" });
 
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/exceptions", body);
+        var response = await client.PostAsync("/api/v1/me/availability/exceptions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -266,13 +248,14 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000006";
         const string guildId = "950000000000000006";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var tomorrow = Today.AddDays(1);
 
         var exceptionId = await CreateExceptionAsync(
-            client, guildId, Today, tomorrow, "Partial", reason: "Doctor",
-            availableFrom: new TimeOnly(9, 0), availableUntil: new TimeOnly(17, 0));
+            client, Today, tomorrow, "Partial", reason: "Doctor",
+            availableFrom: new TimeOnly(9, 0), availableUntil: new TimeOnly(17, 0),
+            guildId: guildId, guildBranchId: guildBranchId);
 
         var (scope, db) = CreateDbScope();
         using (scope)
@@ -280,6 +263,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
             var row = await db.AvailabilityExceptions.FirstAsync(e => e.Id == exceptionId);
             row.UserDiscordId.Should().Be(id);
             row.GuildId.Should().Be(guildId);
+            row.GuildBranchId.Should().Be(guildBranchId);
             row.StartDate.Should().Be(Today);
             row.EndDate.Should().Be(tomorrow);
             row.Status.Should().Be(DayAvailabilityStatus.Partial);
@@ -294,35 +278,55 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000021";
         const string guildId = "950000000000000021";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { startDate = Today, endDate = Today, status = "Partial" });
+        var body = JsonContent.Create(new { guildId, guildBranchId, startDate = Today, endDate = Today, status = "Partial" });
 
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/exceptions", body);
+        var response = await client.PostAsync("/api/v1/me/availability/exceptions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         json.GetProperty("error").GetString().Should().Be("InvalidRequest");
     }
 
-    // â”€â”€ DeleteException â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    [Fact]
+    public async Task CreateException_Global_Returns200AndPersistsWithNullScope()
+    {
+        const string id = "980000000000000023";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var exceptionId = await CreateExceptionAsync(client, Today, Today, "Absent");
+
+        var (scope, db2) = CreateDbScope();
+        using (scope)
+        {
+            var row = await db2.AvailabilityExceptions.FirstAsync(e => e.Id == exceptionId);
+            row.GuildId.Should().BeNull();
+            row.GuildBranchId.Should().BeNull();
+        }
+    }
+
+    // ── DeleteException ──────────────────────────────────────────────────────
 
     [Fact]
     public async Task DeleteException_AlreadyElapsed_Returns400AndRowStillExists()
     {
         const string id      = "980000000000000007";
         const string guildId = "950000000000000007";
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         AvailabilityDeclaration? seeded = null;
         await SeedAsync(db =>
         {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             seeded = new AvailabilityDeclaration
             {
                 UserDiscordId = id,
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 StartDate = Today.AddDays(-10),
                 EndDate = Today.AddDays(-5),
                 Status = DayAvailabilityStatus.Absent,
@@ -333,7 +337,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         var exceptionId = seeded!.Id;
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/availability/exceptions/{exceptionId}");
+        var response = await client.DeleteAsync($"/api/v1/me/availability/exceptions/{exceptionId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -353,13 +357,13 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         const string ownerId    = "980000000000000008";
         const string attackerId = "980000000000000108";
         const string guildId    = "950000000000000008";
-        await SeedRosterAccess(ownerId, guildId);
+        var guildBranchId = await SeedRosterAccess(ownerId, guildId);
         await SeedAdditionalMember(attackerId, guildId);
         var ownerClient = CreateAuthenticatedClient(discordId: ownerId);
-        var exceptionId = await CreateExceptionAsync(ownerClient, guildId, Today, Today.AddDays(1), "Absent");
+        var exceptionId = await CreateExceptionAsync(ownerClient, Today, Today.AddDays(1), "Absent", guildId: guildId, guildBranchId: guildBranchId);
         var attackerClient = CreateAuthenticatedClient(discordId: attackerId);
 
-        var response = await attackerClient.DeleteAsync($"/api/v1/guilds/{guildId}/availability/exceptions/{exceptionId}");
+        var response = await attackerClient.DeleteAsync($"/api/v1/me/availability/exceptions/{exceptionId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -378,11 +382,11 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000009";
         const string guildId = "950000000000000009";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
-        var exceptionId = await CreateExceptionAsync(client, guildId, Today, Today.AddDays(1), "Absent");
+        var exceptionId = await CreateExceptionAsync(client, Today, Today.AddDays(1), "Absent", guildId: guildId, guildBranchId: guildBranchId);
 
-        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/availability/exceptions/{exceptionId}");
+        var response = await client.DeleteAsync($"/api/v1/me/availability/exceptions/{exceptionId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -393,18 +397,18 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // â”€â”€ CreatePattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── CreatePattern ─────────────────────────────────────────────────────────
 
     [Fact]
     public async Task CreatePattern_Valid_Returns200AndPersistsDays()
     {
         const string id      = "980000000000000010";
         const string guildId = "950000000000000010";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var days = new[] { Day(1, DayAvailabilityStatus.Absent, reason: "Raid night") };
 
-        var patternId = await CreatePatternAsync(client, guildId, 7, Today, days, label: "Weekly");
+        var patternId = await CreatePatternAsync(client, 7, Today, days, label: "Weekly", guildId: guildId, guildBranchId: guildBranchId);
 
         var (scope, db) = CreateDbScope();
         using (scope)
@@ -424,33 +428,33 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000022";
         const string guildId = "950000000000000022";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var days = new[] { Day(0, DayAvailabilityStatus.Partial) };
-        var body = JsonContent.Create(new { cycleLengthDays = 7, anchorDate = Today, days });
+        var body = JsonContent.Create(new { guildId, guildBranchId, cycleLengthDays = 7, anchorDate = Today, days });
 
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/patterns", body);
+        var response = await client.PostAsync("/api/v1/me/availability/patterns", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         json.GetProperty("error").GetString().Should().Be("InvalidRequest");
     }
 
-    // â”€â”€ UpdatePattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── UpdatePattern ─────────────────────────────────────────────────────────
 
     [Fact]
     public async Task UpdatePattern_SameDayEdit_HardDeletesOldRowAndCreatesNew()
     {
         const string id      = "980000000000000011";
         const string guildId = "950000000000000011";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var originalId = await CreatePatternAsync(
-            client, guildId, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], label: "Original");
+            client, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], label: "Original", guildId: guildId, guildBranchId: guildBranchId);
 
         var newDays = new[] { Day(2, DayAvailabilityStatus.Partial, availableFrom: new TimeOnly(18, 0), availableUntil: new TimeOnly(22, 0)) };
         var body = JsonContent.Create(new { label = "Updated", cycleLengthDays = 5, anchorDate = Today, days = newDays });
-        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/availability/patterns/{originalId}", body);
+        var response = await client.PatchAsync($"/api/v1/me/availability/patterns/{originalId}", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -480,17 +484,15 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000012";
         const string guildId = "950000000000000012";
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         RecurringAvailabilityPattern? seeded = null;
         await SeedAsync(db =>
         {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             seeded = new RecurringAvailabilityPattern
             {
                 UserDiscordId = id,
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 Label = "Old",
                 CycleLengthDays = 7,
                 AnchorDate = Today.AddDays(-10),
@@ -506,7 +508,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         var newDays = new[] { Day(3, DayAvailabilityStatus.Absent) };
         var body = JsonContent.Create(new { label = "New", cycleLengthDays = 5, anchorDate = Today, days = newDays });
 
-        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/availability/patterns/{oldId}", body);
+        var response = await client.PatchAsync($"/api/v1/me/availability/patterns/{oldId}", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -531,15 +533,15 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         const string ownerId    = "980000000000000013";
         const string attackerId = "980000000000000113";
         const string guildId    = "950000000000000013";
-        await SeedRosterAccess(ownerId, guildId);
+        var guildBranchId = await SeedRosterAccess(ownerId, guildId);
         await SeedAdditionalMember(attackerId, guildId);
         var ownerClient = CreateAuthenticatedClient(discordId: ownerId);
         var patternId = await CreatePatternAsync(
-            ownerClient, guildId, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], label: "Owner Pattern");
+            ownerClient, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], label: "Owner Pattern", guildId: guildId, guildBranchId: guildBranchId);
         var attackerClient = CreateAuthenticatedClient(discordId: attackerId);
         var body = JsonContent.Create(new { label = "Hijacked", cycleLengthDays = 3, anchorDate = Today, days = new[] { Day(0, DayAvailabilityStatus.Absent) } });
 
-        var response = await attackerClient.PatchAsync($"/api/v1/guilds/{guildId}/availability/patterns/{patternId}", body);
+        var response = await attackerClient.PatchAsync($"/api/v1/me/availability/patterns/{patternId}", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -554,19 +556,19 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // â”€â”€ DeletePattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── DeletePattern ─────────────────────────────────────────────────────────
 
     [Fact]
     public async Task DeletePattern_SameDayCreateThenDelete_HardDeletes()
     {
         const string id      = "980000000000000014";
         const string guildId = "950000000000000014";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var patternId = await CreatePatternAsync(
-            client, guildId, 7, Today, [Day(1, DayAvailabilityStatus.Absent)]);
+            client, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], guildId: guildId, guildBranchId: guildBranchId);
 
-        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/availability/patterns/{patternId}");
+        var response = await client.DeleteAsync($"/api/v1/me/availability/patterns/{patternId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -582,17 +584,15 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     {
         const string id      = "980000000000000015";
         const string guildId = "950000000000000015";
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         RecurringAvailabilityPattern? seeded = null;
         await SeedAsync(db =>
         {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId));
             seeded = new RecurringAvailabilityPattern
             {
                 UserDiscordId = id,
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 Label = "Old",
                 CycleLengthDays = 7,
                 AnchorDate = Today.AddDays(-5),
@@ -605,7 +605,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         var patternId = seeded!.Id;
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/availability/patterns/{patternId}");
+        var response = await client.DeleteAsync($"/api/v1/me/availability/patterns/{patternId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db2) = CreateDbScope();
@@ -622,14 +622,14 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         const string ownerId    = "980000000000000016";
         const string attackerId = "980000000000000116";
         const string guildId    = "950000000000000016";
-        await SeedRosterAccess(ownerId, guildId);
+        var guildBranchId = await SeedRosterAccess(ownerId, guildId);
         await SeedAdditionalMember(attackerId, guildId);
         var ownerClient = CreateAuthenticatedClient(discordId: ownerId);
         var patternId = await CreatePatternAsync(
-            ownerClient, guildId, 7, Today, [Day(1, DayAvailabilityStatus.Absent)]);
+            ownerClient, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], guildId: guildId, guildBranchId: guildBranchId);
         var attackerClient = CreateAuthenticatedClient(discordId: attackerId);
 
-        var response = await attackerClient.DeleteAsync($"/api/v1/guilds/{guildId}/availability/patterns/{patternId}");
+        var response = await attackerClient.DeleteAsync($"/api/v1/me/availability/patterns/{patternId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -643,19 +643,20 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // â”€â”€ Audit log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Audit log ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task CreateException_Success_WritesAuditLogEntry()
+    public async Task CreateException_BranchScoped_Success_WritesAuditLogEntry()
     {
         const string id      = "980000000000000017";
         const string guildId = "950000000000000017";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var tomorrow = Today.AddDays(1);
 
-        await CreateExceptionAsync(client, guildId, Today, tomorrow, "Partial", reason: "Doctor",
-            availableFrom: new TimeOnly(9, 0), availableUntil: new TimeOnly(17, 0));
+        await CreateExceptionAsync(client, Today, tomorrow, "Partial", reason: "Doctor",
+            availableFrom: new TimeOnly(9, 0), availableUntil: new TimeOnly(17, 0),
+            guildId: guildId, guildBranchId: guildBranchId);
 
         var (scope, db) = CreateDbScope();
         using (scope)
@@ -670,23 +671,50 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     /// <summary>
+    /// The Global fan-out is the single most feature-defining new code path of the whole
+    /// calendar-global-availability chantier — this proves it end to end against a real EF Core +
+    /// Postgres write, not a mocked <c>IActiveRosterBranchResolver</c>/<c>IAuditLogService</c> like
+    /// the unit tests already cover. Without an active roster character seeded on the branch, a
+    /// Global mutation would resolve to zero branches and silently write no audit row at all.
+    /// </summary>
+    [Fact]
+    public async Task CreateException_Global_WithActiveRosterCharacter_FansOutAuditLogToThatBranch()
+    {
+        const string id      = "980000000000000024";
+        const string guildId = "950000000000000024";
+        await SeedActiveRosterMember(id, guildId, bnetCharacterId: 99024);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        await CreateExceptionAsync(client, Today, Today, "Absent", reason: "Global absence");
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var log = await db.GuildAuditLogs.FirstOrDefaultAsync(l =>
+                l.GuildId == guildId && l.ActionType == GuildAuditAction.AvailabilityExceptionDeclared);
+            log.Should().NotBeNull();
+            log!.ActorDiscordId.Should().Be(id);
+        }
+    }
+
+    /// <summary>
     /// Regression test for a real bug hit in production: <c>GuildAuditLog.Details</c> was capped
     /// at 512 characters, which a shift rotation's full day-by-day JSON breakdown blew straight
     /// past (7 non-trivial days is already close to the old limit on its own). A mocked
-    /// <c>IAuditLogService</c> unit test can never catch this â€” only a real write against Postgres can.
+    /// <c>IAuditLogService</c> unit test can never catch this — only a real write against Postgres can.
     /// </summary>
     [Fact]
     public async Task CreatePattern_ManyDaysDetail_WritesAuditLogEntryWithoutTruncation()
     {
         const string id      = "980000000000000018";
         const string guildId = "950000000000000018";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var days = Enumerable.Range(0, 7)
             .Select(i => Day(i, DayAvailabilityStatus.Partial, reason: $"Shift {i}", availableFrom: new TimeOnly(8, 0), availableUntil: new TimeOnly(20, 0)))
             .ToArray();
 
-        await CreatePatternAsync(client, guildId, 7, Today, days, label: "Full rotation");
+        await CreatePatternAsync(client, 7, Today, days, label: "Full rotation", guildId: guildId, guildBranchId: guildBranchId);
 
         var (scope, db) = CreateDbScope();
         using (scope)
@@ -694,7 +722,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
             var log = await db.GuildAuditLogs.FirstOrDefaultAsync(l =>
                 l.GuildId == guildId && l.ActionType == GuildAuditAction.RecurringAvailabilityPatternCreated);
             log.Should().NotBeNull();
-            // Details is a Dictionary<string,string> serialized to JSON â€” the "days" value is
+            // Details is a Dictionary<string,string> serialized to JSON — the "days" value is
             // itself a JSON-encoded string, so it needs a second parse to reach the actual array.
             var parsedDays = JsonDocument.Parse(JsonDocument.Parse(log.Details!).RootElement.GetProperty("days").GetString()!);
             parsedDays.RootElement.GetArrayLength().Should().Be(7);
@@ -702,7 +730,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // â”€â”€ Cross-user isolation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Cross-user isolation ──────────────────────────────────────────────────
 
     [Fact]
     public async Task GetAvailability_OnlyReturnsRequestersOwnExceptionsAndPatterns()
@@ -710,14 +738,14 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         const string ownerId   = "980000000000000019";
         const string otherId   = "980000000000000119";
         const string guildId   = "950000000000000019";
-        await SeedRosterAccess(ownerId, guildId);
+        var guildBranchId = await SeedRosterAccess(ownerId, guildId);
         await SeedAdditionalMember(otherId, guildId);
         var ownerClient = CreateAuthenticatedClient(discordId: ownerId);
         var otherClient = CreateAuthenticatedClient(discordId: otherId);
-        await CreateExceptionAsync(ownerClient, guildId, Today, Today, "Absent", reason: "Owner's declaration");
+        await CreateExceptionAsync(ownerClient, Today, Today, "Absent", reason: "Owner's declaration", guildId: guildId, guildBranchId: guildBranchId);
 
         var response = await otherClient.GetAsync(
-            $"/api/v1/guilds/{guildId}/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={Today:yyyy-MM-dd}");
+            $"/api/v1/me/availability?rangeStart={Today:yyyy-MM-dd}&rangeEnd={Today:yyyy-MM-dd}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -725,9 +753,9 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         json.GetProperty("days")[0].GetProperty("status").GetString().Should().Be("Available");
     }
 
-    // â”€â”€ Repository â€” not-found branches â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Repository — not-found branches ──────────────────────────────────────
     // The handlers' own pre-checks (existence, ownership) mean these repository-level "not found"
-    // branches are only ever reached in a genuine concurrent-delete race in production â€” calling
+    // branches are only ever reached in a genuine concurrent-delete race in production — calling
     // the repository directly is the only realistic way to exercise them.
 
     [Fact]
@@ -738,7 +766,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var repository = new AvailabilityRepository(db);
 
-            var deleted = await repository.DeleteExceptionAsync(999_999, "nonexistent-user", "nonexistent-guild", default);
+            var deleted = await repository.DeleteExceptionAsync(999_999, "nonexistent-user", default);
 
             deleted.Should().BeFalse();
         }
@@ -752,7 +780,7 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var repository = new AvailabilityRepository(db);
 
-            var closed = await repository.ClosePatternAsync(999_999, "nonexistent-user", "nonexistent-guild", Today, default);
+            var closed = await repository.ClosePatternAsync(999_999, "nonexistent-user", Today, default);
 
             closed.Should().BeFalse();
         }
@@ -766,34 +794,35 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         {
             var repository = new AvailabilityRepository(db);
 
-            var deleted = await repository.DeletePatternAsync(999_999, "nonexistent-user", "nonexistent-guild", default);
+            var deleted = await repository.DeletePatternAsync(999_999, "nonexistent-user", default);
 
             deleted.Should().BeFalse();
         }
     }
 
-    // â”€â”€ Entity relationships (FK / navigation round-trip) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Entity relationships (FK / navigation round-trip) ────────────────────
 
     [Fact]
     public async Task Entities_NavigationPropertiesAndForeignKeys_RoundTripCorrectly()
     {
         const string id      = "980000000000000020";
         const string guildId = "950000000000000020";
-        await SeedRosterAccess(id, guildId);
+        var guildBranchId = await SeedRosterAccess(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
-        var exceptionId = await CreateExceptionAsync(client, guildId, Today, Today, "Absent");
-        var patternId = await CreatePatternAsync(client, guildId, 7, Today, [Day(1, DayAvailabilityStatus.Absent)]);
+        var exceptionId = await CreateExceptionAsync(client, Today, Today, "Absent", guildId: guildId, guildBranchId: guildBranchId);
+        var patternId = await CreatePatternAsync(client, 7, Today, [Day(1, DayAvailabilityStatus.Absent)], guildId: guildId, guildBranchId: guildBranchId);
 
         var (scope, db) = CreateDbScope();
         using (scope)
         {
-            var exception = await db.AvailabilityExceptions.Include(e => e.User).Include(e => e.Guild).FirstAsync(e => e.Id == exceptionId);
+            var exception = await db.AvailabilityExceptions.Include(e => e.User).Include(e => e.Guild).Include(e => e.GuildBranch).FirstAsync(e => e.Id == exceptionId);
             exception.User.DiscordId.Should().Be(id);
-            exception.Guild.Id.Should().Be(guildId);
+            exception.Guild!.Id.Should().Be(guildId);
+            exception.GuildBranch!.Id.Should().Be(guildBranchId);
 
             var pattern = await db.RecurringAvailabilityPatterns.Include(p => p.User).Include(p => p.Guild).FirstAsync(p => p.Id == patternId);
             pattern.User.DiscordId.Should().Be(id);
-            pattern.Guild.Id.Should().Be(guildId);
+            pattern.Guild!.Id.Should().Be(guildId);
 
             var day = await db.RecurringAvailabilityPatternDays.Include(d => d.Pattern).FirstAsync(d => d.PatternId == patternId);
             day.Id.Should().BeGreaterThan(0);
@@ -802,26 +831,30 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
         }
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Seeds a user with plain Roster-level access to a registered guild (no admin flag, no
-    /// character/membership rows â€” a bare <see cref="Domain.Models.Discord.UserGuild"/> row is enough
-    /// for every <see cref="RaidOps.API.Controllers.v1.AvailabilityController"/> endpoint).
+    /// Seeds a user with plain Roster-level access to a registered guild's single active branch
+    /// (no character/membership rows — a bare <see cref="Domain.Models.Discord.UserGuild"/> row is
+    /// enough for every branch-scoped access check). Returns the branch's surrogate ID for building
+    /// request bodies.
     /// </summary>
-    private async Task SeedRosterAccess(string discordId, string guildId)
+    private async Task<int> SeedRosterAccess(string discordId, string guildId)
     {
+        GuildBranch? branch = null;
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(discordId));
             db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
+            branch = TestDataBuilder.CreateGuildBranch(guildId);
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(discordId, guildId));
             return Task.CompletedTask;
         });
+        return branch!.Id;
     }
 
-    /// <summary>Adds a second member with Roster access to a guild already seeded by <see cref="SeedRosterAccess"/> â€” does not re-insert the guild row.</summary>
+    /// <summary>Adds a second member with Roster access to a guild already seeded by <see cref="SeedRosterAccess"/> — does not re-insert the guild row.</summary>
     private async Task SeedAdditionalMember(string discordId, string guildId)
     {
         await SeedAsync(db =>
@@ -833,28 +866,63 @@ public class AvailabilityControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     /// <summary>
-    /// Creates a one-off availability exception via the API and returns its generated ID.
+    /// Seeds a user with an active roster character on a fresh registered guild/branch — the
+    /// shape <see cref="RaidOps.Application.Contracts.Services.IActiveRosterBranchResolver"/> needs
+    /// to fan a Global mutation out to that branch's audit log/notification.
+    /// </summary>
+    private async Task SeedActiveRosterMember(string discordId, string guildId, long bnetCharacterId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
+
+        db.Users.Add(TestDataBuilder.CreateUser(discordId));
+        db.Guilds.Add(new Guild { Id = guildId, Name = "Test Guild", IsRegistered = true });
+        var branch = TestDataBuilder.CreateGuildBranch(guildId);
+        db.GuildBranches.Add(branch);
+        await db.SaveChangesAsync();
+
+        var realm = TestDataBuilder.CreateRealm(slug: $"realm-avail-{bnetCharacterId}");
+        db.Realms.Add(realm);
+        await db.SaveChangesAsync();
+
+        var character = TestDataBuilder.CreateCharacter(discordId, realm.Id, isActive: true, bnetCharacterId: bnetCharacterId);
+        db.Characters.Add(character);
+        await db.SaveChangesAsync();
+
+        db.GuildMemberships.Add(new GuildMembership
+        {
+            CharacterId = character.Id, GuildId = guildId, GuildBranch = branch,
+            CharacterRank = CharacterRank.Main, JoinedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Creates a one-off availability exception via the API and returns its generated ID. Global
+    /// by default (matching the API's own default) unless a branch scope is passed.
     /// </summary>
     private static async Task<int> CreateExceptionAsync(
-        HttpClient client, string guildId, DateOnly startDate, DateOnly endDate, string status,
-        string? reason = null, TimeOnly? availableFrom = null, TimeOnly? availableUntil = null)
+        HttpClient client, DateOnly startDate, DateOnly endDate, string status,
+        string? reason = null, TimeOnly? availableFrom = null, TimeOnly? availableUntil = null,
+        string? guildId = null, int? guildBranchId = null)
     {
-        var body = JsonContent.Create(new { startDate, endDate, status, reason, availableFrom, availableUntil });
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/exceptions", body);
+        var body = JsonContent.Create(new { guildId, guildBranchId, startDate, endDate, status, reason, availableFrom, availableUntil });
+        var response = await client.PostAsync("/api/v1/me/availability/exceptions", body);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         return json.GetProperty("body").GetProperty("id").GetInt32();
     }
 
     /// <summary>
-    /// Creates a recurring availability pattern via the API and returns its generated ID.
+    /// Creates a recurring availability pattern via the API and returns its generated ID. Global by
+    /// default (matching the API's own default) unless a branch scope is passed.
     /// </summary>
     private static async Task<int> CreatePatternAsync(
-        HttpClient client, string guildId, int cycleLengthDays, DateOnly anchorDate,
-        IEnumerable<object> days, string? label = null)
+        HttpClient client, int cycleLengthDays, DateOnly anchorDate,
+        IEnumerable<object> days, string? label = null, string? guildId = null, int? guildBranchId = null)
     {
-        var body = JsonContent.Create(new { label, cycleLengthDays, anchorDate, days });
-        var response = await client.PostAsync($"/api/v1/guilds/{guildId}/availability/patterns", body);
+        var body = JsonContent.Create(new { guildId, guildBranchId, label, cycleLengthDays, anchorDate, days });
+        var response = await client.PostAsync("/api/v1/me/availability/patterns", body);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         return json.GetProperty("body").GetProperty("id").GetInt32();

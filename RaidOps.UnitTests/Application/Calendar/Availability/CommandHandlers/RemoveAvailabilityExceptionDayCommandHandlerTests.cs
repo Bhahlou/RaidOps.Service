@@ -12,7 +12,6 @@ namespace RaidOps.UnitTests.Application.Calendar.Availability.CommandHandlers;
 
 public class RemoveAvailabilityExceptionDayCommandHandlerTests
 {
-    private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IAvailabilityRepository> _repository = new();
     private readonly Mock<IAvailabilityChangeAnnouncer> _announcer = new();
     private readonly RemoveAvailabilityExceptionDayCommandHandler _sut;
@@ -26,15 +25,15 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
     public RemoveAvailabilityExceptionDayCommandHandlerTests()
     {
         _repository.Setup(r => r.GetExceptionsOverlappingAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _repository.Setup(r => r.GetPatternsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.GetPatternsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _repository.Setup(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync(true);
+        _repository.Setup(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, default)).ReturnsAsync(true);
         _repository.Setup(r => r.AddExceptionAsync(It.IsAny<AvailabilityDeclaration>(), default))
             .ReturnsAsync((AvailabilityDeclaration e, CancellationToken _) => e);
 
-        _sut = new RemoveAvailabilityExceptionDayCommandHandler(_access.Object, _repository.Object, _announcer.Object);
+        _sut = new RemoveAvailabilityExceptionDayCommandHandler(_repository.Object, _announcer.Object);
     }
 
     private static AvailabilityDeclaration MakeExisting(DateOnly startDate, DateOnly endDate) => new()
@@ -50,28 +49,15 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
 
     private static RemoveAvailabilityExceptionDayCommand MakeCommand(DateOnly date) => new()
     {
-        GuildId = GuildId,
         RequesterDiscordId = RequesterId,
         ExceptionId = ExceptionId,
         Date = date,
     };
 
     [Fact]
-    public async Task HandleAsync_AccessBelowRoster_ReturnsForbidden()
-    {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Public);
-
-        var result = await _sut.HandleAsync(MakeCommand(Today));
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.Forbidden);
-    }
-
-    [Fact]
     public async Task HandleAsync_ExceptionNotFound_ReturnsAvailabilityExceptionNotFound()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default)).ReturnsAsync((AvailabilityDeclaration?)null);
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default)).ReturnsAsync((AvailabilityDeclaration?)null);
 
         var result = await _sut.HandleAsync(MakeCommand(Today));
 
@@ -82,8 +68,7 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
     [Fact]
     public async Task HandleAsync_ExistingAlreadyElapsed_ReturnsPastDeclarationLocked()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default))
             .ReturnsAsync(MakeExisting(Today.AddDays(-5), Today.AddDays(-1)));
 
         var result = await _sut.HandleAsync(MakeCommand(Today.AddDays(-3)));
@@ -97,8 +82,7 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
     [InlineData(6)]
     public async Task HandleAsync_DateOutsideExceptionRange_ReturnsInvalidRequest(int dayOffset)
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default))
             .ReturnsAsync(MakeExisting(Today, Today.AddDays(5)));
 
         var result = await _sut.HandleAsync(MakeCommand(Today.AddDays(dayOffset)));
@@ -110,22 +94,20 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
     [Fact]
     public async Task HandleAsync_SingleDayException_DeletesWithNoReplacementFragments()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default))
             .ReturnsAsync(MakeExisting(Today, Today));
 
         var result = await _sut.HandleAsync(MakeCommand(Today));
 
         result.IsSuccess.Should().BeTrue();
-        _repository.Verify(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, GuildId, default), Times.Once);
+        _repository.Verify(r => r.DeleteExceptionAsync(ExceptionId, RequesterId, default), Times.Once);
         _repository.Verify(r => r.AddExceptionAsync(It.IsAny<AvailabilityDeclaration>(), default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_RemoveStartEdgeDay_ShrinksFromStart()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default))
             .ReturnsAsync(MakeExisting(Today, Today.AddDays(4)));
 
         var result = await _sut.HandleAsync(MakeCommand(Today));
@@ -139,8 +121,7 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
     [Fact]
     public async Task HandleAsync_RemoveEndEdgeDay_ShrinksFromEnd()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default))
             .ReturnsAsync(MakeExisting(Today, Today.AddDays(4)));
 
         var result = await _sut.HandleAsync(MakeCommand(Today.AddDays(4)));
@@ -154,8 +135,7 @@ public class RemoveAvailabilityExceptionDayCommandHandlerTests
     [Fact]
     public async Task HandleAsync_RemoveMiddleDay_SplitsIntoTwoFragments()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
-        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, GuildId, default))
+        _repository.Setup(r => r.GetExceptionByIdAsync(ExceptionId, RequesterId, default))
             .ReturnsAsync(MakeExisting(Today, Today.AddDays(4)));
 
         var result = await _sut.HandleAsync(MakeCommand(Today.AddDays(2)));
