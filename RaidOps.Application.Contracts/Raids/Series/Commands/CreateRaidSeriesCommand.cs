@@ -14,11 +14,11 @@ public class CreateRaidSeriesCommand : ICommandRequest
     /// <summary>Discord snowflake ID of the officer creating this series. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 
+    /// <summary>Surrogate ID of the guild branch this series targets. Set by the controller from the route, not from the request body.</summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>Display name (e.g. "Split 1").</summary>
     public required string Name { get; set; }
-
-    /// <summary>FK to the game branch this series targets.</summary>
-    public required int BranchId { get; set; }
 
     /// <summary>Day of the week each occurrence falls on.</summary>
     public required DayOfWeek RecurrenceDayOfWeek { get; set; }

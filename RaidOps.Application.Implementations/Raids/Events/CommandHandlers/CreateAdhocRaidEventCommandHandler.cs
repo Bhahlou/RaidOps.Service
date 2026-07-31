@@ -21,9 +21,9 @@ public class CreateAdhocRaidEventCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(CreateAdhocRaidEventCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
         if (command.GroupCount <= 0 || command.SlotsPerGroup <= 0)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "GroupCount and SlotsPerGroup must be positive.");
@@ -41,9 +41,9 @@ public class CreateAdhocRaidEventCommandHandler(
         var raidEvent = new RaidEvent
         {
             GuildId = command.GuildId,
+            GuildBranchId = command.GuildBranchId,
             RaidSeriesId = null,
             Name = command.Name,
-            BranchId = command.BranchId,
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,

@@ -20,18 +20,18 @@ public class DeleteRaidEventCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeleteRaidEventCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var existing = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildId, cancellationToken);
+        var existing = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildBranchId, cancellationToken);
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
         if (existing.Assignments.Count > 0)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventHasAssignments, "Cancel the event instead of deleting it once it has assignments.");
 
-        await raidEventRepository.DeleteAsync(command.EventId, command.GuildId, cancellationToken);
+        await raidEventRepository.DeleteAsync(command.EventId, command.GuildBranchId, cancellationToken);
 
         await auditLogService.LogAsync(
             command.GuildId,

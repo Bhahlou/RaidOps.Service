@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
-using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Domain.Models.Raids;
 
@@ -30,8 +29,8 @@ public class RaidEvent
     [Required, MaxLength(128)]
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>FK to the game branch this event targets.</summary>
-    public int BranchId { get; set; }
+    /// <summary>FK to the guild branch this event targets.</summary>
+    public int GuildBranchId { get; set; }
 
     /// <summary>UTC timestamp this occurrence starts at.</summary>
     public DateTime StartsAtUtc { get; set; }
@@ -79,8 +78,8 @@ public class RaidEvent
     /// <summary>The series this occurrence was materialized from, or <c>null</c> for an ad-hoc event.</summary>
     public virtual RaidSeries? RaidSeries { get; set; }
 
-    /// <summary>The game branch this event targets.</summary>
-    public virtual Branch Branch { get; set; } = null!;
+    /// <summary>The guild branch this event targets.</summary>
+    public virtual GuildBranch GuildBranch { get; set; } = null!;
 
     /// <summary>The set of raid zones this event targets.</summary>
     public virtual ICollection<RaidEventZone> TargetZones { get; set; } = [];

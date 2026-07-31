@@ -50,20 +50,20 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
             .ToListAsync(cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<List<RaidSlotAssignment>> GetActiveAssignmentsForCharacterInGuildAsync(int characterId, string guildId, CancellationToken cancellationToken = default)
+    public async Task<List<RaidSlotAssignment>> GetActiveAssignmentsForCharacterInGuildBranchAsync(int characterId, int guildBranchId, CancellationToken cancellationToken = default)
         => await context.RaidSlotAssignments
             .Where(a => a.CharacterId == characterId
-                && a.RaidEvent.GuildId == guildId
+                && a.RaidEvent.GuildBranchId == guildBranchId
                 && a.RaidEvent.Status != RaidEventStatus.Cancelled)
             .Include(a => a.RaidEvent).ThenInclude(e => e.TargetZones)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<HashSet<int>> GetAssignedCharacterIdsInRangeAsync(string guildId, DateTime rangeStartUtc, DateTime rangeEndUtc, CancellationToken cancellationToken = default)
+    public async Task<HashSet<int>> GetAssignedCharacterIdsInRangeAsync(int guildBranchId, DateTime rangeStartUtc, DateTime rangeEndUtc, CancellationToken cancellationToken = default)
     {
         var ids = await context.RaidSlotAssignments
-            .Where(a => a.RaidEvent.GuildId == guildId
+            .Where(a => a.RaidEvent.GuildBranchId == guildBranchId
                 && a.RaidEvent.Status != RaidEventStatus.Cancelled
                 && a.RaidEvent.PublicationStatus == RaidPublicationStatus.Published
                 && a.RaidEvent.StartsAtUtc >= rangeStartUtc

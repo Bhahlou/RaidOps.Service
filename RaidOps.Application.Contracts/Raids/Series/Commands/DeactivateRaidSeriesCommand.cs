@@ -15,6 +15,9 @@ public class DeactivateRaidSeriesCommand : ICommandRequest
     /// <summary>Discord snowflake ID of the officer deactivating this series. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 
+    /// <summary>Surrogate ID of the guild branch this series belongs to. Set by the controller from the route, not from the request body.</summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>ID of the series to deactivate. Set by the controller from the route, not from the request body.</summary>
     public int SeriesId { get; set; }
 }

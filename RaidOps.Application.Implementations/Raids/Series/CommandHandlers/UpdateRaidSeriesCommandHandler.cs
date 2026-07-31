@@ -22,9 +22,9 @@ public class UpdateRaidSeriesCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateRaidSeriesCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
         if (command.GroupCount <= 0 || command.SlotsPerGroup <= 0)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "GroupCount and SlotsPerGroup must be positive.");
@@ -41,7 +41,6 @@ public class UpdateRaidSeriesCommandHandler(
         {
             Id = command.SeriesId,
             Name = command.Name,
-            BranchId = command.BranchId,
             RecurrenceDayOfWeek = command.RecurrenceDayOfWeek,
             RecurrenceStartTimeLocal = command.RecurrenceStartTimeLocal,
             RecurrenceIntervalWeeks = command.RecurrenceIntervalWeeks <= 0 ? 1 : command.RecurrenceIntervalWeeks,
@@ -49,7 +48,7 @@ public class UpdateRaidSeriesCommandHandler(
             SlotsPerGroup = command.SlotsPerGroup,
         };
 
-        var updated = await raidSeriesRepository.UpdateAsync(series, command.GuildId, distinctZoneIds, cancellationToken);
+        var updated = await raidSeriesRepository.UpdateAsync(series, command.GuildBranchId, distinctZoneIds, cancellationToken);
         if (!updated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidSeriesNotFound, $"Raid series '{command.SeriesId}' does not exist.");
 

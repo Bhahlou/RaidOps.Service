@@ -20,11 +20,11 @@ public class CancelRaidEventCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(CancelRaidEventCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var cancelled = await raidEventRepository.CancelAsync(command.EventId, command.GuildId, cancellationToken);
+        var cancelled = await raidEventRepository.CancelAsync(command.EventId, command.GuildBranchId, cancellationToken);
         if (!cancelled)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 

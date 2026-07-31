@@ -20,18 +20,18 @@ public class PublishRaidEventCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(PublishRaidEventCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var raidEvent = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildId, cancellationToken);
+        var raidEvent = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildBranchId, cancellationToken);
         if (raidEvent == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
         if (raidEvent.PublicationStatus == RaidPublicationStatus.Published)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventAlreadyPublished, "Raid event is already published.");
 
-        var published = await raidEventRepository.PublishAsync(command.EventId, command.GuildId, command.RequesterDiscordId, cancellationToken);
+        var published = await raidEventRepository.PublishAsync(command.EventId, command.GuildBranchId, command.RequesterDiscordId, cancellationToken);
         if (!published)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 

@@ -14,11 +14,11 @@ public class CreateAdhocRaidEventCommand : ICommandRequest
     /// <summary>Discord snowflake ID of the officer creating this event. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 
+    /// <summary>Surrogate ID of the guild branch this event targets. Set by the controller from the route, not from the request body.</summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>Display name (e.g. "One-shot Kara clear").</summary>
     public required string Name { get; set; }
-
-    /// <summary>FK to the game branch this event targets.</summary>
-    public required int BranchId { get; set; }
 
     /// <summary>UTC timestamp this event starts at.</summary>
     public required DateTime StartsAtUtc { get; set; }

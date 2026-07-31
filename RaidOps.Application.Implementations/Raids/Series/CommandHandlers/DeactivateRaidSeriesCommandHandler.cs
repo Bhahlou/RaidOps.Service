@@ -19,11 +19,11 @@ public class DeactivateRaidSeriesCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeactivateRaidSeriesCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var deactivated = await raidSeriesRepository.DeactivateAsync(command.SeriesId, command.GuildId, cancellationToken);
+        var deactivated = await raidSeriesRepository.DeactivateAsync(command.SeriesId, command.GuildBranchId, cancellationToken);
         if (!deactivated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidSeriesNotFound, $"Raid series '{command.SeriesId}' does not exist.");
 

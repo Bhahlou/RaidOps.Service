@@ -23,16 +23,16 @@ public interface IRaidCompositionRepository
     Task<List<RaidSlotAssignment>> GetAssignmentsForEventAsync(int raidEventId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns every assignment for <paramref name="characterId"/> across the guild's non-cancelled
-    /// events, including each event's target zones — used to detect lockout conflicts before
-    /// assigning the character to a new event.
+    /// Returns every assignment for <paramref name="characterId"/> across the guild branch's
+    /// non-cancelled events, including each event's target zones — used to detect lockout conflicts
+    /// before assigning the character to a new event.
     /// </summary>
-    Task<List<RaidSlotAssignment>> GetActiveAssignmentsForCharacterInGuildAsync(int characterId, string guildId, CancellationToken cancellationToken = default);
+    Task<List<RaidSlotAssignment>> GetActiveAssignmentsForCharacterInGuildBranchAsync(int characterId, int guildBranchId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the set of character IDs assigned to any of the guild's non-cancelled, <b>published</b>
+    /// Returns the set of character IDs assigned to any of the guild branch's non-cancelled, <b>published</b>
     /// events starting within the given UTC range. Draft-only assignments don't count — a character
     /// assigned solely within a draft still shows up as "unassigned" against the official schedule.
     /// </summary>
-    Task<HashSet<int>> GetAssignedCharacterIdsInRangeAsync(string guildId, DateTime rangeStartUtc, DateTime rangeEndUtc, CancellationToken cancellationToken = default);
+    Task<HashSet<int>> GetAssignedCharacterIdsInRangeAsync(int guildBranchId, DateTime rangeStartUtc, DateTime rangeEndUtc, CancellationToken cancellationToken = default);
 }

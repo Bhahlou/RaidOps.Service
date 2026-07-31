@@ -22,7 +22,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     GuildId = table.Column<string>(type: "text", nullable: false),
                     Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    BranchId = table.Column<int>(type: "integer", nullable: false),
+                    GuildBranchId = table.Column<int>(type: "integer", nullable: false),
                     RecurrenceDayOfWeek = table.Column<int>(type: "integer", nullable: false),
                     RecurrenceStartTimeLocal = table.Column<TimeOnly>(type: "time without time zone", nullable: false),
                     RecurrenceIntervalWeeks = table.Column<int>(type: "integer", nullable: false),
@@ -37,9 +37,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                 {
                     table.PrimaryKey("PK_RaidSeries", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_RaidSeries_Branches_BranchId",
-                        column: x => x.BranchId,
-                        principalTable: "Branches",
+                        name: "FK_RaidSeries_GuildBranches_GuildBranchId",
+                        column: x => x.GuildBranchId,
+                        principalTable: "GuildBranches",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
@@ -85,7 +85,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     GuildId = table.Column<string>(type: "text", nullable: false),
                     RaidSeriesId = table.Column<int>(type: "integer", nullable: true),
                     Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    BranchId = table.Column<int>(type: "integer", nullable: false),
+                    GuildBranchId = table.Column<int>(type: "integer", nullable: false),
                     StartsAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     GroupCount = table.Column<int>(type: "integer", nullable: false),
                     SlotsPerGroup = table.Column<int>(type: "integer", nullable: false),
@@ -102,9 +102,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                 {
                     table.PrimaryKey("PK_RaidEvents", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_RaidEvents_Branches_BranchId",
-                        column: x => x.BranchId,
-                        principalTable: "Branches",
+                        name: "FK_RaidEvents_GuildBranches_GuildBranchId",
+                        column: x => x.GuildBranchId,
+                        principalTable: "GuildBranches",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
@@ -270,9 +270,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                 column: "RaidZoneId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_RaidEvents_BranchId",
+                name: "IX_RaidEvents_GuildBranchId_StartsAtUtc",
                 table: "RaidEvents",
-                column: "BranchId");
+                columns: new[] { "GuildBranchId", "StartsAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_RaidEvents_GuildId_StartsAtUtc",
@@ -295,9 +295,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                 columns: new[] { "RaidZoneId", "EffectiveFrom" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_RaidSeries_BranchId",
+                name: "IX_RaidSeries_GuildBranchId",
                 table: "RaidSeries",
-                column: "BranchId");
+                column: "GuildBranchId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RaidSeries_GuildId",

@@ -28,9 +28,9 @@ public class GetUnassignedGuildMembersQueryHandler(
     /// <inheritdoc/>
     public async Task<Result<List<UnassignedMemberResponse>>> HandleAsync(GetUnassignedGuildMembersQuery query, CancellationToken cancellationToken)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, query.GuildBranchId, cancellationToken);
         if (accessLevel < GuildAccessLevel.Roster)
-            return Result<List<UnassignedMemberResponse>>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
+            return Result<List<UnassignedMemberResponse>>.Fail(ResponseDetail.Forbidden, "User is not on this guild branch's roster.");
 
         if (query.RangeEnd < query.RangeStart)
             return Result<List<UnassignedMemberResponse>>.Fail(ResponseDetail.InvalidRequest, "RangeEnd must be on or after RangeStart.");
@@ -42,8 +42,8 @@ public class GetUnassignedGuildMembersQueryHandler(
         var rangeStartUtc = GuildTimeHelper.FromGuildLocal(query.RangeStart.ToDateTime(TimeOnly.MinValue), guild.Timezone);
         var rangeEndUtc = GuildTimeHelper.FromGuildLocal(query.RangeEnd.ToDateTime(new TimeOnly(23, 59, 59)), guild.Timezone);
 
-        var memberships = await guildMembershipRepository.GetByGuildIdAsync(query.GuildId, cancellationToken);
-        var assignedCharacterIds = await raidCompositionRepository.GetAssignedCharacterIdsInRangeAsync(query.GuildId, rangeStartUtc, rangeEndUtc, cancellationToken);
+        var memberships = await guildMembershipRepository.GetByGuildBranchIdAsync(query.GuildBranchId, cancellationToken);
+        var assignedCharacterIds = await raidCompositionRepository.GetAssignedCharacterIdsInRangeAsync(query.GuildBranchId, rangeStartUtc, rangeEndUtc, cancellationToken);
 
         var unassigned = memberships.Where(m => !assignedCharacterIds.Contains(m.CharacterId)).ToList();
 

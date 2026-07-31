@@ -12,18 +12,20 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 public class RaidSeriesRepository(RaidOpsDbContext context) : IRaidSeriesRepository
 {
     /// <inheritdoc/>
-    public async Task<RaidSeries?> GetByIdAsync(int id, string guildId, CancellationToken cancellationToken = default)
+    public async Task<RaidSeries?> GetByIdAsync(int id, int guildBranchId, CancellationToken cancellationToken = default)
         => await context.RaidSeries
-            .Where(s => s.Id == id && s.GuildId == guildId)
+            .Where(s => s.Id == id && s.GuildBranchId == guildBranchId)
             .Include(s => s.DefaultZones).ThenInclude(z => z.RaidZone)
+            .Include(s => s.GuildBranch).ThenInclude(gb => gb.Branch)
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<List<RaidSeries>> GetByGuildIdAsync(string guildId, CancellationToken cancellationToken = default)
+    public async Task<List<RaidSeries>> GetByGuildBranchIdAsync(int guildBranchId, CancellationToken cancellationToken = default)
         => await context.RaidSeries
-            .Where(s => s.GuildId == guildId)
+            .Where(s => s.GuildBranchId == guildBranchId)
             .Include(s => s.DefaultZones).ThenInclude(z => z.RaidZone)
+            .Include(s => s.GuildBranch).ThenInclude(gb => gb.Branch)
             .AsNoTracking()
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -37,14 +39,13 @@ public class RaidSeriesRepository(RaidOpsDbContext context) : IRaidSeriesReposit
     }
 
     /// <inheritdoc/>
-    public async Task<bool> UpdateAsync(RaidSeries series, string guildId, IEnumerable<int> raidZoneIds, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateAsync(RaidSeries series, int guildBranchId, IEnumerable<int> raidZoneIds, CancellationToken cancellationToken = default)
     {
         var existing = await context.RaidSeries
-            .FirstOrDefaultAsync(s => s.Id == series.Id && s.GuildId == guildId, cancellationToken);
+            .FirstOrDefaultAsync(s => s.Id == series.Id && s.GuildBranchId == guildBranchId, cancellationToken);
         if (existing == null) return false;
 
         existing.Name = series.Name;
-        existing.BranchId = series.BranchId;
         existing.RecurrenceDayOfWeek = series.RecurrenceDayOfWeek;
         existing.RecurrenceStartTimeLocal = series.RecurrenceStartTimeLocal;
         existing.RecurrenceIntervalWeeks = series.RecurrenceIntervalWeeks;
@@ -71,10 +72,10 @@ public class RaidSeriesRepository(RaidOpsDbContext context) : IRaidSeriesReposit
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeactivateAsync(int id, string guildId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeactivateAsync(int id, int guildBranchId, CancellationToken cancellationToken = default)
     {
         var count = await context.RaidSeries
-            .Where(s => s.Id == id && s.GuildId == guildId)
+            .Where(s => s.Id == id && s.GuildBranchId == guildBranchId)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), cancellationToken);
         return count > 0;
     }

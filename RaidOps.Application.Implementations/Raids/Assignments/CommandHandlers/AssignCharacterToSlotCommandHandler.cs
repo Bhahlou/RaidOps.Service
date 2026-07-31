@@ -11,10 +11,10 @@ namespace RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="AssignCharacterToSlotCommand"/> — the central validation point of the raid
-/// builder. Checks run in a fixed order (event state, roster eligibility, branch match, grid
-/// bounds/occupancy, one-character-per-player, declared absence, lockout conflict) so the first
-/// failing rule always produces the same, predictable error for a given bad request. A drop onto
-/// an already-occupied slot is rejected outright — no automatic swap.
+/// builder. Checks run in a fixed order (event state, roster eligibility on this specific guild
+/// branch, grid bounds/occupancy, one-character-per-player, declared absence, lockout conflict) so
+/// the first failing rule always produces the same, predictable error for a given bad request. A
+/// drop onto an already-occupied slot is rejected outright — no automatic swap.
 /// </summary>
 public class AssignCharacterToSlotCommandHandler(
     IGuildAccessService guildAccessService,
@@ -31,11 +31,11 @@ public class AssignCharacterToSlotCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(AssignCharacterToSlotCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var raidEvent = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildId, cancellationToken);
+        var raidEvent = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildBranchId, cancellationToken);
         if (raidEvent == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
@@ -43,12 +43,12 @@ public class AssignCharacterToSlotCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventCancelled, "Cannot assign to a cancelled raid event.");
 
         var character = await characterRepository.GetByIdAsync(command.CharacterId, cancellationToken);
-        var onRoster = character != null && await guildMembershipRepository.ExistsAsync(command.CharacterId, command.GuildId, cancellationToken);
-        if (character == null || !character.IsActiveInRaidOps || !onRoster)
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOnRoster, "Character is not an active member of this guild's roster.");
+        if (character == null || !character.IsActiveInRaidOps)
+            return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOnRoster, "Character is not an active member of this guild branch's roster.");
 
-        if (character.BranchId != raidEvent.BranchId)
-            return Result<CommandResponse>.Fail(ResponseDetail.BranchMismatch, "Character's game branch does not match the event's branch.");
+        var memberships = await guildMembershipRepository.GetByCharacterIdAsync(command.CharacterId, cancellationToken);
+        if (!memberships.Any(m => m.GuildBranchId == command.GuildBranchId))
+            return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOnRoster, "Character is not an active member of this guild branch's roster.");
 
         if (command.GroupNumber < 1 || command.GroupNumber > raidEvent.GroupCount || command.SlotNumber < 1 || command.SlotNumber > raidEvent.SlotsPerGroup)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidGroupOrSlotNumber, "Group/slot number is out of the event's grid bounds.");
@@ -65,11 +65,11 @@ public class AssignCharacterToSlotCommandHandler(
         var eventLocalDateTime = GuildTimeHelper.ToGuildLocalDateTime(raidEvent.StartsAtUtc, guild?.Timezone);
         var eventLocalDate = DateOnly.FromDateTime(eventLocalDateTime);
 
-        var absenceFailure = await CheckDeclaredAbsenceAsync(character.UserDiscordId, command.GuildId, eventLocalDate, TimeOnly.FromDateTime(eventLocalDateTime), cancellationToken);
+        var absenceFailure = await CheckDeclaredAbsenceAsync(character.UserDiscordId, command.GuildId, command.GuildBranchId, eventLocalDate, TimeOnly.FromDateTime(eventLocalDateTime), cancellationToken);
         if (absenceFailure != null)
             return absenceFailure;
 
-        var lockoutFailure = await CheckLockoutConflictAsync(raidEvent, command.CharacterId, command.GuildId, eventLocalDate, guild?.Timezone, cancellationToken);
+        var lockoutFailure = await CheckLockoutConflictAsync(raidEvent, command.CharacterId, command.GuildId, command.GuildBranchId, eventLocalDate, guild?.Timezone, cancellationToken);
         if (lockoutFailure != null)
             return lockoutFailure;
 
@@ -90,14 +90,17 @@ public class AssignCharacterToSlotCommandHandler(
     /// <summary>
     /// Absence is a hard block: <see cref="DayAvailabilityStatus.Absent"/> always rejects, and
     /// <see cref="DayAvailabilityStatus.Partial"/> rejects only when the event's local start time
-    /// falls outside the declared window.
+    /// falls outside the declared window. Fetches the player's declarations across every scope
+    /// (Global and every branch), then resolves authoritatively for this specific guild branch via
+    /// <see cref="IAvailabilityResolutionService.ResolveForScope"/> — branch-scoped declarations win
+    /// over Global ones, per the resolution cascade.
     /// </summary>
     private async Task<Result<CommandResponse>?> CheckDeclaredAbsenceAsync(
-        string playerDiscordId, string guildId, DateOnly eventLocalDate, TimeOnly eventLocalTime, CancellationToken cancellationToken)
+        string playerDiscordId, string guildId, int guildBranchId, DateOnly eventLocalDate, TimeOnly eventLocalTime, CancellationToken cancellationToken)
     {
-        var memberExceptions = await availabilityRepository.GetExceptionsOverlappingAsync(playerDiscordId, guildId, eventLocalDate, eventLocalDate, cancellationToken);
-        var memberPatterns = await availabilityRepository.GetPatternsAsync(playerDiscordId, guildId, cancellationToken);
-        var resolvedDay = availabilityResolutionService.Resolve(eventLocalDate, eventLocalDate, memberExceptions, memberPatterns)[0];
+        var memberExceptions = await availabilityRepository.GetExceptionsOverlappingAsync(playerDiscordId, eventLocalDate, eventLocalDate, cancellationToken);
+        var memberPatterns = await availabilityRepository.GetPatternsAsync(playerDiscordId, cancellationToken);
+        var resolvedDay = availabilityResolutionService.ResolveForScope(eventLocalDate, eventLocalDate, memberExceptions, memberPatterns, guildId, guildBranchId)[0];
 
         if (resolvedDay.Status == DayAvailabilityStatus.Absent)
             return Result<CommandResponse>.Fail(ResponseDetail.MemberDeclaredAbsent, "This member declared themselves absent on the event's date.");
@@ -121,7 +124,7 @@ public class AssignCharacterToSlotCommandHandler(
     /// active guild membership.
     /// </summary>
     private async Task<Result<CommandResponse>?> CheckLockoutConflictAsync(
-        RaidEvent raidEvent, int characterId, string guildId, DateOnly eventLocalDate, string? guildTimezone, CancellationToken cancellationToken)
+        RaidEvent raidEvent, int characterId, string guildId, int guildBranchId, DateOnly eventLocalDate, string? guildTimezone, CancellationToken cancellationToken)
     {
         var targetZoneIds = raidEvent.TargetZones.Select(z => z.RaidZoneId).ToList();
         if (targetZoneIds.Count == 0)
@@ -130,7 +133,7 @@ public class AssignCharacterToSlotCommandHandler(
         var zones = await raidZoneRepository.GetByIdsAsync(targetZoneIds, cancellationToken);
         var guildOverrides = await raidZoneRepository.GetGuildOverridesAsync(guildId, targetZoneIds, cancellationToken);
         var guildOverridesByZone = guildOverrides.ToDictionary(o => o.RaidZoneId);
-        var otherAssignments = await raidCompositionRepository.GetActiveAssignmentsForCharacterInGuildAsync(characterId, guildId, cancellationToken);
+        var otherAssignments = await raidCompositionRepository.GetActiveAssignmentsForCharacterInGuildBranchAsync(characterId, guildBranchId, cancellationToken);
 
         foreach (var zone in zones)
         {

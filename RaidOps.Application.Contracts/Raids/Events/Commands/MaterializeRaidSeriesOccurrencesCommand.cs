@@ -19,6 +19,9 @@ public class MaterializeRaidSeriesOccurrencesCommand : ICommandRequest
     /// <summary>Discord snowflake ID of the requesting user. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 
+    /// <summary>Surrogate ID of the guild branch to materialize occurrences for. Set by the controller from the route, not from the request body.</summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>First local date (inclusive) to materialize occurrences for.</summary>
     public required DateOnly RangeStart { get; set; }
 

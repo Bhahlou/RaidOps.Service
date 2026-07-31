@@ -10,24 +10,29 @@ using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 namespace RaidOps.Application.Implementations.Raids.Zones.QueryHandlers;
 
 /// <summary>
-/// Handles <see cref="GetRaidZonesForBranchQuery"/> by resolving the branch's currently active
-/// expansion and returning every raid zone seeded for it.
+/// Handles <see cref="GetRaidZonesForBranchQuery"/> by resolving the guild branch's underlying WoW
+/// branch's currently active expansion and returning every raid zone seeded for it.
 /// </summary>
 public class GetRaidZonesForBranchQueryHandler(
     IGuildAccessService guildAccessService,
+    IGuildBranchesRepository guildBranchesRepository,
     IBranchRepository branchRepository,
     IRaidZoneRepository raidZoneRepository) : IQueryHandlerAsync<GetRaidZonesForBranchQuery, List<RaidZoneResponse>>
 {
     /// <inheritdoc/>
     public async Task<Result<List<RaidZoneResponse>>> HandleAsync(GetRaidZonesForBranchQuery query, CancellationToken cancellationToken)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, query.GuildBranchId, cancellationToken);
         if (accessLevel < GuildAccessLevel.Roster)
-            return Result<List<RaidZoneResponse>>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
+            return Result<List<RaidZoneResponse>>.Fail(ResponseDetail.Forbidden, "User is not on this guild branch's roster.");
 
-        var branch = await branchRepository.GetByIdAsync(query.BranchId, cancellationToken);
+        var guildBranch = await guildBranchesRepository.GetByIdAsync(query.GuildBranchId, cancellationToken);
+        if (guildBranch == null)
+            return Result<List<RaidZoneResponse>>.Fail(ResponseDetail.BranchNotFound, $"Guild branch '{query.GuildBranchId}' does not exist.");
+
+        var branch = await branchRepository.GetByIdAsync(guildBranch.BranchId, cancellationToken);
         if (branch == null)
-            return Result<List<RaidZoneResponse>>.Fail(ResponseDetail.BranchNotFound, $"Branch '{query.BranchId}' does not exist.");
+            return Result<List<RaidZoneResponse>>.Fail(ResponseDetail.BranchNotFound, $"Branch '{guildBranch.BranchId}' does not exist.");
 
         var zones = await raidZoneRepository.GetByExpansionIdAsync(branch.CurrentExpansionId, cancellationToken);
 

@@ -13,20 +13,22 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepository
 {
     /// <inheritdoc/>
-    public async Task<RaidEvent?> GetByIdAsync(int id, string guildId, CancellationToken cancellationToken = default)
+    public async Task<RaidEvent?> GetByIdAsync(int id, int guildBranchId, CancellationToken cancellationToken = default)
         => await context.RaidEvents
-            .Where(e => e.Id == id && e.GuildId == guildId)
+            .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
             .Include(e => e.TargetZones).ThenInclude(z => z.RaidZone)
             .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
+            .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<List<RaidEvent>> GetForGuildInRangeAsync(string guildId, DateTime rangeStartUtc, DateTime rangeEndUtc, CancellationToken cancellationToken = default)
+    public async Task<List<RaidEvent>> GetForGuildBranchInRangeAsync(int guildBranchId, DateTime rangeStartUtc, DateTime rangeEndUtc, CancellationToken cancellationToken = default)
         => await context.RaidEvents
-            .Where(e => e.GuildId == guildId && e.StartsAtUtc >= rangeStartUtc && e.StartsAtUtc <= rangeEndUtc)
+            .Where(e => e.GuildBranchId == guildBranchId && e.StartsAtUtc >= rangeStartUtc && e.StartsAtUtc <= rangeEndUtc)
             .Include(e => e.TargetZones).ThenInclude(z => z.RaidZone)
             .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
+            .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
             .AsNoTracking()
             .OrderBy(e => e.StartsAtUtc)
             .ToListAsync(cancellationToken);
@@ -45,14 +47,13 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     }
 
     /// <inheritdoc/>
-    public async Task<bool> UpdateAsync(RaidEvent raidEvent, string guildId, IEnumerable<int> raidZoneIds, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateAsync(RaidEvent raidEvent, int guildBranchId, IEnumerable<int> raidZoneIds, CancellationToken cancellationToken = default)
     {
         var existing = await context.RaidEvents
-            .FirstOrDefaultAsync(e => e.Id == raidEvent.Id && e.GuildId == guildId, cancellationToken);
+            .FirstOrDefaultAsync(e => e.Id == raidEvent.Id && e.GuildBranchId == guildBranchId, cancellationToken);
         if (existing == null) return false;
 
         existing.Name = raidEvent.Name;
-        existing.BranchId = raidEvent.BranchId;
         existing.StartsAtUtc = raidEvent.StartsAtUtc;
         existing.GroupCount = raidEvent.GroupCount;
         existing.SlotsPerGroup = raidEvent.SlotsPerGroup;
@@ -78,10 +79,10 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     }
 
     /// <inheritdoc/>
-    public async Task<bool> CancelAsync(int id, string guildId, CancellationToken cancellationToken = default)
+    public async Task<bool> CancelAsync(int id, int guildBranchId, CancellationToken cancellationToken = default)
     {
         var count = await context.RaidEvents
-            .Where(e => e.Id == id && e.GuildId == guildId)
+            .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
             .ExecuteUpdateAsync(e => e
                 .SetProperty(x => x.Status, RaidEventStatus.Cancelled)
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken);
@@ -89,10 +90,10 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     }
 
     /// <inheritdoc/>
-    public async Task<bool> PublishAsync(int id, string guildId, string publishedByDiscordId, CancellationToken cancellationToken = default)
+    public async Task<bool> PublishAsync(int id, int guildBranchId, string publishedByDiscordId, CancellationToken cancellationToken = default)
     {
         var count = await context.RaidEvents
-            .Where(e => e.Id == id && e.GuildId == guildId)
+            .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
             .ExecuteUpdateAsync(e => e
                 .SetProperty(x => x.PublicationStatus, RaidPublicationStatus.Published)
                 .SetProperty(x => x.PublishedAt, DateTime.UtcNow)
@@ -101,10 +102,10 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(int id, string guildId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(int id, int guildBranchId, CancellationToken cancellationToken = default)
     {
         var raidEvent = await context.RaidEvents
-            .FirstOrDefaultAsync(e => e.Id == id && e.GuildId == guildId, cancellationToken);
+            .FirstOrDefaultAsync(e => e.Id == id && e.GuildBranchId == guildBranchId, cancellationToken);
         if (raidEvent == null) return false;
 
         context.RaidEvents.Remove(raidEvent);

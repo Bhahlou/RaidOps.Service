@@ -19,11 +19,11 @@ public class UpdateRaidEventCommand : ICommandRequest
     /// <summary>ID of the event to update. Set by the controller from the route, not from the request body.</summary>
     public int EventId { get; set; }
 
+    /// <summary>Surrogate ID of the guild branch this event targets. Set by the controller from the route, not from the request body.</summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>Display name.</summary>
     public required string Name { get; set; }
-
-    /// <summary>FK to the game branch this event targets.</summary>
-    public required int BranchId { get; set; }
 
     /// <summary>UTC timestamp this event starts at.</summary>
     public required DateTime StartsAtUtc { get; set; }

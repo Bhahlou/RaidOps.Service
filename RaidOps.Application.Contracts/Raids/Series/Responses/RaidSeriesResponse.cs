@@ -12,10 +12,10 @@ public class RaidSeriesResponse
     /// <summary>Display name (e.g. "Split 1").</summary>
     public required string Name { get; set; }
 
-    /// <summary>FK to the game branch this series targets.</summary>
+    /// <summary>FK to the WoW game-version branch this series targets, resolved via its guild branch.</summary>
     public required int BranchId { get; set; }
 
-    /// <summary>Display name of the game branch.</summary>
+    /// <summary>Display name of the WoW game-version branch.</summary>
     public required string BranchName { get; set; }
 
     /// <summary>Day of the week each occurrence falls on.</summary>

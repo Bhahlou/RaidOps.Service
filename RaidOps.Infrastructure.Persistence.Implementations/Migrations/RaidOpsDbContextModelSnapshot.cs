@@ -625,9 +625,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BranchId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -636,6 +633,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("GroupCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildBranchId")
                         .HasColumnType("integer");
 
                     b.Property<string>("GuildId")
@@ -676,9 +676,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BranchId");
-
                     b.HasIndex("RaidSeriesId");
+
+                    b.HasIndex("GuildBranchId", "StartsAtUtc");
 
                     b.HasIndex("GuildId", "StartsAtUtc");
 
@@ -746,9 +746,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BranchId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -757,6 +754,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("GroupCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildBranchId")
                         .HasColumnType("integer");
 
                     b.Property<string>("GuildId")
@@ -788,7 +788,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BranchId");
+                    b.HasIndex("GuildBranchId");
 
                     b.HasIndex("GuildId");
 
@@ -2180,9 +2180,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
                 {
-                    b.HasOne("RaidOps.Domain.Models.Reference.Branch", "Branch")
+                    b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
                         .WithMany()
-                        .HasForeignKey("BranchId")
+                        .HasForeignKey("GuildBranchId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -2197,9 +2197,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasForeignKey("RaidSeriesId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Branch");
-
                     b.Navigation("Guild");
+
+                    b.Navigation("GuildBranch");
 
                     b.Navigation("RaidSeries");
                 });
@@ -2236,9 +2236,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeries", b =>
                 {
-                    b.HasOne("RaidOps.Domain.Models.Reference.Branch", "Branch")
+                    b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
                         .WithMany()
-                        .HasForeignKey("BranchId")
+                        .HasForeignKey("GuildBranchId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -2248,9 +2248,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Branch");
-
                     b.Navigation("Guild");
+
+                    b.Navigation("GuildBranch");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeriesZone", b =>

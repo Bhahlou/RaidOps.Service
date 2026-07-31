@@ -23,9 +23,9 @@ public class UpdateRaidEventCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateRaidEventCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
         if (command.GroupCount <= 0 || command.SlotsPerGroup <= 0)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "GroupCount and SlotsPerGroup must be positive.");
@@ -34,7 +34,7 @@ public class UpdateRaidEventCommandHandler(
         if (distinctZoneIds.Count == 0)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "At least one raid zone must be targeted.");
 
-        var existing = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildId, cancellationToken);
+        var existing = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildBranchId, cancellationToken);
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
@@ -49,14 +49,13 @@ public class UpdateRaidEventCommandHandler(
         {
             Id = command.EventId,
             Name = command.Name,
-            BranchId = command.BranchId,
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,
             UpdatedAt = DateTime.UtcNow,
         };
 
-        var updated = await raidEventRepository.UpdateAsync(raidEvent, command.GuildId, distinctZoneIds, cancellationToken);
+        var updated = await raidEventRepository.UpdateAsync(raidEvent, command.GuildBranchId, distinctZoneIds, cancellationToken);
         if (!updated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 

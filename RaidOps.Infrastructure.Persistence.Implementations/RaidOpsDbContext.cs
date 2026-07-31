@@ -437,7 +437,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(l => l.RaidZoneId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // RaidSeries → Guild/Branch
+        // RaidSeries → Guild/GuildBranch
         modelBuilder.Entity<RaidSeries>()
             .HasOne(s => s.Guild)
             .WithMany()
@@ -445,13 +445,16 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<RaidSeries>()
-            .HasOne(s => s.Branch)
+            .HasOne(s => s.GuildBranch)
             .WithMany()
-            .HasForeignKey(s => s.BranchId)
+            .HasForeignKey(s => s.GuildBranchId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<RaidSeries>()
             .HasIndex(s => s.GuildId);
+
+        modelBuilder.Entity<RaidSeries>()
+            .HasIndex(s => s.GuildBranchId);
 
         // RaidSeriesZone — composite PK (RaidSeriesId, RaidZoneId); deleting a series drops its default-zone rows
         modelBuilder.Entity<RaidSeriesZone>()
@@ -469,8 +472,8 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(sz => sz.RaidZoneId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // RaidEvent → Guild/Branch/RaidSeries — a deleted/deactivated series never takes its historical
-        // events down with it, so RaidSeriesId is set null instead of cascading.
+        // RaidEvent → Guild/GuildBranch/RaidSeries — a deleted/deactivated series never takes its
+        // historical events down with it, so RaidSeriesId is set null instead of cascading.
         modelBuilder.Entity<RaidEvent>()
             .HasOne(e => e.Guild)
             .WithMany()
@@ -478,9 +481,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<RaidEvent>()
-            .HasOne(e => e.Branch)
+            .HasOne(e => e.GuildBranch)
             .WithMany()
-            .HasForeignKey(e => e.BranchId)
+            .HasForeignKey(e => e.GuildBranchId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<RaidEvent>()
@@ -491,6 +494,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<RaidEvent>()
             .HasIndex(e => new { e.GuildId, e.StartsAtUtc });
+
+        modelBuilder.Entity<RaidEvent>()
+            .HasIndex(e => new { e.GuildBranchId, e.StartsAtUtc });
 
         // RaidEventZone — composite PK (RaidEventId, RaidZoneId); deleting an event drops its target-zone rows
         modelBuilder.Entity<RaidEventZone>()

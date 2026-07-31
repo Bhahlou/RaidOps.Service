@@ -24,9 +24,9 @@ public class MaterializeRaidSeriesOccurrencesCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(MaterializeRaidSeriesOccurrencesCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel < GuildAccessLevel.Roster)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild's roster.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not on this guild branch's roster.");
 
         if (command.RangeEnd < command.RangeStart)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "RangeEnd must be on or after RangeStart.");
@@ -35,7 +35,7 @@ public class MaterializeRaidSeriesOccurrencesCommandHandler(
         if (guild == null)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildNotFound, $"Guild '{command.GuildId}' does not exist.");
 
-        var activeSeries = (await raidSeriesRepository.GetByGuildIdAsync(command.GuildId, cancellationToken))
+        var activeSeries = (await raidSeriesRepository.GetByGuildBranchIdAsync(command.GuildBranchId, cancellationToken))
             .Where(s => s.IsActive)
             .ToList();
 
@@ -61,9 +61,9 @@ public class MaterializeRaidSeriesOccurrencesCommandHandler(
                 var raidEvent = new RaidEvent
                 {
                     GuildId = command.GuildId,
+                    GuildBranchId = command.GuildBranchId,
                     RaidSeriesId = series.Id,
                     Name = series.Name,
-                    BranchId = series.BranchId,
                     StartsAtUtc = startsAtUtc,
                     GroupCount = series.GroupCount,
                     SlotsPerGroup = series.SlotsPerGroup,

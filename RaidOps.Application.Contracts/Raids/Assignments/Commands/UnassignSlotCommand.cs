@@ -14,6 +14,9 @@ public class UnassignSlotCommand : ICommandRequest
     /// <summary>Discord snowflake ID of the officer clearing the slot. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
 
+    /// <summary>Surrogate ID of the guild branch the target event belongs to. Set by the controller from the route, not from the request body.</summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>ID of the target event. Set by the controller from the route, not from the request body.</summary>
     public int EventId { get; set; }
 

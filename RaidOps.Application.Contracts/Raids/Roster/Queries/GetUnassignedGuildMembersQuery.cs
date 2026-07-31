@@ -13,6 +13,9 @@ public class GetUnassignedGuildMembersQuery : IQueryRequest<List<UnassignedMembe
     /// <summary>Discord snowflake ID of the guild whose roster to check.</summary>
     public required string GuildId { get; set; }
 
+    /// <summary>Surrogate ID of the guild branch whose roster to check.</summary>
+    public required int GuildBranchId { get; set; }
+
     /// <summary>Discord snowflake ID of the requesting user.</summary>
     public required string RequesterDiscordId { get; set; }
 

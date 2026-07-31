@@ -15,10 +15,10 @@ public class RaidEventResponse
     /// <summary>Display name.</summary>
     public required string Name { get; set; }
 
-    /// <summary>FK to the game branch this event targets.</summary>
+    /// <summary>FK to the WoW game-version branch this event targets, resolved via its guild branch.</summary>
     public required int BranchId { get; set; }
 
-    /// <summary>Display name of the game branch.</summary>
+    /// <summary>Display name of the WoW game-version branch.</summary>
     public required string BranchName { get; set; }
 
     /// <summary>UTC timestamp this event starts at.</summary>

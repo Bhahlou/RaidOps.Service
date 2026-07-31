@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
-using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Domain.Models.Raids;
 
@@ -27,8 +26,8 @@ public class RaidSeries
     [Required, MaxLength(128)]
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>FK to the game branch this series targets (e.g. Classic Anniversary).</summary>
-    public int BranchId { get; set; }
+    /// <summary>FK to the guild branch this series targets (e.g. Classic Anniversary on this guild).</summary>
+    public int GuildBranchId { get; set; }
 
     /// <summary>Day of the week each occurrence falls on.</summary>
     public DayOfWeek RecurrenceDayOfWeek { get; set; }
@@ -69,8 +68,8 @@ public class RaidSeries
     /// <summary>The guild this series belongs to.</summary>
     public virtual Guild Guild { get; set; } = null!;
 
-    /// <summary>The game branch this series targets.</summary>
-    public virtual Branch Branch { get; set; } = null!;
+    /// <summary>The guild branch this series targets.</summary>
+    public virtual GuildBranch GuildBranch { get; set; } = null!;
 
     /// <summary>The set of raid zones every materialized occurrence targets by default.</summary>
     public virtual ICollection<RaidSeriesZone> DefaultZones { get; set; } = [];
