@@ -26,6 +26,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
 {
     private const int RaidBranchId = 4;
     private const int KarazhanZoneId = 1;
+    private static readonly int[] DefaultZoneIds = [KarazhanZoneId];
 
     // ── Auth enforcement ────────────────────────────────────────────────────
 
@@ -854,7 +855,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             recurrenceIntervalWeeks = 1,
             groupCount = 2,
             slotsPerGroup = 5,
-            raidZoneIds = zoneIds ?? [KarazhanZoneId],
+            raidZoneIds = zoneIds ?? DefaultZoneIds,
         });
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         return json.GetProperty("body").GetProperty("id").GetInt32();
@@ -868,7 +869,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             startsAtUtc = startsAtUtc ?? DateTime.UtcNow.AddDays(3),
             groupCount = 2,
             slotsPerGroup = 5,
-            raidZoneIds = zoneIds ?? [KarazhanZoneId],
+            raidZoneIds = zoneIds ?? DefaultZoneIds,
         });
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         return json.GetProperty("body").GetProperty("id").GetInt32();

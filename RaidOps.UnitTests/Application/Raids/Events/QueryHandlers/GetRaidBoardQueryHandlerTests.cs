@@ -1,13 +1,11 @@
 using System.Linq.Expressions;
 using FluentAssertions;
 using Moq;
-using RaidOps.Application.Contracts.Calendar.Availability.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Raids.Events.Queries;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.QueryHandlers;
 using RaidOps.Domain.Enums;
-using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
@@ -22,8 +20,8 @@ public class GetRaidBoardQueryHandlerTests
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<IGuildMembershipRepository> _guildMembershipRepository = new();
-    private readonly Mock<IAvailabilityRepository> _availabilityRepository = new();
-    private readonly Mock<IAvailabilityResolutionService> _availabilityResolutionService = new();
+    private readonly Mock<IRaidAvailabilityService> _raidAvailabilityService = new();
+    private readonly Mock<IRaidAvailabilityLookup> _availabilityLookup = new();
     private readonly Mock<IUsersRepository> _usersRepository = new();
     private readonly Mock<ICharacterRepository> _characterRepository = new();
     private readonly GetRaidBoardQueryHandler _sut;
@@ -40,19 +38,19 @@ public class GetRaidBoardQueryHandlerTests
     {
         _sut = new GetRaidBoardQueryHandler(
             _access.Object, _guildsRepository.Object, _raidEventRepository.Object, _guildMembershipRepository.Object,
-            _availabilityRepository.Object, _availabilityResolutionService.Object, _usersRepository.Object, _characterRepository.Object);
+            _raidAvailabilityService.Object, _usersRepository.Object, _characterRepository.Object);
 
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
         _guildsRepository.Setup(r => r.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Timezone = null });
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([]);
-        _availabilityRepository.Setup(r => r.GetExceptionsOverlappingForUsersAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default)).ReturnsAsync([]);
-        _availabilityRepository.Setup(r => r.GetPatternsForUsersAsync(It.IsAny<IEnumerable<string>>(), default)).ReturnsAsync([]);
         _usersRepository.Setup(r => r.FindAsync(It.IsAny<Expression<Func<User, bool>>>(), default)).ReturnsAsync([]);
         _characterRepository.Setup(r => r.GetRaidSpecsForCharactersAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<IReadOnlyCollection<AvailabilityDeclaration>>(),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([new ResolvedDayAvailabilityResponse { Status = DayAvailabilityStatus.Available }]);
+
+        _raidAvailabilityService.Setup(s => s.LoadRosterAvailabilityAsync(
+                It.IsAny<IEnumerable<string>>(), GuildId, GuildBranchId, It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default))
+            .ReturnsAsync(_availabilityLookup.Object);
+        _availabilityLookup.Setup(l => l.ResolveStatus(It.IsAny<string>(), It.IsAny<DateOnly>())).Returns(DayAvailabilityStatus.Available);
+        _availabilityLookup.Setup(l => l.IsUnavailableAt(It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<TimeOnly>())).Returns(false);
     }
 
     private static GetRaidBoardQuery MakeQuery() => new()
@@ -217,15 +215,12 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_AssignmentAvailabilityStatus_ReflectsResolvedStatus()
+    public async Task HandleAsync_AssignmentAvailabilityStatus_ReflectsLookupResolvedStatus()
     {
         var character = MakeAssignedCharacter();
         _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
             .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)])]);
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<IReadOnlyCollection<AvailabilityDeclaration>>(),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([new ResolvedDayAvailabilityResponse { Status = DayAvailabilityStatus.Absent }]);
+        _availabilityLookup.Setup(l => l.ResolveStatus(AssignedPlayerId, It.IsAny<DateOnly>())).Returns(DayAvailabilityStatus.Absent);
 
         var result = await _sut.HandleAsync(MakeQuery(), default);
 
@@ -233,34 +228,12 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_NoResolvedDay_AssignmentDefaultsToAvailable()
+    public async Task HandleAsync_RosterPlayerLookupReportsUnavailable_AppearsInAbsentPlayerDiscordIds()
     {
-        var character = MakeAssignedCharacter();
-        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
-            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)])]);
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<IReadOnlyCollection<AvailabilityDeclaration>>(),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([]);
-
-        var result = await _sut.HandleAsync(MakeQuery(), default);
-
-        result.Value!.Events.Single().Assignments.Single().AvailabilityStatus.Should().Be(DayAvailabilityStatus.Available);
-    }
-
-    [Fact]
-    public async Task HandleAsync_RosterPlayerDeclaredAbsent_AppearsInAbsentPlayerDiscordIds()
-    {
-        var absentCharacter = new Character { Id = 99, UserDiscordId = "player-absent", Class = Warrior };
+        var character = new Character { Id = 99, UserDiscordId = "player-absent", Class = Warrior };
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
-            .ReturnsAsync([new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = absentCharacter }]);
-        _availabilityRepository.Setup(r => r.GetExceptionsOverlappingForUsersAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default))
-            .ReturnsAsync([new AvailabilityDeclaration { UserDiscordId = "player-absent" }]);
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(),
-                It.Is<IReadOnlyCollection<AvailabilityDeclaration>>(ex => ex.Any(e => e.UserDiscordId == "player-absent")),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([new ResolvedDayAvailabilityResponse { Status = DayAvailabilityStatus.Absent }]);
+            .ReturnsAsync([new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = character }]);
+        _availabilityLookup.Setup(l => l.IsUnavailableAt("player-absent", It.IsAny<DateOnly>(), It.IsAny<TimeOnly>())).Returns(true);
         _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
             .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published)]);
 
@@ -270,55 +243,11 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_RosterPlayerPartialOutsideEventWindow_IsAbsent()
-    {
-        var character = new Character { Id = 99, UserDiscordId = "player-partial", Class = Warrior };
-        _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
-            .ReturnsAsync([new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = character }]);
-        _availabilityRepository.Setup(r => r.GetExceptionsOverlappingForUsersAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default))
-            .ReturnsAsync([new AvailabilityDeclaration { UserDiscordId = "player-partial" }]);
-        // Event starts 20:00 UTC; member only available until 18:00 — outside the window.
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(),
-                It.Is<IReadOnlyCollection<AvailabilityDeclaration>>(ex => ex.Any(e => e.UserDiscordId == "player-partial")),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([new ResolvedDayAvailabilityResponse { Status = DayAvailabilityStatus.Partial, AvailableUntil = new TimeOnly(18, 0) }]);
-        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
-            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published)]);
-
-        var result = await _sut.HandleAsync(MakeQuery(), default);
-
-        result.Value!.Events.Single().AbsentPlayerDiscordIds.Should().Contain("player-partial");
-    }
-
-    [Fact]
-    public async Task HandleAsync_RosterPlayerPartialWithinEventWindow_IsNotAbsent()
-    {
-        var character = new Character { Id = 99, UserDiscordId = "player-partial", Class = Warrior };
-        _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
-            .ReturnsAsync([new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = character }]);
-        _availabilityRepository.Setup(r => r.GetExceptionsOverlappingForUsersAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default))
-            .ReturnsAsync([new AvailabilityDeclaration { UserDiscordId = "player-partial" }]);
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(),
-                It.Is<IReadOnlyCollection<AvailabilityDeclaration>>(ex => ex.Any(e => e.UserDiscordId == "player-partial")),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([new ResolvedDayAvailabilityResponse { Status = DayAvailabilityStatus.Partial, AvailableFrom = new TimeOnly(18, 0), AvailableUntil = new TimeOnly(23, 0) }]);
-        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
-            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published)]);
-
-        var result = await _sut.HandleAsync(MakeQuery(), default);
-
-        result.Value!.Events.Single().AbsentPlayerDiscordIds.Should().NotContain("player-partial");
-    }
-
-    [Fact]
-    public async Task HandleAsync_RosterPlayerAvailable_IsNotAbsent()
+    public async Task HandleAsync_RosterPlayerLookupReportsAvailable_DoesNotAppearInAbsentPlayerDiscordIds()
     {
         var character = new Character { Id = 99, UserDiscordId = "player-available", Class = Warrior };
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
             .ReturnsAsync([new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = character }]);
-        // Uses the constructor's default ResolveForScope stub, which resolves to Available.
         _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
             .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published)]);
 
@@ -328,20 +257,23 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_NoResolvedDayForRosterPlayer_IsNotAbsent()
+    public async Task HandleAsync_LoadsRosterAvailabilityOnceForWholeRosterAndRange()
     {
-        var character = new Character { Id = 99, UserDiscordId = "player-x", Class = Warrior };
+        var characterA = new Character { Id = 98, UserDiscordId = "player-a", Class = Warrior };
+        var characterB = new Character { Id = 99, UserDiscordId = "player-b", Class = Warrior };
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
-            .ReturnsAsync([new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = character }]);
-        _availabilityResolutionService.Setup(s => s.ResolveForScope(
-                It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<IReadOnlyCollection<AvailabilityDeclaration>>(),
-                It.IsAny<IReadOnlyCollection<RecurringAvailabilityPattern>>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Returns([]);
+            .ReturnsAsync([
+                new GuildMembership { CharacterId = 98, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterA },
+                new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterB },
+            ]);
         _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
-            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published)]);
+            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published), MakeEvent(RaidPublicationStatus.Published)]);
+        var query = MakeQuery();
 
-        var result = await _sut.HandleAsync(MakeQuery(), default);
+        await _sut.HandleAsync(query, default);
 
-        result.Value!.Events.Single().AbsentPlayerDiscordIds.Should().BeEmpty();
+        _raidAvailabilityService.Verify(s => s.LoadRosterAvailabilityAsync(
+            It.Is<IEnumerable<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")),
+            GuildId, GuildBranchId, query.RangeStart, query.RangeEnd, default), Times.Once);
     }
 }

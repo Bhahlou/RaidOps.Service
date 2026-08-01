@@ -28,6 +28,8 @@ internal static class ApplicationRegistry
         services.AddScoped<IAbsenceNotificationContentBuilder, AbsenceNotificationContentBuilder>();
         services.AddScoped<IAvailabilityChangeAnnouncer, AvailabilityChangeAnnouncer>();
         services.AddScoped<IRaidLockoutService, RaidLockoutService>();
+        services.AddScoped<IRaidAvailabilityService, RaidAvailabilityService>();
+        services.AddScoped<IRaidLockoutConflictChecker, RaidLockoutConflictChecker>();
         return services;
     }
 }

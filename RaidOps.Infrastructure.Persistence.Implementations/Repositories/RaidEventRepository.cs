@@ -20,6 +20,7 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
             .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
             .Include(e => e.Assignments).ThenInclude(a => a.Spec)
             .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -31,6 +32,7 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
             .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
             .Include(e => e.Assignments).ThenInclude(a => a.Spec)
             .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .AsSplitQuery()
             .AsNoTracking()
             .OrderBy(e => e.StartsAtUtc)
             .ToListAsync(cancellationToken);

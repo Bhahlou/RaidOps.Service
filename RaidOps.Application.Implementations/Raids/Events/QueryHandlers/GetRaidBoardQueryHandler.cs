@@ -6,7 +6,6 @@ using RaidOps.Application.Contracts.Raids.Zones.Responses;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
-using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Character;
@@ -31,8 +30,7 @@ public class GetRaidBoardQueryHandler(
     IGuildsRepository guildsRepository,
     IRaidEventRepository raidEventRepository,
     IGuildMembershipRepository guildMembershipRepository,
-    IAvailabilityRepository availabilityRepository,
-    IAvailabilityResolutionService availabilityResolutionService,
+    IRaidAvailabilityService raidAvailabilityService,
     IUsersRepository usersRepository,
     ICharacterRepository characterRepository) : IQueryHandlerAsync<GetRaidBoardQuery, RaidBoardResponse>
 {
@@ -63,8 +61,7 @@ public class GetRaidBoardQueryHandler(
         var rosterMemberships = await guildMembershipRepository.GetByGuildBranchIdAsync(query.GuildBranchId, cancellationToken);
         var rosterPlayerIds = rosterMemberships.Select(m => m.Character.UserDiscordId).Distinct().ToList();
 
-        var exceptions = await availabilityRepository.GetExceptionsOverlappingForUsersAsync(rosterPlayerIds, query.RangeStart, query.RangeEnd, cancellationToken);
-        var patterns = await availabilityRepository.GetPatternsForUsersAsync(rosterPlayerIds, cancellationToken);
+        var availabilityLookup = await raidAvailabilityService.LoadRosterAvailabilityAsync(rosterPlayerIds, query.GuildId, query.GuildBranchId, query.RangeStart, query.RangeEnd, cancellationToken);
 
         var assignedPlayerIds = events.SelectMany(e => e.Assignments).Select(a => a.AssignedPlayerDiscordId).Distinct().ToList();
         var players = await usersRepository.FindAsync(u => assignedPlayerIds.Contains(u.DiscordId), cancellationToken);
@@ -76,31 +73,31 @@ public class GetRaidBoardQueryHandler(
             .GroupBy(rs => rs.CharacterId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var context = new BoardMappingContext(guild, rosterPlayerIds, playersById, availabilityLookup, raidSpecsByCharacter);
         var response = new RaidBoardResponse
         {
-            Events = [.. events.Select(e => MapEvent(e, guild, query.GuildId, query.GuildBranchId, playersById, rosterPlayerIds, exceptions, patterns, raidSpecsByCharacter))],
+            Events = [.. events.Select(e => MapEvent(e, context))],
         };
 
         return Result<RaidBoardResponse>.Ok(response);
     }
 
-    private RaidEventResponse MapEvent(
-        RaidEvent raidEvent,
-        Guild guild,
-        string guildId,
-        int guildBranchId,
-        Dictionary<string, User> playersById,
-        List<string> rosterPlayerIds,
-        List<AvailabilityDeclaration> guildExceptions,
-        List<RecurringAvailabilityPattern> guildPatterns,
-        Dictionary<int, List<CharacterRaidSpec>> raidSpecsByCharacter)
+    /// <summary>Bundles the per-request state shared across every event/assignment mapped for one board response.</summary>
+    private sealed record BoardMappingContext(
+        Guild Guild,
+        List<string> RosterPlayerIds,
+        Dictionary<string, User> PlayersById,
+        IRaidAvailabilityLookup AvailabilityLookup,
+        Dictionary<int, List<CharacterRaidSpec>> RaidSpecsByCharacter);
+
+    private static RaidEventResponse MapEvent(RaidEvent raidEvent, BoardMappingContext ctx)
     {
-        var localDateTime = GuildTimeHelper.ToGuildLocalDateTime(raidEvent.StartsAtUtc, guild.Timezone);
+        var localDateTime = GuildTimeHelper.ToGuildLocalDateTime(raidEvent.StartsAtUtc, ctx.Guild.Timezone);
         var localDate = DateOnly.FromDateTime(localDateTime);
         var localTime = TimeOnly.FromDateTime(localDateTime);
 
-        var absentPlayerIds = rosterPlayerIds
-            .Where(playerId => IsPlayerAbsent(playerId, localDate, localTime, guildId, guildBranchId, guildExceptions, guildPatterns))
+        var absentPlayerIds = ctx.RosterPlayerIds
+            .Where(playerId => ctx.AvailabilityLookup.IsUnavailableAt(playerId, localDate, localTime))
             .ToList();
 
         return new RaidEventResponse
@@ -124,29 +121,17 @@ public class GetRaidBoardQueryHandler(
                 Name = z.RaidZone.Name,
                 ShortCode = z.RaidZone.ShortCode,
             })],
-            Assignments = [.. raidEvent.Assignments.Select(a => MapAssignment(a, localDate, guildId, guildBranchId, playersById, guildExceptions, guildPatterns, raidSpecsByCharacter))],
+            Assignments = [.. raidEvent.Assignments.Select(a => MapAssignment(a, localDate, ctx))],
             AbsentPlayerDiscordIds = absentPlayerIds,
         };
     }
 
-    private RaidSlotAssignmentResponse MapAssignment(
-        RaidSlotAssignment assignment,
-        DateOnly eventLocalDate,
-        string guildId,
-        int guildBranchId,
-        Dictionary<string, User> playersById,
-        List<AvailabilityDeclaration> guildExceptions,
-        List<RecurringAvailabilityPattern> guildPatterns,
-        Dictionary<int, List<CharacterRaidSpec>> raidSpecsByCharacter)
+    private static RaidSlotAssignmentResponse MapAssignment(RaidSlotAssignment assignment, DateOnly eventLocalDate, BoardMappingContext ctx)
     {
-        playersById.TryGetValue(assignment.AssignedPlayerDiscordId, out var player);
+        ctx.PlayersById.TryGetValue(assignment.AssignedPlayerDiscordId, out var player);
 
-        var memberExceptions = guildExceptions.Where(e => e.UserDiscordId == assignment.AssignedPlayerDiscordId).ToList();
-        var memberPatterns = guildPatterns.Where(p => p.UserDiscordId == assignment.AssignedPlayerDiscordId).ToList();
-        var resolved = availabilityResolutionService.ResolveForScope(eventLocalDate, eventLocalDate, memberExceptions, memberPatterns, guildId, guildBranchId);
-        var availabilityStatus = resolved.Count > 0 ? resolved[0].Status : DayAvailabilityStatus.Available;
-
-        var characterRaidSpecs = raidSpecsByCharacter.GetValueOrDefault(assignment.CharacterId, []);
+        var availabilityStatus = ctx.AvailabilityLookup.ResolveStatus(assignment.AssignedPlayerDiscordId, eventLocalDate);
+        var characterRaidSpecs = ctx.RaidSpecsByCharacter.GetValueOrDefault(assignment.CharacterId, []);
 
         return new RaidSlotAssignmentResponse
         {
@@ -170,39 +155,4 @@ public class GetRaidBoardQueryHandler(
         Name = spec.Name,
         IconUrl = spec.IconUrl,
     };
-
-    /// <summary>
-    /// Mirrors <c>AssignCharacterToSlotCommandHandler.CheckDeclaredAbsenceAsync</c>'s blocking rule
-    /// exactly: hard <see cref="DayAvailabilityStatus.Absent"/>, or <see cref="DayAvailabilityStatus.Partial"/>
-    /// whose declared window doesn't cover the event's local start time.
-    /// </summary>
-    private bool IsPlayerAbsent(
-        string playerId,
-        DateOnly eventLocalDate,
-        TimeOnly eventLocalTime,
-        string guildId,
-        int guildBranchId,
-        List<AvailabilityDeclaration> guildExceptions,
-        List<RecurringAvailabilityPattern> guildPatterns)
-    {
-        var memberExceptions = guildExceptions.Where(e => e.UserDiscordId == playerId).ToList();
-        var memberPatterns = guildPatterns.Where(p => p.UserDiscordId == playerId).ToList();
-        var resolved = availabilityResolutionService.ResolveForScope(eventLocalDate, eventLocalDate, memberExceptions, memberPatterns, guildId, guildBranchId);
-        if (resolved.Count == 0)
-            return false;
-
-        var day = resolved[0];
-        if (day.Status == DayAvailabilityStatus.Absent)
-            return true;
-
-        if (day.Status == DayAvailabilityStatus.Partial)
-        {
-            var withinWindow =
-                (day.AvailableFrom == null || eventLocalTime >= day.AvailableFrom.Value) &&
-                (day.AvailableUntil == null || eventLocalTime <= day.AvailableUntil.Value);
-            return !withinWindow;
-        }
-
-        return false;
-    }
 }
