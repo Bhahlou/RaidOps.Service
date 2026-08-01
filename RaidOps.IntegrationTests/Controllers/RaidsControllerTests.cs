@@ -27,6 +27,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
     private const int RaidBranchId = 4;
     private const int KarazhanZoneId = 1;
     private static readonly int[] DefaultZoneIds = [KarazhanZoneId];
+    private static readonly int[] GruulsLairZoneIds = [2];
 
     // ── Auth enforcement ────────────────────────────────────────────────────
 
@@ -155,6 +156,208 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateClientWithoutSubClaim();
 
         var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/zones");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetLockoutWeek_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/lockout-week");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetSeriesList_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/series");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task CreateSeries_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/series", new
+        {
+            name = "Split 1",
+            recurrenceDayOfWeek = DayOfWeek.Wednesday,
+            recurrenceStartTimeLocal = new TimeOnly(20, 0),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateSeries_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PatchAsync("/api/v1/guilds/630000000000000001/branches/1/raids/series/1", JsonContent.Create(new
+        {
+            name = "Split 1",
+            recurrenceDayOfWeek = DayOfWeek.Wednesday,
+            recurrenceStartTimeLocal = new TimeOnly(20, 0),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task DeactivateSeries_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/series/1/deactivate", new { });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task MaterializeOccurrences_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsync("/api/v1/guilds/630000000000000001/branches/1/raids/materialize?rangeStart=2026-01-01&rangeEnd=2026-01-07", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetBoard_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/board?rangeStart=2026-01-01&rangeEnd=2026-01-07");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task CreateEvent_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events", new
+        {
+            name = "One-shot event",
+            startsAtUtc = DateTime.UtcNow.AddDays(3),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateEvent_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PatchAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1", JsonContent.Create(new
+        {
+            name = "One-shot event",
+            startsAtUtc = DateTime.UtcNow.AddDays(3),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task DeleteEvent_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.DeleteAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task PublishEvent_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/publish", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AssignSlot_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/slots/assign", new
+        {
+            groupNumber = 1, slotNumber = 1, characterId = 1,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SwapSlotAssignments_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/slots/swap", new
+        {
+            groupNumberA = 1, slotNumberA = 1, groupNumberB = 2, slotNumberB = 1,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UnassignSlot_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/slots/unassign", new
+        {
+            groupNumber = 1, slotNumber = 1,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateSlotAssignmentSpec_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PatchAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/slots/spec", JsonContent.Create(new
+        {
+            groupNumber = 1, slotNumber = 1, specId = 1,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetUnassignedMembers_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/unassigned-members?rangeStart=2026-01-01&rangeEnd=2026-01-07");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -303,7 +506,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             recurrenceIntervalWeeks = 2,
             groupCount = 3,
             slotsPerGroup = 5,
-            raidZoneIds = new[] { 2 }, // Gruul's Lair
+            raidZoneIds = GruulsLairZoneIds,
         }));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -317,6 +520,30 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             series.GroupCount.Should().Be(3);
             series.DefaultZones.Should().ContainSingle(z => z.RaidZoneId == 2);
         }
+    }
+
+    [Fact]
+    public async Task UpdateSeries_SeriesNotFound_Returns400()
+    {
+        const string id = "610000000000000015";
+        const string guildId = "630000000000000015";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/series/999999", JsonContent.Create(new
+        {
+            name = "Split 1",
+            recurrenceDayOfWeek = DayOfWeek.Wednesday,
+            recurrenceStartTimeLocal = new TimeOnly(20, 0),
+            recurrenceIntervalWeeks = 1,
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("RaidSeriesNotFound");
     }
 
     [Fact]
@@ -490,7 +717,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             startsAtUtc = DateTime.UtcNow.AddDays(5),
             groupCount = 3,
             slotsPerGroup = 5,
-            raidZoneIds = new[] { 2 },
+            raidZoneIds = GruulsLairZoneIds,
         }));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -700,6 +927,34 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             var atOriginalB = await db.RaidSlotAssignments.SingleAsync(a => a.RaidEventId == eventId && a.GroupNumber == 2 && a.SlotNumber == 1);
             atOriginalA.CharacterId.Should().Be(characterB);
             atOriginalB.CharacterId.Should().Be(characterA);
+        }
+    }
+
+    [Fact]
+    public async Task SwapSlotAssignments_OneSlotEmpty_Returns400AndDoesNotMove()
+    {
+        const string id = "610000000000000149";
+        const string guildId = "630000000000000149";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var characterA = await SeedCharacterOnRoster(id, guildId, branchId, bnetCharacterId: 610145001, name: "CharA");
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId);
+        await AssignSlotAsync(client, guildId, branchId, eventId, characterA, groupNumber: 1, slotNumber: 1);
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/slots/swap", new
+        {
+            groupNumberA = 1, slotNumberA = 1, groupNumberB = 2, slotNumberB = 1,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("BothSlotsMustBeOccupiedToSwap");
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var stillAtOriginal = await db.RaidSlotAssignments.SingleAsync(a => a.RaidEventId == eventId);
+            stillAtOriginal.GroupNumber.Should().Be(1);
+            stillAtOriginal.SlotNumber.Should().Be(1);
         }
     }
 

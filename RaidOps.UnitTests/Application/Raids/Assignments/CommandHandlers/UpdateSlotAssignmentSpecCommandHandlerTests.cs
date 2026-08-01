@@ -86,6 +86,24 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_OtherSlotsOccupiedButTargetCoordinateEmpty_ReturnsSlotEmpty()
+    {
+        // Distinct from the fully-empty-list case above: an assignment exists in the event, just
+        // not at the requested (GroupNumber, SlotNumber) coordinate.
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId,
+            Assignments = [new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 1, CharacterId = CharacterId }],
+        });
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.SlotEmpty);
+    }
+
+    [Fact]
     public async Task HandleAsync_SpecNotDeclaredByCharacter_ReturnsSpecNotAvailableForCharacter()
     {
         SetupOfficer();

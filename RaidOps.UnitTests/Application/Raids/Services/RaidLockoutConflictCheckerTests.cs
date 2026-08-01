@@ -147,6 +147,23 @@ public class RaidLockoutConflictCheckerTests
     }
 
     [Fact]
+    public async Task FindConflictingZoneNameAsync_GuildBranchNotFound_SoftSkipsAndReturnsNull()
+    {
+        // Distinct from a resolved branch with no Region: the branch lookup itself returns null
+        // (e.g. a stale/deleted branch), exercising the "guildBranch?.Region" null-conditional's
+        // own null path rather than just its Region being null.
+        var targetEvent = MakeEvent(EventId, [new RaidEventZone { RaidZoneId = 7 }]);
+        var zone = new RaidZone { Id = 7, LockoutCadenceDays = null, LockoutAnchorUtc = null };
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync((GuildBranch?)null);
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([zone]);
+
+        var result = await _sut.FindConflictingZoneNameAsync(targetEvent, CharacterId, GuildId, GuildBranchId);
+
+        result.Should().BeNull();
+        _raidLockoutService.Verify(s => s.GetLockoutWindowStart(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<IReadOnlyCollection<RaidLockoutCadenceOverride>>(), It.IsAny<DateTime>()), Times.Never);
+    }
+
+    [Fact]
     public async Task FindConflictingZoneNameAsync_RegionScheduleNotSeeded_SoftSkipsAndReturnsNull()
     {
         var targetEvent = MakeEvent(EventId, [new RaidEventZone { RaidZoneId = 7 }]);

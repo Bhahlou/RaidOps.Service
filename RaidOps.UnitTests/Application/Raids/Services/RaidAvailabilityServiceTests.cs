@@ -72,6 +72,38 @@ public class RaidAvailabilityServiceTests
     }
 
     [Fact]
+    public async Task IsPlayerUnavailableAsync_PartialOpenEndedFromBeforeEvent_ReturnsFalse()
+    {
+        // No AvailableUntil bound — available indefinitely from 18:00 onward. Event starts 20:00.
+        SetupResolvedDay(DayAvailabilityStatus.Partial, from: new TimeOnly(18, 0));
+
+        var result = await _sut.IsPlayerUnavailableAsync(PlayerDiscordId, GuildId, GuildBranchId, EventStartsAtUtc);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task IsPlayerUnavailableAsync_PartialOpenEndedFromAfterEvent_ReturnsTrue()
+    {
+        // No AvailableUntil bound, but the member isn't available until 21:00 — after the 20:00 event.
+        SetupResolvedDay(DayAvailabilityStatus.Partial, from: new TimeOnly(21, 0));
+
+        var result = await _sut.IsPlayerUnavailableAsync(PlayerDiscordId, GuildId, GuildBranchId, EventStartsAtUtc);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsPlayerUnavailableAsync_PartialWithNoBoundsAtAll_ReturnsFalse()
+    {
+        SetupResolvedDay(DayAvailabilityStatus.Partial);
+
+        var result = await _sut.IsPlayerUnavailableAsync(PlayerDiscordId, GuildId, GuildBranchId, EventStartsAtUtc);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task IsPlayerUnavailableAsync_Available_ReturnsFalse()
     {
         SetupResolvedDay(DayAvailabilityStatus.Available);
@@ -119,6 +151,26 @@ public class RaidAvailabilityServiceTests
             It.Is<IEnumerable<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")), rangeStart, rangeEnd, default), Times.Once);
         _availabilityRepository.Verify(r => r.GetPatternsForUsersAsync(
             It.Is<IEnumerable<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoadRosterAvailabilityAsync_NonCollectionEnumerable_IsMaterializedBeforeQuerying()
+    {
+        // A plain generator (no ICollection<string>) forces the "as ICollection<string>" cast to
+        // fail, exercising the "?? [.. playerDiscordIds]" materialization fallback.
+        static IEnumerable<string> GeneratePlayerIds()
+        {
+            yield return "player-a";
+            yield return "player-b";
+        }
+
+        var rangeStart = new DateOnly(2026, 2, 1);
+        var rangeEnd = new DateOnly(2026, 2, 7);
+
+        await _sut.LoadRosterAvailabilityAsync(GeneratePlayerIds(), GuildId, GuildBranchId, rangeStart, rangeEnd);
+
+        _availabilityRepository.Verify(r => r.GetExceptionsOverlappingForUsersAsync(
+            It.Is<IEnumerable<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")), rangeStart, rangeEnd, default), Times.Once);
     }
 
     [Fact]

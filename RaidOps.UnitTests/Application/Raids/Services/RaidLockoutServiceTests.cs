@@ -79,6 +79,28 @@ public class RaidLockoutServiceTests
     }
 
     [Fact]
+    public void GetLockoutWindowStart_AllBreakpointsBeforeCursor_TreatsThemAsAbsentForThisStep()
+    {
+        // The override's whole date range is already in the past relative to the anchor itself, so
+        // both of its breakpoints sit before the loop's very first cursor position (the anchor) —
+        // distinct from having no overrides at all: the breakpoints list is non-empty here, but
+        // none of them qualify as the "next" one from the cursor's viewpoint.
+        var overrides = new List<RaidLockoutCadenceOverride>
+        {
+            new()
+            {
+                CadenceDays = 2,
+                EffectiveFrom = DateOnly.FromDateTime(Anchor.AddDays(-10)),
+                EffectiveUntil = DateOnly.FromDateTime(Anchor.AddDays(-5)),
+            },
+        };
+
+        var result = _sut.GetLockoutWindowStart(Anchor, 7, overrides, Anchor.AddDays(10));
+
+        result.Should().Be(Anchor.AddDays(7));
+    }
+
+    [Fact]
     public void GetLockoutWindowStart_ActiveOverride_UsesOverrideCadenceInsteadOfBaseline()
     {
         // Override drops cadence from 7 to 2 for the anchor's whole first baseline cycle.

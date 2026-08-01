@@ -30,6 +30,10 @@ public static class GuildTimeHelper
         }
         catch (InvalidTimeZoneException)
         {
+            // Unlike TimeZoneNotFoundException (an unknown ID — reachable with any bad string, and
+            // covered above), this needs a tzdata file that exists but is corrupt, which only
+            // happens with a broken OS timezone database. Not reproducible from a unit test without
+            // replacing real system tzdata, so this line is intentionally left uncovered.
             return utc;
         }
     }
@@ -62,6 +66,8 @@ public static class GuildTimeHelper
         }
         catch (InvalidTimeZoneException)
         {
+            // See the matching catch in ToGuildLocalDateTime — same "corrupt OS tzdata" precondition,
+            // intentionally left uncovered for the same reason.
             return DateTime.SpecifyKind(local, DateTimeKind.Utc);
         }
     }

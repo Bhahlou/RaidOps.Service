@@ -96,4 +96,42 @@ public class GuildBranchesRepositoryTests(RaidOpsWebApplicationFactory factory)
             updated.RosterRoleIds.Should().BeEmpty();
         }
     }
+
+    [Fact]
+    public async Task UpdateRegionAsync_BranchNotFound_ReturnsFalse()
+    {
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+            var result = await repo.UpdateRegionAsync(guildBranchId: -1, region: "eu");
+
+            result.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateRegionAsync_Success_PersistsRegionAndReturnsTrue()
+    {
+        const string guildId = "960000000000000003";
+        await SeedGuildAsync(guildId);
+        var branch = TestDataBuilder.CreateGuildBranch(guildId);
+        await SeedAsync(db =>
+        {
+            db.GuildBranches.Add(branch);
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+            var result = await repo.UpdateRegionAsync(branch.Id, "eu");
+
+            result.Should().BeTrue();
+
+            var updated = await db.GuildBranches.FindAsync(branch.Id);
+            updated!.Region.Should().Be("eu");
+        }
+    }
 }

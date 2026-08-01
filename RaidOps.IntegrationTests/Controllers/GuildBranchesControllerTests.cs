@@ -53,6 +53,14 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task UpdateRegion_WithoutToken_Returns401()
+    {
+        var body = JsonContent.Create(new { region = "eu" });
+        var response = await Client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/region", body);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     // ── GetBranches ────────────────────────────────────────────────────────
 
     [Fact]
@@ -296,6 +304,114 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
 
             var variables = JsonSerializer.Deserialize<Dictionary<string, string>>(log.Details!);
             variables.Should().ContainKey("branchName").WhoseValue.Should().NotBeNullOrEmpty();
+        }
+    }
+
+    // ── UpdateRegion ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateRegion_WhenOfficerOfBranch_Returns200AndPersists()
+    {
+        const string id      = "700000000000000011";
+        const string guildId = "970000000000000011";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { region = "eu" });
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/region", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var updated = await db.GuildBranches.FindAsync(branch.Id);
+            updated!.Region.Should().Be("eu");
+        }
+    }
+
+    [Fact]
+    public async Task UpdateRegion_WhenNotOfficerOfBranch_Returns400()
+    {
+        const string id      = "700000000000000012";
+        const string guildId = "970000000000000012";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { region = "eu" });
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/region", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateRegion_UnrecognizedRegion_Returns400()
+    {
+        const string id      = "700000000000000013";
+        const string guildId = "970000000000000013";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { region = "atlantis" });
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/region", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("InvalidRegion");
+    }
+
+    [Fact]
+    public async Task UpdateRegion_OnSuccess_WritesAuditLog()
+    {
+        const string id      = "700000000000000014";
+        const string guildId = "970000000000000014";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { region = "eu" });
+
+        await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/region", body);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var log = await db.GuildAuditLogs.FirstOrDefaultAsync(l =>
+                l.GuildId == guildId && l.ActionType == GuildAuditAction.BranchRegionUpdated);
+            log.Should().NotBeNull();
+            log!.ActorDiscordId.Should().Be(id);
+
+            var variables = JsonSerializer.Deserialize<Dictionary<string, string>>(log.Details!);
+            variables.Should().ContainKey("newRegion").WhoseValue.Should().Be("eu");
         }
     }
 }
