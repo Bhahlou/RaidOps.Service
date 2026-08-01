@@ -97,4 +97,27 @@ public class GuildBranchesController(
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
         return ToActionResult(result);
     }
+
+    /// <summary>
+    /// Persists the Blizzard API region for one guild branch — used to resolve its weekly
+    /// raid-lockout schedule.
+    /// </summary>
+    [HttpPatch("{guildId}/branches/{guildBranchId:int}/region")]
+    public async Task<IActionResult> UpdateRegion(
+        string guildId,
+        int guildBranchId,
+        [FromBody] UpdateGuildBranchRegionCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
 }

@@ -41,4 +41,22 @@ public interface IAvailabilityRepository
 
     /// <summary>Deletes the pattern identified by <paramref name="patternId"/> if it belongs to <paramref name="userDiscordId"/>. Returns <c>false</c> if no matching pattern exists.</summary>
     Task<bool> DeletePatternAsync(int patternId, string userDiscordId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every exception belonging to any of <paramref name="userDiscordIds"/>, across every
+    /// scope (Global and every guild branch alike), that overlaps <paramref name="rangeStart"/>..
+    /// <paramref name="rangeEnd"/> — a bulk counterpart to <see cref="GetExceptionsOverlappingAsync"/>
+    /// used to resolve availability for many members at once (e.g. the raid board) without one query
+    /// per member. Unlike a guild-scoped fetch, this correctly includes Global declarations, since
+    /// the caller already knows exactly which users it cares about.
+    /// </summary>
+    Task<List<AvailabilityDeclaration>> GetExceptionsOverlappingForUsersAsync(IEnumerable<string> userDiscordIds, DateOnly rangeStart, DateOnly rangeEnd, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every version (current and historical) of every recurring pattern belonging to any of
+    /// <paramref name="userDiscordIds"/>, across every scope, with their days — a bulk counterpart to
+    /// <see cref="GetPatternsAsync"/>, same Global-inclusive behavior as
+    /// <see cref="GetExceptionsOverlappingForUsersAsync"/>.
+    /// </summary>
+    Task<List<RecurringAvailabilityPattern>> GetPatternsForUsersAsync(IEnumerable<string> userDiscordIds, CancellationToken cancellationToken = default);
 }

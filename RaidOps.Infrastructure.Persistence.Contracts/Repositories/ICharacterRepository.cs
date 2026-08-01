@@ -79,4 +79,17 @@ public interface ICharacterRepository
     /// specs, these are never touched by sync — only by this method.
     /// </summary>
     Task UpsertRaidSpecsAsync(int characterId, IEnumerable<CharacterRaidSpec> raidSpecs, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the character's user-curated raid-viable specs (see <see cref="UpsertRaidSpecsAsync"/>),
+    /// including each spec's reference data. Empty if the character has none declared.
+    /// </summary>
+    Task<List<CharacterRaidSpec>> GetRaidSpecsAsync(int characterId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bulk counterpart to <see cref="GetRaidSpecsAsync"/> — returns every raid-viable spec
+    /// declaration for any of <paramref name="characterIds"/> in one query, used to avoid one
+    /// query per assignment when building the raid board response.
+    /// </summary>
+    Task<List<CharacterRaidSpec>> GetRaidSpecsForCharactersAsync(IEnumerable<int> characterIds, CancellationToken cancellationToken = default);
 }

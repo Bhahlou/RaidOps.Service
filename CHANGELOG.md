@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.4.0...v1.5.0) (2026-08-01)
+
+
+### 🚀 Features
+
+* Raid builder API ([#61](https://github.com/Bhahlou/RaidOps.Service/issues/61)) ([8cd338c](https://github.com/Bhahlou/RaidOps.Service/commit/8cd338c0a39c795d9a9ea054f4e27b31deee9556))
+
 ## [1.4.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.2...v1.4.0) (2026-07-30)
 
 
