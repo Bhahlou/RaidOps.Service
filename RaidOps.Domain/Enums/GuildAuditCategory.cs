@@ -20,4 +20,7 @@ public enum GuildAuditCategory
 
     /// <summary>Actions about guild branches (activation/deactivation, roster/officer role-set configuration).</summary>
     Branches = 5,
+
+    /// <summary>Actions about raid series and raid events (creation, edits, cancellation).</summary>
+    Raids = 6,
 }
