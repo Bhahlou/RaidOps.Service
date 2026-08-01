@@ -732,6 +732,43 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task UpdateEvent_EventNotFound_Returns400()
+    {
+        const string id = "610000000000000131";
+        const string guildId = "630000000000000131";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/999999", JsonContent.Create(new
+        {
+            name = "Renamed event",
+            startsAtUtc = DateTime.UtcNow.AddDays(5),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("RaidEventNotFound");
+    }
+
+    [Fact]
+    public async Task DeleteEvent_EventNotFound_Returns400()
+    {
+        const string id = "610000000000000132";
+        const string guildId = "630000000000000132";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/999999");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("RaidEventNotFound");
+    }
+
+    [Fact]
     public async Task DeleteEvent_RemovesEventAndCascadesAssignments()
     {
         const string id = "610000000000000032";

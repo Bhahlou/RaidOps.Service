@@ -12,9 +12,8 @@ namespace RaidOps.UnitTests.Application.Raids.Events.CommandHandlers;
 
 public class CreateAdhocRaidEventCommandHandlerTests
 {
-    private readonly Mock<IGuildAccessService> _access = new();
+    private readonly Mock<IRaidGridAndZoneValidator> _gridAndZoneValidator = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
-    private readonly Mock<IRaidZoneRepository> _raidZoneRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly CreateAdhocRaidEventCommandHandler _sut;
 
@@ -24,7 +23,10 @@ public class CreateAdhocRaidEventCommandHandlerTests
 
     public CreateAdhocRaidEventCommandHandlerTests()
     {
-        _sut = new CreateAdhocRaidEventCommandHandler(_access.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _auditLogService.Object);
+        _sut = new CreateAdhocRaidEventCommandHandler(_gridAndZoneValidator.Object, _raidEventRepository.Object, _auditLogService.Object);
+
+        _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
+            .ReturnsAsync(Result<List<int>>.Ok([1]));
     }
 
     private static CreateAdhocRaidEventCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null) => new()
@@ -39,77 +41,22 @@ public class CreateAdhocRaidEventCommandHandlerTests
         RaidZoneIds = zoneIds ?? [1],
     };
 
-    private void SetupOfficer() =>
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-
     [Fact]
-    public async Task HandleAsync_NotOfficer_ReturnsForbidden()
+    public async Task HandleAsync_ValidatorFails_PropagatesErrorWithoutPersisting()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
+            .ReturnsAsync(Result<List<int>>.Fail(ResponseDetail.RaidZoneNotFound, "One or more raid zones do not exist."));
 
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.Forbidden);
-    }
-
-    [Theory]
-    [InlineData(0, 5)]
-    [InlineData(-1, 5)]
-    [InlineData(2, 0)]
-    [InlineData(2, -1)]
-    public async Task HandleAsync_NonPositiveGridShape_ReturnsInvalidRequest(int groupCount, int slotsPerGroup)
-    {
-        SetupOfficer();
-
-        var result = await _sut.HandleAsync(MakeCommand(groupCount, slotsPerGroup));
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.InvalidRequest);
-    }
-
-    [Fact]
-    public async Task HandleAsync_NoZonesTargeted_ReturnsInvalidRequest()
-    {
-        SetupOfficer();
-
-        var result = await _sut.HandleAsync(MakeCommand(zoneIds: []));
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.InvalidRequest);
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnknownZone_ReturnsRaidZoneNotFound()
-    {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
-
-        var result = await _sut.HandleAsync(MakeCommand(zoneIds: [1, 2]));
-
-        result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.RaidZoneNotFound);
-    }
-
-    [Fact]
-    public async Task HandleAsync_DuplicateZoneIds_AreDeduplicatedBeforeLookup()
-    {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.Is<IEnumerable<int>>(ids => ids.Count() == 1 && ids.Contains(1)), default))
-            .ReturnsAsync([new RaidZone { Id = 1 }]);
-        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
-            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
-
-        var result = await _sut.HandleAsync(MakeCommand(zoneIds: [1, 1]));
-
-        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.IsAny<RaidEvent>(), default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_Success_CreatesDraftScheduledEventAndLogsAudit()
     {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
         _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
             .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
 

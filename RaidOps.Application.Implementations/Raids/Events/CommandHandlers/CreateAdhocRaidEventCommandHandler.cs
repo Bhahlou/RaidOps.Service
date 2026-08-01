@@ -13,28 +13,19 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// requested grid shape and target zones, then persisting a standalone raid event.
 /// </summary>
 public class CreateAdhocRaidEventCommandHandler(
-    IGuildAccessService guildAccessService,
+    IRaidGridAndZoneValidator gridAndZoneValidator,
     IRaidEventRepository raidEventRepository,
-    IRaidZoneRepository raidZoneRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<CreateAdhocRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(CreateAdhocRaidEventCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
-        if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
+        var validation = await gridAndZoneValidator.ValidateAsync(
+            command.RequesterDiscordId, command.GuildId, command.GuildBranchId, command.GroupCount, command.SlotsPerGroup, command.RaidZoneIds, cancellationToken);
+        if (validation.IsFailed)
+            return Result<CommandResponse>.Fail(validation.Error!, validation.Detail);
 
-        if (command.GroupCount <= 0 || command.SlotsPerGroup <= 0)
-            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "GroupCount and SlotsPerGroup must be positive.");
-
-        var distinctZoneIds = command.RaidZoneIds.Distinct().ToList();
-        if (distinctZoneIds.Count == 0)
-            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "At least one raid zone must be targeted.");
-
-        var zones = await raidZoneRepository.GetByIdsAsync(distinctZoneIds, cancellationToken);
-        if (zones.Count != distinctZoneIds.Count)
-            return Result<CommandResponse>.Fail(ResponseDetail.RaidZoneNotFound, "One or more raid zones do not exist.");
+        var distinctZoneIds = validation.Value!;
 
         // PublicationStatus is left unset here, relying on RaidEvent's own Draft default —
         // ad-hoc events are never created pre-published, only PublishRaidEventCommand can do that.

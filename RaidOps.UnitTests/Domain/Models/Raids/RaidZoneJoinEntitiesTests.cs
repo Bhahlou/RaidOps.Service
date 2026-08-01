@@ -67,4 +67,15 @@ public class RaidZoneJoinEntitiesTests
         series.Guild.Should().BeSameAs(guild);
         series.Guild.Name.Should().Be("Test Guild");
     }
+
+    [Fact]
+    public void RaidEvent_GuildNavigation_CanBeSetAndRead()
+    {
+        var guild = new Guild { Id = "guild-1", Name = "Test Guild" };
+
+        var raidEvent = new RaidEvent { Id = 1, Name = "Split 1", GuildId = guild.Id, Guild = guild };
+
+        raidEvent.Guild.Should().BeSameAs(guild);
+        raidEvent.Guild.Name.Should().Be("Test Guild");
+    }
 }

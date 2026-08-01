@@ -12,9 +12,8 @@ namespace RaidOps.UnitTests.Application.Raids.Series.CommandHandlers;
 
 public class UpdateRaidSeriesCommandHandlerTests
 {
-    private readonly Mock<IGuildAccessService> _access = new();
+    private readonly Mock<IRaidGridAndZoneValidator> _gridAndZoneValidator = new();
     private readonly Mock<IRaidSeriesRepository> _raidSeriesRepository = new();
-    private readonly Mock<IRaidZoneRepository> _raidZoneRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly UpdateRaidSeriesCommandHandler _sut;
 
@@ -25,7 +24,10 @@ public class UpdateRaidSeriesCommandHandlerTests
 
     public UpdateRaidSeriesCommandHandlerTests()
     {
-        _sut = new UpdateRaidSeriesCommandHandler(_access.Object, _raidSeriesRepository.Object, _raidZoneRepository.Object, _auditLogService.Object);
+        _sut = new UpdateRaidSeriesCommandHandler(_gridAndZoneValidator.Object, _raidSeriesRepository.Object, _auditLogService.Object);
+
+        _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
+            .ReturnsAsync(Result<List<int>>.Ok([1]));
     }
 
     private static UpdateRaidSeriesCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null, int intervalWeeks = 1) => new()
@@ -43,61 +45,22 @@ public class UpdateRaidSeriesCommandHandlerTests
         RaidZoneIds = zoneIds ?? [1],
     };
 
-    private void SetupOfficer() =>
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-
     [Fact]
-    public async Task HandleAsync_NotOfficer_ReturnsForbidden()
+    public async Task HandleAsync_ValidatorFails_PropagatesErrorWithoutPersisting()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
+            .ReturnsAsync(Result<List<int>>.Fail(ResponseDetail.InvalidRequest, "GroupCount and SlotsPerGroup must be positive."));
 
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.Forbidden);
-    }
-
-    [Theory]
-    [InlineData(0, 5)]
-    [InlineData(2, 0)]
-    public async Task HandleAsync_NonPositiveGridShape_ReturnsInvalidRequest(int groupCount, int slotsPerGroup)
-    {
-        SetupOfficer();
-
-        var result = await _sut.HandleAsync(MakeCommand(groupCount, slotsPerGroup));
-
-        result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.InvalidRequest);
-    }
-
-    [Fact]
-    public async Task HandleAsync_NoZonesTargeted_ReturnsInvalidRequest()
-    {
-        SetupOfficer();
-
-        var result = await _sut.HandleAsync(MakeCommand(zoneIds: []));
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.InvalidRequest);
-    }
-
-    [Fact]
-    public async Task HandleAsync_UnknownZone_ReturnsRaidZoneNotFound()
-    {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
-
-        var result = await _sut.HandleAsync(MakeCommand());
-
-        result.IsFailed.Should().BeTrue();
-        result.Error.Should().Be(ResponseDetail.RaidZoneNotFound);
+        _raidSeriesRepository.Verify(r => r.UpdateAsync(It.IsAny<RaidSeries>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_SeriesNotFound_ReturnsRaidSeriesNotFound()
     {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
         _raidSeriesRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidSeries>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(false);
 
         var result = await _sut.HandleAsync(MakeCommand());
@@ -110,8 +73,6 @@ public class UpdateRaidSeriesCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NonPositiveIntervalWeeks_DefaultsToOne()
     {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
         _raidSeriesRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidSeries>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(MakeCommand(intervalWeeks: -3));
@@ -123,8 +84,6 @@ public class UpdateRaidSeriesCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Success_UpdatesAndLogsAudit()
     {
-        SetupOfficer();
-        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
         _raidSeriesRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidSeries>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(MakeCommand());

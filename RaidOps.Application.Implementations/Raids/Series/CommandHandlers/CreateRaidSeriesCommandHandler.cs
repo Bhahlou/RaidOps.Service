@@ -13,28 +13,19 @@ namespace RaidOps.Application.Implementations.Raids.Series.CommandHandlers;
 /// requested grid shape and target zones, then persisting the new recurring template.
 /// </summary>
 public class CreateRaidSeriesCommandHandler(
-    IGuildAccessService guildAccessService,
+    IRaidGridAndZoneValidator gridAndZoneValidator,
     IRaidSeriesRepository raidSeriesRepository,
-    IRaidZoneRepository raidZoneRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<CreateRaidSeriesCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(CreateRaidSeriesCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
-        if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
+        var validation = await gridAndZoneValidator.ValidateAsync(
+            command.RequesterDiscordId, command.GuildId, command.GuildBranchId, command.GroupCount, command.SlotsPerGroup, command.RaidZoneIds, cancellationToken);
+        if (validation.IsFailed)
+            return Result<CommandResponse>.Fail(validation.Error!, validation.Detail);
 
-        if (command.GroupCount <= 0 || command.SlotsPerGroup <= 0)
-            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "GroupCount and SlotsPerGroup must be positive.");
-
-        var distinctZoneIds = command.RaidZoneIds.Distinct().ToList();
-        if (distinctZoneIds.Count == 0)
-            return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "At least one raid zone must be targeted.");
-
-        var zones = await raidZoneRepository.GetByIdsAsync(distinctZoneIds, cancellationToken);
-        if (zones.Count != distinctZoneIds.Count)
-            return Result<CommandResponse>.Fail(ResponseDetail.RaidZoneNotFound, "One or more raid zones do not exist.");
+        var distinctZoneIds = validation.Value!;
 
         var series = new RaidSeries
         {

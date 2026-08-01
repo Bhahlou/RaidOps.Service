@@ -61,6 +61,58 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task GetBranches_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/970000000000000001/branches");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ActivateBranch_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/970000000000000001/branches", new { branchId = 1 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task DeactivateBranch_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.DeleteAsync("/api/v1/guilds/970000000000000001/branches/1");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateRosterSettings_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var body = JsonContent.Create(new { rosterMode = "Open" });
+
+        var response = await client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/roster-settings", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateRegion_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var body = JsonContent.Create(new { region = "eu" });
+
+        var response = await client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/region", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     // ── GetBranches ────────────────────────────────────────────────────────
 
     [Fact]

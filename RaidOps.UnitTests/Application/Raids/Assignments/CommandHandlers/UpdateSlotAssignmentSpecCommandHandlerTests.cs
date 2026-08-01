@@ -89,12 +89,31 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
     public async Task HandleAsync_OtherSlotsOccupiedButTargetCoordinateEmpty_ReturnsSlotEmpty()
     {
         // Distinct from the fully-empty-list case above: an assignment exists in the event, just
-        // not at the requested (GroupNumber, SlotNumber) coordinate.
+        // not at the requested (GroupNumber, SlotNumber) coordinate. Same GroupNumber as requested
+        // (1) so the match fails on the SlotNumber half of the predicate (1 vs 2).
         SetupOfficer();
         _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
         {
             Id = EventId,
             Assignments = [new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 1, CharacterId = CharacterId }],
+        });
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.SlotEmpty);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AssignmentExistsInDifferentGroup_ReturnsSlotEmpty()
+    {
+        // Different GroupNumber than requested (2 vs 1) — the predicate short-circuits on its
+        // first half, distinct from the SlotNumber-mismatch case above.
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId,
+            Assignments = [new RaidSlotAssignment { GroupNumber = 2, SlotNumber = 2, CharacterId = CharacterId }],
         });
 
         var result = await _sut.HandleAsync(MakeCommand());

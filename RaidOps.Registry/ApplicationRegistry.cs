@@ -30,6 +30,7 @@ internal static class ApplicationRegistry
         services.AddScoped<IRaidLockoutService, RaidLockoutService>();
         services.AddScoped<IRaidAvailabilityService, RaidAvailabilityService>();
         services.AddScoped<IRaidLockoutConflictChecker, RaidLockoutConflictChecker>();
+        services.AddScoped<IRaidGridAndZoneValidator, RaidGridAndZoneValidator>();
         return services;
     }
 }
