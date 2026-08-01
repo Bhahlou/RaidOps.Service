@@ -19,6 +19,19 @@ public interface IRaidCompositionRepository
     /// <summary>Removes the assignment at the given coordinate. Returns <c>false</c> if the slot was already empty.</summary>
     Task<bool> UnassignAsync(int raidEventId, int groupNumber, int slotNumber, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Exchanges the characters assigned at two coordinates within the same event — the
+    /// counterpart to <see cref="AssignCharacterAsync"/> for a drop onto an already-occupied slot.
+    /// Returns <c>false</c> without making any change if either coordinate was empty.
+    /// </summary>
+    Task<bool> SwapAssignmentsAsync(int raidEventId, int groupNumberA, int slotNumberA, int groupNumberB, int slotNumberB, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Changes the spec an already-assigned character is playing at the given coordinate (e.g.
+    /// switching to an off-spec this raid needs). Returns <c>false</c> if the slot was empty.
+    /// </summary>
+    Task<bool> UpdateAssignmentSpecAsync(int raidEventId, int groupNumber, int slotNumber, int specId, CancellationToken cancellationToken = default);
+
     /// <summary>Returns every assignment for the given event, including the assigned character.</summary>
     Task<List<RaidSlotAssignment>> GetAssignmentsForEventAsync(int raidEventId, CancellationToken cancellationToken = default);
 

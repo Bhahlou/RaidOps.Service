@@ -36,16 +36,20 @@ public class RaidZone
     public int SlotsPerGroup { get; set; }
 
     /// <summary>
-    /// Number of days between lockout resets for this zone, absent any active
+    /// Number of days between lockout resets for this zone, independently of the region's weekly
+    /// reset — e.g. 3 for Zul'Gurub/AQ20, 5 for Onyxia. <c>null</c> means this zone simply follows
+    /// its guild branch's <see cref="WeeklyLockoutSchedule"/> (the common case — every post-Vanilla
+    /// raid resets with the weekly reset). Ignored when non-null, absent any active
     /// <see cref="RaidLockoutCadenceOverride"/> covering the date being evaluated.
     /// </summary>
-    public int LockoutCadenceDays { get; set; }
+    public int? LockoutCadenceDays { get; set; }
 
     /// <summary>
-    /// Reference date used as the origin for lockout window computation — any date that is a
-    /// genuine reset day works, since the engine advances from it in whole-cadence jumps.
+    /// UTC origin instant for this zone's own lockout cadence — only meaningful when
+    /// <see cref="LockoutCadenceDays"/> is set. Any genuine reset instant works, since the engine
+    /// advances from it in whole-cadence jumps.
     /// </summary>
-    public DateOnly LockoutAnchorDate { get; set; }
+    public DateTime? LockoutAnchorUtc { get; set; }
 
     /// <summary>Icon URL, or <c>null</c> if none is configured.</summary>
     [MaxLength(512)]

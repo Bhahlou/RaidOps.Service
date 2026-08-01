@@ -93,6 +93,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="RaidZone"/> lookup table (Karazhan, SSC, Black Temple, …).</summary>
     public DbSet<RaidZone> RaidZones => Set<RaidZone>();
 
+    /// <summary>Gets the <see cref="WeeklyLockoutSchedule"/> lookup table (one row per Blizzard API region).</summary>
+    public DbSet<WeeklyLockoutSchedule> WeeklyLockoutSchedules => Set<WeeklyLockoutSchedule>();
+
     /// <summary>Gets the <see cref="RaidLockoutCadenceOverride"/> table (time-bound lockout corrections).</summary>
     public DbSet<RaidLockoutCadenceOverride> RaidLockoutCadenceOverrides => Set<RaidLockoutCadenceOverride>();
 
@@ -530,6 +533,12 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(a => a.CharacterId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasOne(a => a.Spec)
+            .WithMany()
+            .HasForeignKey(a => a.SpecId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Defense in depth: one character per event, and one player (across all their characters) per event.
         modelBuilder.Entity<RaidSlotAssignment>()
             .HasIndex(a => new { a.RaidEventId, a.CharacterId })
@@ -550,6 +559,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         SeedClasses(modelBuilder);
         SeedSpecs(modelBuilder);
         SeedRaidZones(modelBuilder);
+        SeedWeeklyLockoutSchedules(modelBuilder);
     }
 
     private static void SeedExpansions(ModelBuilder modelBuilder)
@@ -711,20 +721,34 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     private static void SeedRaidZones(ModelBuilder modelBuilder)
     {
-        // PLACEHOLDER: LockoutAnchorDate below is a plausible TBC-era Tuesday reset day, not a
-        // verified real-world reset date — correct it with real data before this ships to
-        // production. All 8 zones use ExpansionId = 2 (TBC, per Branch.Id = 4 "Classic Anniversary").
-        var placeholderAnchor = new DateOnly(2007, 1, 16);
-
+        // All 8 zones use ExpansionId = 2 (TBC, per Branch.Id = 4 "Classic Anniversary"). None sets
+        // LockoutCadenceDays/LockoutAnchorUtc — every one of them is a plain weekly reset, so they
+        // defer to their guild branch's WeeklyLockoutSchedule (see SeedWeeklyLockoutSchedules).
+        // Only zones with an independent cadence (e.g. Vanilla's Zul'Gurub/AQ20 every 3 days,
+        // Onyxia every 5) need those two fields set.
         modelBuilder.Entity<RaidZone>().HasData(
-            new RaidZone { Id = 1, Name = "Karazhan",            ShortCode = "Kara", ExpansionId = 2, GroupCount = 2, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 1 },
-            new RaidZone { Id = 2, Name = "Gruul's Lair",        ShortCode = "Gruul", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 2 },
-            new RaidZone { Id = 3, Name = "Magtheridon's Lair",  ShortCode = "Mag", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 3 },
-            new RaidZone { Id = 4, Name = "Serpentshrine Cavern",ShortCode = "SSC", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 4 },
-            new RaidZone { Id = 5, Name = "The Eye",             ShortCode = "TK", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 5 },
-            new RaidZone { Id = 6, Name = "Mount Hyjal",         ShortCode = "Hyjal", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 6 },
-            new RaidZone { Id = 7, Name = "Black Temple",        ShortCode = "BT", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 7 },
-            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, LockoutCadenceDays = 7, LockoutAnchorDate = placeholderAnchor, SortOrder = 8 }
+            new RaidZone { Id = 1, Name = "Karazhan",            ShortCode = "Kara", ExpansionId = 2, GroupCount = 2, SlotsPerGroup = 5, SortOrder = 1 },
+            new RaidZone { Id = 2, Name = "Gruul's Lair",        ShortCode = "Gruul", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 2 },
+            new RaidZone { Id = 3, Name = "Magtheridon's Lair",  ShortCode = "Mag", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 3 },
+            new RaidZone { Id = 4, Name = "Serpentshrine Cavern",ShortCode = "SSC", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 4 },
+            new RaidZone { Id = 5, Name = "The Eye",             ShortCode = "TK", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 5 },
+            new RaidZone { Id = 6, Name = "Mount Hyjal",         ShortCode = "Hyjal", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 6 },
+            new RaidZone { Id = 7, Name = "Black Temple",        ShortCode = "BT", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 7 },
+            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 8 }
+        );
+    }
+
+    private static void SeedWeeklyLockoutSchedules(ModelBuilder modelBuilder)
+    {
+        // Anchors are real, verified resets at the schedule Blizzard has used since the EU time
+        // changed from 08:00 CET to 05:00 CET (= 04:00 UTC) in November 2022 — any correct
+        // Wednesday/Tuesday at that UTC hour works, the exact date is otherwise arbitrary. Anchored
+        // in UTC deliberately (not local server time) so a DST rule change never shifts the computed
+        // reset instant. "us" also covers Latin America and Oceania — Blizzard's own API already
+        // buckets them together.
+        modelBuilder.Entity<WeeklyLockoutSchedule>().HasData(
+            new WeeklyLockoutSchedule { Region = "eu", AnchorUtc = new DateTime(2023, 1, 4, 4, 0, 0, DateTimeKind.Utc), CadenceDays = 7 },
+            new WeeklyLockoutSchedule { Region = "us", AnchorUtc = new DateTime(2023, 1, 3, 15, 0, 0, DateTimeKind.Utc), CadenceDays = 7 }
         );
     }
 }

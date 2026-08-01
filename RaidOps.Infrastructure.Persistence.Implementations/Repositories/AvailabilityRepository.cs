@@ -93,17 +93,23 @@ public class AvailabilityRepository(RaidOpsDbContext context) : IAvailabilityRep
     }
 
     /// <inheritdoc/>
-    public async Task<List<AvailabilityDeclaration>> GetExceptionsOverlappingForGuildAsync(string guildId, DateOnly rangeStart, DateOnly rangeEnd, CancellationToken cancellationToken = default)
-        => await context.AvailabilityExceptions
-            .Where(e => e.GuildId == guildId && e.StartDate <= rangeEnd && e.EndDate >= rangeStart)
+    public async Task<List<AvailabilityDeclaration>> GetExceptionsOverlappingForUsersAsync(IEnumerable<string> userDiscordIds, DateOnly rangeStart, DateOnly rangeEnd, CancellationToken cancellationToken = default)
+    {
+        var idList = userDiscordIds.ToList();
+        return await context.AvailabilityExceptions
+            .Where(e => idList.Contains(e.UserDiscordId) && e.StartDate <= rangeEnd && e.EndDate >= rangeStart)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+    }
 
     /// <inheritdoc/>
-    public async Task<List<RecurringAvailabilityPattern>> GetPatternsForGuildAsync(string guildId, CancellationToken cancellationToken = default)
-        => await context.RecurringAvailabilityPatterns
-            .Where(p => p.GuildId == guildId)
+    public async Task<List<RecurringAvailabilityPattern>> GetPatternsForUsersAsync(IEnumerable<string> userDiscordIds, CancellationToken cancellationToken = default)
+    {
+        var idList = userDiscordIds.ToList();
+        return await context.RecurringAvailabilityPatterns
+            .Where(p => idList.Contains(p.UserDiscordId))
             .Include(p => p.Days)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+    }
 }

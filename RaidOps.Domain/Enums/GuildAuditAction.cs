@@ -79,4 +79,7 @@ public enum GuildAuditAction
 
     /// <summary>A raid event was published, making it visible to non-officer roster members.</summary>
     RaidEventPublished = 25,
+
+    /// <summary>A guild branch's Blizzard API region was set or changed.</summary>
+    BranchRegionUpdated = 26,
 }

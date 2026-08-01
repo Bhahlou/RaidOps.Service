@@ -28,4 +28,7 @@ public class GuildBranchResponse
 
     /// <summary>Discord snowflake IDs of the roles that grant Officer access on this branch.</summary>
     public List<string> OfficerRoleIds { get; set; } = [];
+
+    /// <summary>Blizzard API region this branch's realm sits in ("eu"/"us"/"kr"/"tw"), or <c>null</c> if not yet configured.</summary>
+    public string? Region { get; set; }
 }

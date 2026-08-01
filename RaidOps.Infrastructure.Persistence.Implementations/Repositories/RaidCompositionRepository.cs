@@ -42,6 +42,50 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
     }
 
     /// <inheritdoc/>
+    public async Task<bool> SwapAssignmentsAsync(int raidEventId, int groupNumberA, int slotNumberA, int groupNumberB, int slotNumberB, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        var assignmentA = await context.RaidSlotAssignments.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.RaidEventId == raidEventId && a.GroupNumber == groupNumberA && a.SlotNumber == slotNumberA, cancellationToken);
+        var assignmentB = await context.RaidSlotAssignments.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.RaidEventId == raidEventId && a.GroupNumber == groupNumberB && a.SlotNumber == slotNumberB, cancellationToken);
+
+        if (assignmentA == null || assignmentB == null)
+            return false;
+
+        // Delete both rows first — the composite PK is (RaidEventId, GroupNumber, SlotNumber), so
+        // updating one row directly onto the other's still-occupied coordinate would violate it
+        // mid-transaction. Same delete-then-insert shape as AssignCharacterAsync.
+        await context.RaidSlotAssignments
+            .Where(a => a.RaidEventId == raidEventId
+                && ((a.GroupNumber == groupNumberA && a.SlotNumber == slotNumberA) || (a.GroupNumber == groupNumberB && a.SlotNumber == slotNumberB)))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        context.ChangeTracker.Clear();
+
+        assignmentA.GroupNumber = groupNumberB;
+        assignmentA.SlotNumber = slotNumberB;
+        assignmentB.GroupNumber = groupNumberA;
+        assignmentB.SlotNumber = slotNumberA;
+
+        context.RaidSlotAssignments.AddRange(assignmentA, assignmentB);
+        await context.SaveChangesAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> UpdateAssignmentSpecAsync(int raidEventId, int groupNumber, int slotNumber, int specId, CancellationToken cancellationToken = default)
+    {
+        var count = await context.RaidSlotAssignments
+            .Where(a => a.RaidEventId == raidEventId && a.GroupNumber == groupNumber && a.SlotNumber == slotNumber)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(a => a.SpecId, specId), cancellationToken);
+        return count > 0;
+    }
+
+    /// <inheritdoc/>
     public async Task<List<RaidSlotAssignment>> GetAssignmentsForEventAsync(int raidEventId, CancellationToken cancellationToken = default)
         => await context.RaidSlotAssignments
             .Where(a => a.RaidEventId == raidEventId)
@@ -53,8 +97,7 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
     public async Task<List<RaidSlotAssignment>> GetActiveAssignmentsForCharacterInGuildBranchAsync(int characterId, int guildBranchId, CancellationToken cancellationToken = default)
         => await context.RaidSlotAssignments
             .Where(a => a.CharacterId == characterId
-                && a.RaidEvent.GuildBranchId == guildBranchId
-                && a.RaidEvent.Status != RaidEventStatus.Cancelled)
+                && a.RaidEvent.GuildBranchId == guildBranchId)
             .Include(a => a.RaidEvent).ThenInclude(e => e.TargetZones)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -64,7 +107,6 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
     {
         var ids = await context.RaidSlotAssignments
             .Where(a => a.RaidEvent.GuildBranchId == guildBranchId
-                && a.RaidEvent.Status != RaidEventStatus.Cancelled
                 && a.RaidEvent.PublicationStatus == RaidPublicationStatus.Published
                 && a.RaidEvent.StartsAtUtc >= rangeStartUtc
                 && a.RaidEvent.StartsAtUtc <= rangeEndUtc)

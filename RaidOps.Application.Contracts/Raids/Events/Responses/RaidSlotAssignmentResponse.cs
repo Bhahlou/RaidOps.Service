@@ -34,4 +34,10 @@ public class RaidSlotAssignmentResponse
     /// read time so a declaration made after assignment still surfaces as a conflict in the UI.
     /// </summary>
     public required DayAvailabilityStatus AvailabilityStatus { get; set; }
+
+    /// <summary>The spec this character is playing for this assignment — defaults to their main raid spec when first assigned.</summary>
+    public required RaidSpecRefResponse Spec { get; set; }
+
+    /// <summary>Every raid spec this character has declared — lets the UI offer switching to any of them, not just the current one.</summary>
+    public required List<RaidSpecRefResponse> AvailableSpecs { get; set; }
 }

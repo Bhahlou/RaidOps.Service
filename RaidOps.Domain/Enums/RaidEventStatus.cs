@@ -10,7 +10,4 @@ public enum RaidEventStatus
 
     /// <summary>Already happened. Still counts toward lockout consumption (history).</summary>
     Completed = 1,
-
-    /// <summary>Cancelled — excluded from lockout consumption and from the "unassigned members" computation.</summary>
-    Cancelled = 2,
 }

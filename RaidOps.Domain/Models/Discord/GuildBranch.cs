@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Domain.Models.Discord;
@@ -54,6 +55,15 @@ public class GuildBranch
 
     /// <summary>UTC timestamp of when this branch was first activated on the guild.</summary>
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Blizzard API region this branch's realm sits in ("eu", "us", "kr", "tw") — determines which
+    /// <see cref="WeeklyLockoutSchedule"/> row applies for this branch's weekly raid resets. Set
+    /// manually by an officer (no reliable way to auto-detect it); <c>null</c> until configured,
+    /// in which case region-based lockout resolution is skipped rather than guessed.
+    /// </summary>
+    [MaxLength(4)]
+    public string? Region { get; set; }
 
     // ── Navigation ────────────────────────────────────────────────────────
 

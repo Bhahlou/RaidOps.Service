@@ -49,4 +49,11 @@ public interface IGuildBranchesRepository
         List<string> rosterRoleIds,
         List<string> officerRoleIds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the Blizzard API region for the given guild branch, used to resolve its weekly
+    /// raid-lockout schedule.
+    /// </summary>
+    /// <returns><c>true</c> if the branch existed and was updated; <c>false</c> if not found.</returns>
+    Task<bool> UpdateRegionAsync(int guildBranchId, string region, CancellationToken cancellationToken = default);
 }

@@ -45,6 +45,7 @@ public static class ResponseDetail
     public const string GuildBranchNotFound = nameof(GuildBranchNotFound);
     public const string GuildBranchNotActive = nameof(GuildBranchNotActive);
     public const string GuildBranchAlreadyActive = nameof(GuildBranchAlreadyActive);
+    public const string InvalidRegion = nameof(InvalidRegion);
 
     // ── Calendar ──────────────────────────────────────────────────────────
     public const string AvailabilityExceptionNotFound = nameof(AvailabilityExceptionNotFound);
@@ -55,9 +56,9 @@ public static class ResponseDetail
     public const string RaidZoneNotFound = nameof(RaidZoneNotFound);
     public const string RaidSeriesNotFound = nameof(RaidSeriesNotFound);
     public const string RaidEventNotFound = nameof(RaidEventNotFound);
-    public const string RaidEventCancelled = nameof(RaidEventCancelled);
-    public const string RaidEventHasAssignments = nameof(RaidEventHasAssignments);
     public const string SlotOccupied = nameof(SlotOccupied);
+    public const string SlotEmpty = nameof(SlotEmpty);
+    public const string BothSlotsMustBeOccupiedToSwap = nameof(BothSlotsMustBeOccupiedToSwap);
     public const string InvalidGroupOrSlotNumber = nameof(InvalidGroupOrSlotNumber);
     public const string CharacterNotOnRoster = nameof(CharacterNotOnRoster);
     public const string BranchMismatch = nameof(BranchMismatch);
@@ -65,4 +66,7 @@ public static class ResponseDetail
     public const string MemberDeclaredAbsent = nameof(MemberDeclaredAbsent);
     public const string RaidLockoutConflict = nameof(RaidLockoutConflict);
     public const string RaidEventAlreadyPublished = nameof(RaidEventAlreadyPublished);
+    public const string CharacterHasNoRaidSpec = nameof(CharacterHasNoRaidSpec);
+    public const string SpecNotAvailableForCharacter = nameof(SpecNotAvailableForCharacter);
+    public const string GridShrinkWouldOrphanAssignments = nameof(GridShrinkWouldOrphanAssignments);
 }

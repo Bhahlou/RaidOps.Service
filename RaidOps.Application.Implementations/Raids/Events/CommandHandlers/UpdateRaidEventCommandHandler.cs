@@ -12,7 +12,10 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// Handles <see cref="UpdateRaidEventCommand"/> by verifying officer access, validating the
 /// requested grid shape and target zones, then replacing the event's schedule and target-zone
 /// set. Works for both ad-hoc events and series-materialized occurrences — never mutates a
-/// parent series. Rejected once the event has been cancelled.
+/// parent series. Shrinking <see cref="UpdateRaidEventCommand.GroupCount"/>/<see cref="UpdateRaidEventCommand.SlotsPerGroup"/>
+/// below a coordinate that already has an assignment is rejected outright — the grid would
+/// otherwise keep an assignment the UI can never again render or unassign (no slot to click), and
+/// role counters would keep counting a character nobody can see anymore.
 /// </summary>
 public class UpdateRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
@@ -38,8 +41,8 @@ public class UpdateRaidEventCommandHandler(
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
-        if (existing.Status == RaidEventStatus.Cancelled)
-            return Result<CommandResponse>.Fail(ResponseDetail.RaidEventCancelled, "Cannot update a cancelled raid event.");
+        if (existing.Assignments.Any(a => a.GroupNumber > command.GroupCount || a.SlotNumber > command.SlotsPerGroup))
+            return Result<CommandResponse>.Fail(ResponseDetail.GridShrinkWouldOrphanAssignments, "Unassign every character outside the new grid size first.");
 
         var zones = await raidZoneRepository.GetByIdsAsync(distinctZoneIds, cancellationToken);
         if (zones.Count != distinctZoneIds.Count)

@@ -9,8 +9,7 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="DeleteRaidEventCommand"/> by verifying officer access and permanently
-/// removing a raid event — rejected once it has any slot assignments, since deleting those would
-/// silently erase attendance history; <c>CancelRaidEventCommand</c> should be used instead.
+/// removing a raid event — its slot assignments are cascade-deleted with it at the database level.
 /// </summary>
 public class DeleteRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
@@ -27,9 +26,6 @@ public class DeleteRaidEventCommandHandler(
         var existing = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildBranchId, cancellationToken);
         if (existing == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
-
-        if (existing.Assignments.Count > 0)
-            return Result<CommandResponse>.Fail(ResponseDetail.RaidEventHasAssignments, "Cancel the event instead of deleting it once it has assignments.");
 
         await raidEventRepository.DeleteAsync(command.EventId, command.GuildBranchId, cancellationToken);
 

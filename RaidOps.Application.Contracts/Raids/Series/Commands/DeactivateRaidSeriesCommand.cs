@@ -4,8 +4,10 @@ namespace RaidOps.Application.Contracts.Raids.Series.Commands;
 
 /// <summary>
 /// Stops future materialization of a recurring raid template, without altering the occurrences it
-/// already produced. The requesting user must hold <see cref="Domain.Enums.GuildAccessLevel.Officer"/>
-/// access on <see cref="GuildId"/>.
+/// already produced — unless <see cref="DeleteEmptyOccurrences"/> is set, which additionally bulk
+/// deletes the ones still empty and unpublished (draft, no assignments). Anything published or with
+/// roster history is always left untouched. The requesting user must hold
+/// <see cref="Domain.Enums.GuildAccessLevel.Officer"/> access on <see cref="GuildId"/>.
 /// </summary>
 public class DeactivateRaidSeriesCommand : ICommandRequest
 {
@@ -20,4 +22,7 @@ public class DeactivateRaidSeriesCommand : ICommandRequest
 
     /// <summary>ID of the series to deactivate. Set by the controller from the route, not from the request body.</summary>
     public int SeriesId { get; set; }
+
+    /// <summary>Also bulk deletes the series' already-materialized draft, zero-assignment occurrences.</summary>
+    public bool DeleteEmptyOccurrences { get; set; }
 }

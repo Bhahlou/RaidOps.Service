@@ -3,10 +3,9 @@ using RaidOps.Application.Contracts.CQRS;
 namespace RaidOps.Application.Contracts.Raids.Events.Commands;
 
 /// <summary>
-/// Permanently deletes a raid event that has no slot assignments (use
-/// <c>CancelRaidEventCommand</c> instead once assignments exist, to preserve history). The
-/// requesting user must hold <see cref="Domain.Enums.GuildAccessLevel.Officer"/> access on
-/// <see cref="GuildId"/>.
+/// Permanently deletes a raid event, including any slot assignments it has (cascade-deleted at the
+/// database level). The requesting user must hold <see cref="Domain.Enums.GuildAccessLevel.Officer"/>
+/// access on <see cref="GuildId"/>.
 /// </summary>
 public class DeleteRaidEventCommand : ICommandRequest
 {

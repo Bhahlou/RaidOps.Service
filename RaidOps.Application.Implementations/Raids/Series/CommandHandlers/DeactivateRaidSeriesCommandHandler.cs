@@ -9,11 +9,14 @@ namespace RaidOps.Application.Implementations.Raids.Series.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="DeactivateRaidSeriesCommand"/> by verifying officer access and stopping
-/// future materialization — occurrences already produced by the series are left untouched.
+/// future materialization. Occurrences already produced by the series are left untouched, unless
+/// <see cref="DeactivateRaidSeriesCommand.DeleteEmptyOccurrences"/> asks to also bulk delete the
+/// ones still empty and unpublished (see <see cref="IRaidEventRepository.DeleteEmptyDraftOccurrencesForSeriesAsync"/>).
 /// </summary>
 public class DeactivateRaidSeriesCommandHandler(
     IGuildAccessService guildAccessService,
     IRaidSeriesRepository raidSeriesRepository,
+    IRaidEventRepository raidEventRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<DeactivateRaidSeriesCommand>
 {
     /// <inheritdoc/>
@@ -27,13 +30,17 @@ public class DeactivateRaidSeriesCommandHandler(
         if (!deactivated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidSeriesNotFound, $"Raid series '{command.SeriesId}' does not exist.");
 
+        var deletedCount = 0;
+        if (command.DeleteEmptyOccurrences)
+            deletedCount = await raidEventRepository.DeleteEmptyDraftOccurrencesForSeriesAsync(command.SeriesId, command.GuildBranchId, cancellationToken);
+
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.RaidSeriesDeactivated,
-            new Dictionary<string, string> { ["seriesId"] = command.SeriesId.ToString() },
+            new Dictionary<string, string> { ["seriesId"] = command.SeriesId.ToString(), ["deletedEmptyOccurrences"] = deletedCount.ToString() },
             cancellationToken);
 
-        return Result<CommandResponse>.Ok(new CommandResponse("Raid series deactivated successfully."));
+        return Result<CommandResponse>.Ok(new CommandResponse("Raid series deactivated successfully.", new { deletedCount }));
     }
 }

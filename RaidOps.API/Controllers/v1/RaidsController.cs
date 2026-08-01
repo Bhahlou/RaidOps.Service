@@ -7,6 +7,8 @@ using RaidOps.Application.Contracts.Raids.Assignments.Commands;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Raids.Events.Queries;
 using RaidOps.Application.Contracts.Raids.Events.Responses;
+using RaidOps.Application.Contracts.Raids.Lockout.Queries;
+using RaidOps.Application.Contracts.Raids.Lockout.Responses;
 using RaidOps.Application.Contracts.Raids.Roster.Queries;
 using RaidOps.Application.Contracts.Raids.Roster.Responses;
 using RaidOps.Application.Contracts.Raids.Series.Commands;
@@ -43,6 +45,21 @@ public class RaidsController(
 
         var result = await QueryDispatcher.DispatchAsync<GetRaidZonesForBranchQuery, List<RaidZoneResponse>>(
             new GetRaidZonesForBranchQuery { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>Returns the current weekly raid-lockout window of the guild branch, or a fully-null response if its region isn't configured yet.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/lockout-week")]
+    public async Task<IActionResult> GetLockoutWeek(string guildId, int guildBranchId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildBranchLockoutWeekQuery, GuildBranchLockoutWeekResponse>(
+            new GetGuildBranchLockoutWeekQuery { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId },
             cancellationToken);
 
         return ToActionResult(result);
@@ -96,18 +113,20 @@ public class RaidsController(
         return ToActionResult(result);
     }
 
-    /// <summary>Stops future materialization of a recurring raid series without touching its past occurrences.</summary>
+    /// <summary>Stops future materialization of a recurring raid series, optionally bulk-deleting its empty unpublished occurrences too.</summary>
     [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/series/{seriesId:int}/deactivate")]
-    public async Task<IActionResult> DeactivateSeries(string guildId, int guildBranchId, int seriesId, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeactivateSeries(string guildId, int guildBranchId, int seriesId, [FromBody] DeactivateRaidSeriesCommand command, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
-        var result = await CommandDispatcher.DispatchAsync(
-            new DeactivateRaidSeriesCommand { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, SeriesId = seriesId },
-            cancellationToken);
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+        command.SeriesId = seriesId;
 
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
         return ToActionResult(result);
     }
 
@@ -184,7 +203,7 @@ public class RaidsController(
         return ToActionResult(result);
     }
 
-    /// <summary>Permanently deletes a raid event that has no slot assignments.</summary>
+    /// <summary>Permanently deletes a raid event, including any slot assignments it has.</summary>
     [HttpDelete("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}")]
     public async Task<IActionResult> DeleteEvent(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
     {
@@ -194,21 +213,6 @@ public class RaidsController(
 
         var result = await CommandDispatcher.DispatchAsync(
             new DeleteRaidEventCommand { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, EventId = eventId },
-            cancellationToken);
-
-        return ToActionResult(result);
-    }
-
-    /// <summary>Cancels a raid event, preserving its assignments and history.</summary>
-    [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/cancel")]
-    public async Task<IActionResult> CancelEvent(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
-    {
-        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        if (discordId == null)
-            return Unauthorized();
-
-        var result = await CommandDispatcher.DispatchAsync(
-            new CancelRaidEventCommand { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, EventId = eventId },
             cancellationToken);
 
         return ToActionResult(result);
@@ -246,9 +250,43 @@ public class RaidsController(
         return ToActionResult(result);
     }
 
+    /// <summary>Swaps the characters assigned at two (group, slot) coordinates of the same raid event's grid.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/slots/swap")]
+    public async Task<IActionResult> SwapSlotAssignments(string guildId, int guildBranchId, int eventId, [FromBody] SwapSlotAssignmentsCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+        command.EventId = eventId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
     /// <summary>Clears a (group, slot) coordinate of a raid event's grid.</summary>
     [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/slots/unassign")]
     public async Task<IActionResult> UnassignSlot(string guildId, int guildBranchId, int eventId, [FromBody] UnassignSlotCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+        command.EventId = eventId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Changes which of a character's declared raid specs a slot assignment counts as.</summary>
+    [HttpPatch("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/slots/spec")]
+    public async Task<IActionResult> UpdateSlotAssignmentSpec(string guildId, int guildBranchId, int eventId, [FromBody] UpdateSlotAssignmentSpecCommand command, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)

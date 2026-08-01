@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using RaidOps.Domain.Models.Reference;
 using WowCharacter = RaidOps.Domain.Models.Character.Character;
 
 namespace RaidOps.Domain.Models.Raids;
@@ -27,6 +28,13 @@ public class RaidSlotAssignment
     public int CharacterId { get; set; }
 
     /// <summary>
+    /// FK to the spec this character is playing for this assignment — defaults to the character's
+    /// main raid spec when first assigned, but the officer can switch it to any of the character's
+    /// other declared raid specs afterwards (e.g. an off-spec is needed for this particular raid).
+    /// </summary>
+    public int SpecId { get; set; }
+
+    /// <summary>
     /// Discord snowflake ID of the player who owns <see cref="CharacterId"/>, denormalized from
     /// <see cref="Character.UserDiscordId"/> at assignment time so a DB-level unique index on
     /// (<see cref="RaidEventId"/>, <see cref="AssignedPlayerDiscordId"/>) can enforce "one character
@@ -49,4 +57,7 @@ public class RaidSlotAssignment
 
     /// <summary>The assigned character.</summary>
     public virtual WowCharacter Character { get; set; } = null!;
+
+    /// <summary>The spec this character is playing for this assignment.</summary>
+    public virtual Spec Spec { get; set; } = null!;
 }

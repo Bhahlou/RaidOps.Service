@@ -50,4 +50,12 @@ public class RaidEventResponse
 
     /// <summary>The sparse slot assignments for this event.</summary>
     public required List<RaidSlotAssignmentResponse> Assignments { get; set; }
+
+    /// <summary>
+    /// Discord IDs of every roster player (assigned or not) whose declared availability would
+    /// reject an assignment to this event — mirrors <c>AssignCharacterToSlotCommandHandler</c>'s
+    /// absence check exactly (hard <c>Absent</c>, or <c>Partial</c> outside the event's start time)
+    /// so the front end can show a drop target as blocked before the drag is even released.
+    /// </summary>
+    public required List<string> AbsentPlayerDiscordIds { get; set; }
 }
