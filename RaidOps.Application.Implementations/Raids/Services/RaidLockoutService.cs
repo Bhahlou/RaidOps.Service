@@ -26,7 +26,14 @@ public class RaidLockoutService : IRaidLockoutService
         while (true)
         {
             var cadence = Math.Max(1, CadenceAt(baselineCadenceDays, overrides, cursor));
-            var nextBreakpoint = breakpoints.Cast<DateTime?>().FirstOrDefault(b => b > cursor);
+
+            // Deliberately not `breakpoints.Cast<DateTime?>().FirstOrDefault(b => b > cursor)`:
+            // that lifts `>` to a nullable comparison whose "operand is null" branch can never
+            // execute (every cast element is a real DateTime), which coverage tooling flags as a
+            // permanently half-covered line. Plain non-nullable comparison here, nullable only at
+            // the boundary where "no breakpoint found" actually needs representing.
+            var laterBreakpoints = breakpoints.Where(b => b > cursor).ToList();
+            var nextBreakpoint = laterBreakpoints.Count > 0 ? laterBreakpoints[0] : (DateTime?)null;
             var ceiling = nextBreakpoint.HasValue && nextBreakpoint.Value < utcInstant ? nextBreakpoint.Value : utcInstant;
 
             cursor = Advance(cursor, ceiling, cadence);
