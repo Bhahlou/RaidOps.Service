@@ -3,6 +3,7 @@ using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
@@ -86,6 +87,35 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="CharacterRaidSpec"/> join table.</summary>
     public DbSet<CharacterRaidSpec> CharacterRaidSpecs => Set<CharacterRaidSpec>();
+
+    // ── Raids ─────────────────────────────────────────────────────────────
+
+    /// <summary>Gets the <see cref="RaidZone"/> lookup table (Karazhan, SSC, Black Temple, …).</summary>
+    public DbSet<RaidZone> RaidZones => Set<RaidZone>();
+
+    /// <summary>Gets the <see cref="WeeklyLockoutSchedule"/> lookup table (one row per Blizzard API region).</summary>
+    public DbSet<WeeklyLockoutSchedule> WeeklyLockoutSchedules => Set<WeeklyLockoutSchedule>();
+
+    /// <summary>Gets the <see cref="RaidLockoutCadenceOverride"/> table (time-bound lockout corrections).</summary>
+    public DbSet<RaidLockoutCadenceOverride> RaidLockoutCadenceOverrides => Set<RaidLockoutCadenceOverride>();
+
+    /// <summary>Gets the <see cref="GuildRaidZoneLockout"/> table (per-guild lockout baseline corrections, e.g. region reset day).</summary>
+    public DbSet<GuildRaidZoneLockout> GuildRaidZoneLockouts => Set<GuildRaidZoneLockout>();
+
+    /// <summary>Gets the <see cref="RaidSeries"/> table (recurring raid templates).</summary>
+    public DbSet<RaidSeries> RaidSeries => Set<RaidSeries>();
+
+    /// <summary>Gets the <see cref="RaidSeriesZone"/> join table.</summary>
+    public DbSet<RaidSeriesZone> RaidSeriesZones => Set<RaidSeriesZone>();
+
+    /// <summary>Gets the <see cref="RaidEvent"/> table (concrete raid occurrences).</summary>
+    public DbSet<RaidEvent> RaidEvents => Set<RaidEvent>();
+
+    /// <summary>Gets the <see cref="RaidEventZone"/> join table.</summary>
+    public DbSet<RaidEventZone> RaidEventZones => Set<RaidEventZone>();
+
+    /// <summary>Gets the <see cref="RaidSlotAssignment"/> table (sparse group/slot grid assignments).</summary>
+    public DbSet<RaidSlotAssignment> RaidSlotAssignments => Set<RaidSlotAssignment>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -370,6 +400,153 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne(s => s.Class)
             .WithMany(c => c.Specs)
             .HasForeignKey(s => s.ClassId);
+
+        ConfigureRaidRelationships(modelBuilder);
+    }
+
+    /// <summary>Configures the raid builder entities: composite keys, cascade rules, and indexes.</summary>
+    private static void ConfigureRaidRelationships(ModelBuilder modelBuilder)
+    {
+        // RaidZone → Expansion (reference data, no back-nav on Expansion)
+        modelBuilder.Entity<RaidZone>()
+            .HasOne(z => z.Expansion)
+            .WithMany()
+            .HasForeignKey(z => z.ExpansionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RaidLockoutCadenceOverride → RaidZone; overrides are removed along with their zone (reference data cleanup only)
+        modelBuilder.Entity<RaidLockoutCadenceOverride>()
+            .HasOne(o => o.RaidZone)
+            .WithMany(z => z.LockoutOverrides)
+            .HasForeignKey(o => o.RaidZoneId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidLockoutCadenceOverride>()
+            .HasIndex(o => new { o.RaidZoneId, o.EffectiveFrom });
+
+        // GuildRaidZoneLockout — composite PK (GuildId, RaidZoneId); per-guild lockout baseline correction
+        modelBuilder.Entity<GuildRaidZoneLockout>()
+            .HasKey(l => new { l.GuildId, l.RaidZoneId });
+
+        modelBuilder.Entity<GuildRaidZoneLockout>()
+            .HasOne(l => l.Guild)
+            .WithMany()
+            .HasForeignKey(l => l.GuildId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GuildRaidZoneLockout>()
+            .HasOne(l => l.RaidZone)
+            .WithMany()
+            .HasForeignKey(l => l.RaidZoneId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RaidSeries → Guild/GuildBranch
+        modelBuilder.Entity<RaidSeries>()
+            .HasOne(s => s.Guild)
+            .WithMany()
+            .HasForeignKey(s => s.GuildId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidSeries>()
+            .HasOne(s => s.GuildBranch)
+            .WithMany()
+            .HasForeignKey(s => s.GuildBranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidSeries>()
+            .HasIndex(s => s.GuildId);
+
+        modelBuilder.Entity<RaidSeries>()
+            .HasIndex(s => s.GuildBranchId);
+
+        // RaidSeriesZone — composite PK (RaidSeriesId, RaidZoneId); deleting a series drops its default-zone rows
+        modelBuilder.Entity<RaidSeriesZone>()
+            .HasKey(sz => new { sz.RaidSeriesId, sz.RaidZoneId });
+
+        modelBuilder.Entity<RaidSeriesZone>()
+            .HasOne(sz => sz.RaidSeries)
+            .WithMany(s => s.DefaultZones)
+            .HasForeignKey(sz => sz.RaidSeriesId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidSeriesZone>()
+            .HasOne(sz => sz.RaidZone)
+            .WithMany()
+            .HasForeignKey(sz => sz.RaidZoneId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RaidEvent → Guild/GuildBranch/RaidSeries — a deleted/deactivated series never takes its
+        // historical events down with it, so RaidSeriesId is set null instead of cascading.
+        modelBuilder.Entity<RaidEvent>()
+            .HasOne(e => e.Guild)
+            .WithMany()
+            .HasForeignKey(e => e.GuildId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidEvent>()
+            .HasOne(e => e.GuildBranch)
+            .WithMany()
+            .HasForeignKey(e => e.GuildBranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidEvent>()
+            .HasOne(e => e.RaidSeries)
+            .WithMany(s => s.Events)
+            .HasForeignKey(e => e.RaidSeriesId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<RaidEvent>()
+            .HasIndex(e => new { e.GuildId, e.StartsAtUtc });
+
+        modelBuilder.Entity<RaidEvent>()
+            .HasIndex(e => new { e.GuildBranchId, e.StartsAtUtc });
+
+        // RaidEventZone — composite PK (RaidEventId, RaidZoneId); deleting an event drops its target-zone rows
+        modelBuilder.Entity<RaidEventZone>()
+            .HasKey(ez => new { ez.RaidEventId, ez.RaidZoneId });
+
+        modelBuilder.Entity<RaidEventZone>()
+            .HasOne(ez => ez.RaidEvent)
+            .WithMany(e => e.TargetZones)
+            .HasForeignKey(ez => ez.RaidEventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidEventZone>()
+            .HasOne(ez => ez.RaidZone)
+            .WithMany()
+            .HasForeignKey(ez => ez.RaidZoneId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RaidSlotAssignment — composite PK (RaidEventId, GroupNumber, SlotNumber); deleting an event drops its assignments
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasKey(a => new { a.RaidEventId, a.GroupNumber, a.SlotNumber });
+
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasOne(a => a.RaidEvent)
+            .WithMany(e => e.Assignments)
+            .HasForeignKey(a => a.RaidEventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasOne(a => a.Character)
+            .WithMany()
+            .HasForeignKey(a => a.CharacterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasOne(a => a.Spec)
+            .WithMany()
+            .HasForeignKey(a => a.SpecId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Defense in depth: one character per event, and one player (across all their characters) per event.
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasIndex(a => new { a.RaidEventId, a.CharacterId })
+            .IsUnique();
+
+        modelBuilder.Entity<RaidSlotAssignment>()
+            .HasIndex(a => new { a.RaidEventId, a.AssignedPlayerDiscordId })
+            .IsUnique();
     }
 
     // ── Static seed data ──────────────────────────────────────────────────
@@ -381,6 +558,8 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         SeedRaces(modelBuilder);
         SeedClasses(modelBuilder);
         SeedSpecs(modelBuilder);
+        SeedRaidZones(modelBuilder);
+        SeedWeeklyLockoutSchedules(modelBuilder);
     }
 
     private static void SeedExpansions(ModelBuilder modelBuilder)
@@ -537,6 +716,39 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new Spec { Id = 1467, Name = "Devastation",   Role = SpecRole.Dps,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_devastation.jpg" },
             new Spec { Id = 1468, Name = "Preservation",  Role = SpecRole.Healer, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_preservation.jpg" },
             new Spec { Id = 1473, Name = "Augmentation",  Role = SpecRole.Dps,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_augmentation.jpg" }
+        );
+    }
+
+    private static void SeedRaidZones(ModelBuilder modelBuilder)
+    {
+        // All 8 zones use ExpansionId = 2 (TBC, per Branch.Id = 4 "Classic Anniversary"). None sets
+        // LockoutCadenceDays/LockoutAnchorUtc — every one of them is a plain weekly reset, so they
+        // defer to their guild branch's WeeklyLockoutSchedule (see SeedWeeklyLockoutSchedules).
+        // Only zones with an independent cadence (e.g. Vanilla's Zul'Gurub/AQ20 every 3 days,
+        // Onyxia every 5) need those two fields set.
+        modelBuilder.Entity<RaidZone>().HasData(
+            new RaidZone { Id = 1, Name = "Karazhan",            ShortCode = "Kara", ExpansionId = 2, GroupCount = 2, SlotsPerGroup = 5, SortOrder = 1 },
+            new RaidZone { Id = 2, Name = "Gruul's Lair",        ShortCode = "Gruul", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 2 },
+            new RaidZone { Id = 3, Name = "Magtheridon's Lair",  ShortCode = "Mag", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 3 },
+            new RaidZone { Id = 4, Name = "Serpentshrine Cavern",ShortCode = "SSC", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 4 },
+            new RaidZone { Id = 5, Name = "The Eye",             ShortCode = "TK", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 5 },
+            new RaidZone { Id = 6, Name = "Mount Hyjal",         ShortCode = "Hyjal", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 6 },
+            new RaidZone { Id = 7, Name = "Black Temple",        ShortCode = "BT", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 7 },
+            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 8 }
+        );
+    }
+
+    private static void SeedWeeklyLockoutSchedules(ModelBuilder modelBuilder)
+    {
+        // Anchors are real, verified resets at the schedule Blizzard has used since the EU time
+        // changed from 08:00 CET to 05:00 CET (= 04:00 UTC) in November 2022 — any correct
+        // Wednesday/Tuesday at that UTC hour works, the exact date is otherwise arbitrary. Anchored
+        // in UTC deliberately (not local server time) so a DST rule change never shifts the computed
+        // reset instant. "us" also covers Latin America and Oceania — Blizzard's own API already
+        // buckets them together.
+        modelBuilder.Entity<WeeklyLockoutSchedule>().HasData(
+            new WeeklyLockoutSchedule { Region = "eu", AnchorUtc = new DateTime(2023, 1, 4, 4, 0, 0, DateTimeKind.Utc), CadenceDays = 7 },
+            new WeeklyLockoutSchedule { Region = "us", AnchorUtc = new DateTime(2023, 1, 3, 15, 0, 0, DateTimeKind.Utc), CadenceDays = 7 }
         );
     }
 }

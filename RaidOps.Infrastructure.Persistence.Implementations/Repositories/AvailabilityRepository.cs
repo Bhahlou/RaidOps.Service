@@ -91,4 +91,25 @@ public class AvailabilityRepository(RaidOpsDbContext context) : IAvailabilityRep
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <inheritdoc/>
+    public async Task<List<AvailabilityDeclaration>> GetExceptionsOverlappingForUsersAsync(IEnumerable<string> userDiscordIds, DateOnly rangeStart, DateOnly rangeEnd, CancellationToken cancellationToken = default)
+    {
+        var idList = userDiscordIds.ToList();
+        return await context.AvailabilityExceptions
+            .Where(e => idList.Contains(e.UserDiscordId) && e.StartDate <= rangeEnd && e.EndDate >= rangeStart)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<List<RecurringAvailabilityPattern>> GetPatternsForUsersAsync(IEnumerable<string> userDiscordIds, CancellationToken cancellationToken = default)
+    {
+        var idList = userDiscordIds.ToList();
+        return await context.RecurringAvailabilityPatterns
+            .Where(p => idList.Contains(p.UserDiscordId))
+            .Include(p => p.Days)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
 }

@@ -212,6 +212,25 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
     }
 
     /// <inheritdoc/>
+    public async Task<List<CharacterRaidSpec>> GetRaidSpecsAsync(int characterId, CancellationToken cancellationToken = default)
+        => await context.CharacterRaidSpecs
+            .Where(rs => rs.CharacterId == characterId)
+            .Include(rs => rs.Spec)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<List<CharacterRaidSpec>> GetRaidSpecsForCharactersAsync(IEnumerable<int> characterIds, CancellationToken cancellationToken = default)
+    {
+        var idList = characterIds.ToList();
+        return await context.CharacterRaidSpecs
+            .Where(rs => idList.Contains(rs.CharacterId))
+            .Include(rs => rs.Spec)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task ActivateAsync(IEnumerable<int> characterIds, string userDiscordId, CancellationToken cancellationToken = default)
     {
         var ids = characterIds.ToList();

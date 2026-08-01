@@ -29,4 +29,11 @@ public enum NotificationType
     /// with every event left off, which is a legitimate steady state.
     /// </summary>
     AbsenceNotificationsNotConfigured = 3,
+
+    /// <summary>
+    /// The user is an admin of a guild that has at least one active
+    /// <see cref="Models.Discord.GuildBranch"/> with no <see cref="Models.Discord.GuildBranch.Region"/>
+    /// set yet — without it, the weekly raid-lockout reset window can't be resolved for that branch.
+    /// </summary>
+    BranchRegionNotConfigured = 4,
 }

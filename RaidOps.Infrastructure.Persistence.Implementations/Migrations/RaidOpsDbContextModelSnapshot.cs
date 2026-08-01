@@ -450,6 +450,10 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<string>("Region")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
                     b.Property<int?>("RosterMode")
                         .HasColumnType("integer");
 
@@ -594,6 +598,420 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("GuildId");
 
                     b.ToTable("UserGuilds");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.GuildRaidZoneLockout", b =>
+                {
+                    b.Property<string>("GuildId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("RaidZoneId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LockoutAnchorUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("LockoutCadenceDays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("GuildId", "RaidZoneId");
+
+                    b.HasIndex("RaidZoneId");
+
+                    b.ToTable("GuildRaidZoneLockouts");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("GroupCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildBranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GuildId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("PublicationStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedByDiscordId")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RaidSeriesId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SignupMode")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlotsPerGroup")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaidSeriesId");
+
+                    b.HasIndex("GuildBranchId", "StartsAtUtc");
+
+                    b.HasIndex("GuildId", "StartsAtUtc");
+
+                    b.ToTable("RaidEvents");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEventZone", b =>
+                {
+                    b.Property<int>("RaidEventId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RaidZoneId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RaidEventId", "RaidZoneId");
+
+                    b.HasIndex("RaidZoneId");
+
+                    b.ToTable("RaidEventZones");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidLockoutCadenceOverride", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CadenceDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveUntil")
+                        .HasColumnType("date");
+
+                    b.Property<int>("RaidZoneId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaidZoneId", "EffectiveFrom");
+
+                    b.ToTable("RaidLockoutCadenceOverrides");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeries", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("GroupCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildBranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GuildId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("RecurrenceDayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RecurrenceIntervalWeeks")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("RecurrenceStartTimeLocal")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<int>("SignupMode")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlotsPerGroup")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildBranchId");
+
+                    b.HasIndex("GuildId");
+
+                    b.ToTable("RaidSeries");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeriesZone", b =>
+                {
+                    b.Property<int>("RaidSeriesId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RaidZoneId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RaidSeriesId", "RaidZoneId");
+
+                    b.HasIndex("RaidZoneId");
+
+                    b.ToTable("RaidSeriesZones");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSlotAssignment", b =>
+                {
+                    b.Property<int>("RaidEventId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GroupNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlotNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssignedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AssignedPlayerDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("CharacterId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SpecId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RaidEventId", "GroupNumber", "SlotNumber");
+
+                    b.HasIndex("CharacterId");
+
+                    b.HasIndex("SpecId");
+
+                    b.HasIndex("RaidEventId", "AssignedPlayerDiscordId")
+                        .IsUnique();
+
+                    b.HasIndex("RaidEventId", "CharacterId")
+                        .IsUnique();
+
+                    b.ToTable("RaidSlotAssignments");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidZone", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExpansionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GroupCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IconUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("LockoutAnchorUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("LockoutCadenceDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ShortCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("SlotsPerGroup")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpansionId");
+
+                    b.ToTable("RaidZones");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            ExpansionId = 2,
+                            GroupCount = 2,
+                            Name = "Karazhan",
+                            ShortCode = "Kara",
+                            SlotsPerGroup = 5,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "Gruul's Lair",
+                            ShortCode = "Gruul",
+                            SlotsPerGroup = 5,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "Magtheridon's Lair",
+                            ShortCode = "Mag",
+                            SlotsPerGroup = 5,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "Serpentshrine Cavern",
+                            ShortCode = "SSC",
+                            SlotsPerGroup = 5,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 5,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "The Eye",
+                            ShortCode = "TK",
+                            SlotsPerGroup = 5,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 6,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "Mount Hyjal",
+                            ShortCode = "Hyjal",
+                            SlotsPerGroup = 5,
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 7,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "Black Temple",
+                            ShortCode = "BT",
+                            SlotsPerGroup = 5,
+                            SortOrder = 7
+                        },
+                        new
+                        {
+                            Id = 8,
+                            ExpansionId = 2,
+                            GroupCount = 5,
+                            Name = "Sunwell Plateau",
+                            ShortCode = "SWP",
+                            SlotsPerGroup = 5,
+                            SortOrder = 8
+                        });
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.WeeklyLockoutSchedule", b =>
+                {
+                    b.Property<string>("Region")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
+                    b.Property<DateTime>("AnchorUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CadenceDays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Region");
+
+                    b.ToTable("WeeklyLockoutSchedules");
+
+                    b.HasData(
+                        new
+                        {
+                            Region = "eu",
+                            AnchorUtc = new DateTime(2023, 1, 4, 4, 0, 0, 0, DateTimeKind.Utc),
+                            CadenceDays = 7
+                        },
+                        new
+                        {
+                            Region = "us",
+                            AnchorUtc = new DateTime(2023, 1, 3, 15, 0, 0, 0, DateTimeKind.Utc),
+                            CadenceDays = 7
+                        });
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Branch", b =>
@@ -1765,6 +2183,157 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.GuildRaidZoneLockout", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidZone", "RaidZone")
+                        .WithMany()
+                        .HasForeignKey("RaidZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Guild");
+
+                    b.Navigation("RaidZone");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
+                        .WithMany()
+                        .HasForeignKey("GuildBranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidSeries", "RaidSeries")
+                        .WithMany("Events")
+                        .HasForeignKey("RaidSeriesId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Guild");
+
+                    b.Navigation("GuildBranch");
+
+                    b.Navigation("RaidSeries");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEventZone", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidEvent", "RaidEvent")
+                        .WithMany("TargetZones")
+                        .HasForeignKey("RaidEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidZone", "RaidZone")
+                        .WithMany()
+                        .HasForeignKey("RaidZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RaidEvent");
+
+                    b.Navigation("RaidZone");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidLockoutCadenceOverride", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidZone", "RaidZone")
+                        .WithMany("LockoutOverrides")
+                        .HasForeignKey("RaidZoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RaidZone");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeries", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
+                        .WithMany()
+                        .HasForeignKey("GuildBranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Guild");
+
+                    b.Navigation("GuildBranch");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeriesZone", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidSeries", "RaidSeries")
+                        .WithMany("DefaultZones")
+                        .HasForeignKey("RaidSeriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidZone", "RaidZone")
+                        .WithMany()
+                        .HasForeignKey("RaidZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RaidSeries");
+
+                    b.Navigation("RaidZone");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSlotAssignment", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Character.Character", "Character")
+                        .WithMany()
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidEvent", "RaidEvent")
+                        .WithMany("Assignments")
+                        .HasForeignKey("RaidEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spec", "Spec")
+                        .WithMany()
+                        .HasForeignKey("SpecId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Character");
+
+                    b.Navigation("RaidEvent");
+
+                    b.Navigation("Spec");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidZone", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "Expansion")
+                        .WithMany()
+                        .HasForeignKey("ExpansionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Expansion");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Branch", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "CurrentExpansion")
@@ -1828,6 +2397,25 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.User", b =>
                 {
                     b.Navigation("UserGuilds");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
+                {
+                    b.Navigation("Assignments");
+
+                    b.Navigation("TargetZones");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSeries", b =>
+                {
+                    b.Navigation("DefaultZones");
+
+                    b.Navigation("Events");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidZone", b =>
+                {
+                    b.Navigation("LockoutOverrides");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.WowClass", b =>

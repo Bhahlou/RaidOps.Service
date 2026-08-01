@@ -41,6 +41,7 @@ public class GetGuildBranchesQueryHandler(
             RosterMode = b.RosterMode,
             RosterRoleIds = b.RosterRoleIds,
             OfficerRoleIds = b.OfficerRoleIds,
+            Region = b.Region,
         }).ToList();
 
         return Result<List<GuildBranchResponse>>.Ok(response);
