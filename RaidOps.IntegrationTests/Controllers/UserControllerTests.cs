@@ -141,7 +141,9 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: ["999000000000000001"]));
+            var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: ["999000000000000001"]);
+            branch.Region = "eu";
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             db.GuildNotificationSettings.Add(new GuildNotificationSetting
             {
@@ -192,7 +194,9 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             guild.Language = "en";
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(guild);
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId));
+            var branch = TestDataBuilder.CreateGuildBranch(guildId);
+            branch.Region = "eu";
+            db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             db.GuildNotificationSettings.Add(new GuildNotificationSetting
             {
