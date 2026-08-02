@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.5.0...v1.5.1) (2026-08-02)
+
+
+### 🐛 Bug Fixes
+
+* Fall back to Discord username when global_name is null on signup ([#64](https://github.com/Bhahlou/RaidOps.Service/issues/64)) ([b01e52d](https://github.com/Bhahlou/RaidOps.Service/commit/b01e52d87612962cae64e0e7184fb1bf0ba12ed6))
+
 ## [1.5.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.4.0...v1.5.0) (2026-08-01)
 
 
