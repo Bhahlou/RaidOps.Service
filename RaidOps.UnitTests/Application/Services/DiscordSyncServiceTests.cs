@@ -69,6 +69,23 @@ public class DiscordSyncServiceTests
     }
 
     [Fact]
+    public async Task SignupSync_UserWithNoGlobalName_UsesUsernameAsName()
+    {
+        // Regression: accounts that never set a Discord display name return global_name: null,
+        // which must not end up as a null User.Name (violates the DB NOT NULL constraint).
+        _discord.Setup(d => d.GetCurrentUserAsync(AccessToken, default))
+            .ReturnsAsync(new GetDiscordUserInfoResponse { Id = DiscordId, Username = "sion29270", GlobalName = null, Avatar = null });
+
+        _users.Setup(u => u.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync((User?)null);
+        _users.Setup(u => u.AddAsync(It.IsAny<User>(), default))
+            .ReturnsAsync((User u, CancellationToken _) => u);
+
+        var result = await _sut.SyncUserAndGuildsAsync(DiscordId, AccessToken, RefreshToken);
+
+        result.Name.Should().Be("sion29270");
+    }
+
+    [Fact]
     public async Task SignupSync_UpsertsGuildsAndReplacesUserGuilds()
     {
         _users.Setup(u => u.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync((User?)null);
