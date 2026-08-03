@@ -2,6 +2,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -15,6 +16,8 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 public class CreateAdhocRaidEventCommandHandler(
     IRaidGridAndZoneValidator gridAndZoneValidator,
     IRaidEventRepository raidEventRepository,
+    IRaidZoneRepository raidZoneRepository,
+    IGuildsRepository guildsRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<CreateAdhocRaidEventCommand>
 {
     /// <inheritdoc/>
@@ -47,11 +50,20 @@ public class CreateAdhocRaidEventCommandHandler(
 
         var created = await raidEventRepository.AddAsync(raidEvent, cancellationToken);
 
+        var zones = await raidZoneRepository.GetByIdsAsync(distinctZoneIds, cancellationToken);
+        var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
+        var startsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(command.StartsAtUtc, guild?.Timezone);
+
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.RaidEventCreated,
-            new Dictionary<string, string> { ["eventName"] = command.Name },
+            new Dictionary<string, string>
+            {
+                ["eventName"] = command.Name,
+                ["startsAtLocal"] = startsAtLocal.ToString("yyyy-MM-dd HH:mm"),
+                ["raidZoneNames"] = string.Join(", ", zones.Select(z => z.Name)),
+            },
             cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event created successfully.", new { created.Id }));

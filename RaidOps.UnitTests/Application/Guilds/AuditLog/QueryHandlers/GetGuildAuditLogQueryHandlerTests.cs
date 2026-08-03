@@ -233,6 +233,20 @@ public class GetGuildAuditLogQueryHandlerTests
     [InlineData(GuildAuditAction.BranchActivated, GuildAuditCategory.Branches)]
     [InlineData(GuildAuditAction.BranchDeactivated, GuildAuditCategory.Branches)]
     [InlineData(GuildAuditAction.BranchRosterSettingsUpdated, GuildAuditCategory.Branches)]
+    [InlineData(GuildAuditAction.NotificationSettingsReset, GuildAuditCategory.Settings)]
+    [InlineData(GuildAuditAction.RaidSeriesCreated, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidSeriesUpdated, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidSeriesDeactivated, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidEventCreated, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidEventUpdated, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidEventCancelled, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidEventDeleted, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.RaidEventPublished, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.BranchRegionUpdated, GuildAuditCategory.Branches)]
+    [InlineData(GuildAuditAction.SlotAssigned, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.SlotUnassigned, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.SlotsSwapped, GuildAuditCategory.Raids)]
+    [InlineData(GuildAuditAction.SlotAssignmentSpecChanged, GuildAuditCategory.Raids)]
     public async Task HandleAsync_MapsActionTypeToExpectedCategory(GuildAuditAction actionType, GuildAuditCategory expectedCategory)
     {
         SetupAdmin();

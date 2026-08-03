@@ -11,4 +11,5 @@ internal class NoOpDiscordBotService : IDiscordBotService
 {
     public IGuildService Guilds { get; } = new NoOpGuildService();
     public IMessageService Messages => throw new NotSupportedException("Discord bot is not available in integration tests.");
+    public IEmojiService Emojis { get; } = new NoOpEmojiService();
 }

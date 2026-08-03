@@ -14,16 +14,17 @@ namespace RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 /// branch, grid bounds/occupancy, one-character-per-player, declared absence, lockout conflict) so
 /// the first failing rule always produces the same, predictable error for a given bad request. A
 /// drop onto an already-occupied slot is rejected outright — see
-/// <see cref="SwapSlotAssignmentsCommandHandler"/> for exchanging two occupied slots.
+/// <see cref="SwapSlotAssignmentsCommandHandler"/> for exchanging two occupied slots. Composition
+/// changes on an already-published event are audit-logged and posted to Discord (the "raid
+/// composition changes" family); the same edits on a still-draft event stay silent.
 /// </summary>
 public class AssignCharacterToSlotCommandHandler(
     IGuildAccessService guildAccessService,
     IRaidEventRepository raidEventRepository,
     ICharacterRepository characterRepository,
-    IGuildMembershipRepository guildMembershipRepository,
-    IRaidAvailabilityService raidAvailabilityService,
-    IRaidLockoutConflictChecker raidLockoutConflictChecker,
-    IRaidCompositionRepository raidCompositionRepository) : ICommandHandlerAsync<AssignCharacterToSlotCommand>
+    IRaidSlotEligibilityValidator raidSlotEligibilityValidator,
+    IRaidCompositionRepository raidCompositionRepository,
+    IRaidCompositionNotifier raidCompositionNotifier) : ICommandHandlerAsync<AssignCharacterToSlotCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(AssignCharacterToSlotCommand command, CancellationToken cancellationToken = default)
@@ -40,9 +41,9 @@ public class AssignCharacterToSlotCommandHandler(
         if (character == null || !character.IsActiveInRaidOps)
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOnRoster, "Character is not an active member of this guild branch's roster.");
 
-        var memberships = await guildMembershipRepository.GetByCharacterIdAsync(command.CharacterId, cancellationToken);
-        if (!memberships.Any(m => m.GuildBranchId == command.GuildBranchId))
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotOnRoster, "Character is not an active member of this guild branch's roster.");
+        var membershipResult = await raidSlotEligibilityValidator.ValidateRosterMembershipAsync(command.CharacterId, command.GuildBranchId, cancellationToken);
+        if (membershipResult.IsFailed)
+            return Result<CommandResponse>.Fail(membershipResult.Error!, membershipResult.Detail);
 
         if (command.GroupNumber < 1 || command.GroupNumber > raidEvent.GroupCount || command.SlotNumber < 1 || command.SlotNumber > raidEvent.SlotsPerGroup)
             return Result<CommandResponse>.Fail(ResponseDetail.InvalidGroupOrSlotNumber, "Group/slot number is out of the event's grid bounds.");
@@ -55,13 +56,9 @@ public class AssignCharacterToSlotCommandHandler(
         if (otherCharacterOfSamePlayer)
             return Result<CommandResponse>.Fail(ResponseDetail.PlayerAlreadyAssignedInEvent, "This player already has another character assigned in this event.");
 
-        var isUnavailable = await raidAvailabilityService.IsPlayerUnavailableAsync(character.UserDiscordId, command.GuildId, command.GuildBranchId, raidEvent.StartsAtUtc, cancellationToken);
-        if (isUnavailable)
-            return Result<CommandResponse>.Fail(ResponseDetail.MemberDeclaredAbsent, "This member's declared availability does not cover the event's start time.");
-
-        var conflictingZoneName = await raidLockoutConflictChecker.FindConflictingZoneNameAsync(raidEvent, command.CharacterId, command.GuildId, command.GuildBranchId, cancellationToken);
-        if (conflictingZoneName != null)
-            return Result<CommandResponse>.Fail(ResponseDetail.RaidLockoutConflict, $"Character is already locked to '{conflictingZoneName}' for this reset window via another event.");
+        var assignabilityResult = await raidSlotEligibilityValidator.ValidateAssignabilityAsync(raidEvent, character, command.GuildId, command.GuildBranchId, cancellationToken);
+        if (assignabilityResult.IsFailed)
+            return Result<CommandResponse>.Fail(assignabilityResult.Error!, assignabilityResult.Detail);
 
         var specResult = await ResolveSpecIdAsync(raidEvent, command.CharacterId, cancellationToken);
         if (specResult.IsFailed)
@@ -78,6 +75,18 @@ public class AssignCharacterToSlotCommandHandler(
             AssignedAt = DateTime.UtcNow,
             AssignedByDiscordId = command.RequesterDiscordId,
         }, cancellationToken);
+
+        if (raidEvent.PublicationStatus == RaidPublicationStatus.Published)
+        {
+            var raidSpecs = await characterRepository.GetRaidSpecsAsync(command.CharacterId, cancellationToken);
+            var specName = raidSpecs.FirstOrDefault(s => s.SpecId == specResult.Value)?.Spec.Name;
+
+            await raidCompositionNotifier.NotifySlotAssignedAsync(
+                raidEvent, command.RequesterDiscordId,
+                new RaidCharacterRef(character.Name, character.ClassId, specName),
+                new SlotCoordinate(command.GroupNumber, command.SlotNumber),
+                cancellationToken);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character assigned successfully."));
     }

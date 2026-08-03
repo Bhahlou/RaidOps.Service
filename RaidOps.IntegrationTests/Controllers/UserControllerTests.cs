@@ -145,10 +145,14 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             branch.Region = "eu";
             db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
-            db.GuildNotificationSettings.Add(new GuildNotificationSetting
-            {
-                GuildId = guildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null,
-            });
+            // One saved row per notification family (Absence, Raid changes, Raid composition
+            // changes) so this test stays focused on BranchOfficerRolesNotConfigured — without
+            // these, the admin would also get nudged for the two other families having never
+            // been configured either.
+            db.GuildNotificationSettings.AddRange(
+                new GuildNotificationSetting { GuildId = guildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null },
+                new GuildNotificationSetting { GuildId = guildId, EventType = GuildNotificationEventType.RaidPublished, Enabled = false, ChannelId = null },
+                new GuildNotificationSetting { GuildId = guildId, EventType = GuildNotificationEventType.RaidSlotAssigned, Enabled = false, ChannelId = null });
             return Task.CompletedTask;
         });
         var client = CreateAuthenticatedClient(discordId: id);
@@ -198,10 +202,13 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
             branch.Region = "eu";
             db.GuildBranches.Add(branch);
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
-            db.GuildNotificationSettings.Add(new GuildNotificationSetting
-            {
-                GuildId = guildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null,
-            });
+            // One saved row per notification family so only the explicitly-dismissed
+            // BranchOfficerRolesNotConfigured nudge is at stake — see the comment on
+            // GetMe_AdminOfGuildWithBranchOfficerRolesConfigured_NoNotification above.
+            db.GuildNotificationSettings.AddRange(
+                new GuildNotificationSetting { GuildId = guildId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null },
+                new GuildNotificationSetting { GuildId = guildId, EventType = GuildNotificationEventType.RaidPublished, Enabled = false, ChannelId = null },
+                new GuildNotificationSetting { GuildId = guildId, EventType = GuildNotificationEventType.RaidSlotAssigned, Enabled = false, ChannelId = null });
             db.NotificationDismissals.Add(new NotificationDismissal
             {
                 UserDiscordId = id,
