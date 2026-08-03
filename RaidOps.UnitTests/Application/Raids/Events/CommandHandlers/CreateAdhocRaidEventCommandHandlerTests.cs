@@ -5,6 +5,7 @@ using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -62,6 +63,7 @@ public class CreateAdhocRaidEventCommandHandlerTests
     {
         _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
             .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
 
         var result = await _sut.HandleAsync(MakeCommand());
 
@@ -78,5 +80,29 @@ public class CreateAdhocRaidEventCommandHandlerTests
             e.TargetZones.Count == 1),
             default), Times.Once);
         _auditLogService.Verify(a => a.LogAsync(GuildId, RequesterId, GuildAuditAction.RaidEventCreated, It.IsAny<Dictionary<string, string>>(), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_LogsAuditWithGuildLocalTimeAndZoneNames()
+    {
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _guildsRepository.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Timezone = "Europe/Paris" });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(
+        [
+            new RaidZone { Id = 1, Name = "Molten Core" },
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        // 2026-02-01 20:00 UTC -> Europe/Paris is UTC+1 in February (no DST) -> 21:00 local.
+        _auditLogService.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.RaidEventCreated,
+            It.Is<Dictionary<string, string>>(d =>
+                d["eventName"] == "One-shot Kara clear" &&
+                d["startsAtLocal"] == "2026-02-01 21:00" &&
+                d["raidZoneNames"] == "Molten Core"),
+            default), Times.Once);
     }
 }

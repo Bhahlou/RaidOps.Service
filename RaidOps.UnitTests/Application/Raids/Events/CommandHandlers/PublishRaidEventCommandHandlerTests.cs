@@ -5,7 +5,9 @@ using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Events.CommandHandlers;
@@ -40,12 +42,13 @@ public class PublishRaidEventCommandHandlerTests
         EventId = EventId,
     };
 
-    private static RaidEvent MakeEvent(RaidPublicationStatus status = RaidPublicationStatus.Draft) => new()
+    private static RaidEvent MakeEvent(RaidPublicationStatus status = RaidPublicationStatus.Draft, List<RaidEventZone>? targetZones = null) => new()
     {
         Id = EventId,
         Name = "Split 1",
         StartsAtUtc = new DateTime(2026, 2, 1, 20, 0, 0, DateTimeKind.Utc),
         PublicationStatus = status,
+        TargetZones = targetZones ?? [],
     };
 
     private void SetupOfficer() =>
@@ -114,5 +117,44 @@ public class PublishRaidEventCommandHandlerTests
         _auditLogService.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.RaidEventPublished,
             It.Is<Dictionary<string, string>>(d => d["eventName"] == "Split 1"), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_LogsAuditWithGuildLocalTimeAndZoneNames()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent(targetZones:
+        [
+            new RaidEventZone { RaidZone = new RaidZone { Id = 1, Name = "Molten Core" } },
+        ]));
+        _raidEventRepository.Setup(r => r.PublishAsync(EventId, GuildBranchId, RequesterId, default)).ReturnsAsync(true);
+        _guildsRepository.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Timezone = "Europe/Paris" });
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLogService.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.RaidEventPublished,
+            It.Is<Dictionary<string, string>>(d =>
+                d["eventName"] == "Split 1" &&
+                d["startsAtLocal"] == "2026-02-01 21:00" &&
+                d["raidZoneNames"] == "Molten Core"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_BuildsAndDispatchesPublishedNotification()
+    {
+        SetupOfficer();
+        var raidEvent = MakeEvent();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(raidEvent);
+        _raidEventRepository.Setup(r => r.PublishAsync(EventId, GuildBranchId, RequesterId, default)).ReturnsAsync(true);
+        var embed = new DiscordEmbedContent("Raid published");
+        _raidNotificationContentBuilder.Setup(b => b.BuildPublishedAsync(GuildId, RequesterId, raidEvent, default)).ReturnsAsync(embed);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidPublished, GuildBranchId, embed, default), Times.Once);
     }
 }

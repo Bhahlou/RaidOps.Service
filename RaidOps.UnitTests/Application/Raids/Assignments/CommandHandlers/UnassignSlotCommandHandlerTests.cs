@@ -5,7 +5,9 @@ using RaidOps.Application.Contracts.Raids.Assignments.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Assignments.CommandHandlers;
@@ -43,14 +45,14 @@ public class UnassignSlotCommandHandlerTests
         SlotNumber = 2,
     };
 
-    private static RaidEvent MakeEvent(RaidPublicationStatus status = RaidPublicationStatus.Draft) => new()
+    private static RaidEvent MakeEvent(RaidPublicationStatus status = RaidPublicationStatus.Draft, List<RaidSlotAssignment>? assignments = null) => new()
     {
         Id = EventId,
         GuildId = GuildId,
         GuildBranchId = GuildBranchId,
         Name = "Split 1",
         PublicationStatus = status,
-        Assignments = [],
+        Assignments = assignments ?? [],
     };
 
     [Fact]
@@ -87,5 +89,75 @@ public class UnassignSlotCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _compositionRepository.Verify(r => r.UnassignAsync(EventId, 1, 2, default), Times.Once);
+    }
+
+    // ── Draft vs Published notification gating ──────────────────────────────
+
+    private const int CharacterId = 42;
+
+    [Fact]
+    public async Task HandleAsync_DraftEventWithOccupant_Succeeds_ButDoesNotNotify()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent(assignments:
+        [
+            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1 },
+        ]));
+        _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventWithOccupant_NotifiesWithResolvedCharacterClassAndSpec()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        var publishedEvent = MakeEvent(status: RaidPublicationStatus.Published, assignments:
+        [
+            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1 },
+        ]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync(new Character { Id = CharacterId, Name = "Arthas", ClassId = 6 });
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterId, default)).ReturnsAsync(
+        [
+            new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, Spec = new Spec { Id = 1, Name = "Blood" } },
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"),
+            new SlotCoordinate(1, 2),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventOccupantCharacterNoLongerExists_FallsBackToCharacterIdAsName()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        var publishedEvent = MakeEvent(status: RaidPublicationStatus.Published, assignments:
+        [
+            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1 },
+        ]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync((Character?)null);
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterId, default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.Name == CharacterId.ToString() && c.ClassId == null && c.SpecName == null),
+            new SlotCoordinate(1, 2),
+            default), Times.Once);
     }
 }

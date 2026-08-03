@@ -5,7 +5,9 @@ using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Events.CommandHandlers;
@@ -173,5 +175,107 @@ public class UpdateRaidEventCommandHandlerTests
             It.Is<RaidEvent>(e => e.Id == EventId && e.Name == "Split 1" && e.GroupCount == 2 && e.SlotsPerGroup == 5),
             GuildBranchId, It.Is<IEnumerable<int>>(ids => ids.Single() == 1), default), Times.Once);
         _auditLogService.Verify(a => a.LogAsync(GuildId, RequesterId, GuildAuditAction.RaidEventUpdated, It.IsAny<Dictionary<string, string>>(), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_LogsAuditWithGuildLocalTimeDiffAndZoneNameDiff()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId,
+            // MakeCommand's fixed StartsAtUtc is 2026-02-01 20:00 UTC — pick a distinctly different
+            // old value so old/new actually differ in the audit diff.
+            StartsAtUtc = new DateTime(2026, 1, 15, 18, 0, 0, DateTimeKind.Utc),
+            Assignments = [],
+            TargetZones = [new RaidEventZone { RaidZone = new RaidZone { Id = 1, Name = "Molten Core" } }],
+        });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 2, Name = "Blackwing Lair" }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+        _guildsRepository.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Timezone = "Europe/Paris" });
+
+        var result = await _sut.HandleAsync(MakeCommand(zoneIds: [2]));
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLogService.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.RaidEventUpdated,
+            It.Is<Dictionary<string, string>>(d =>
+                d["eventName"] == "Split 1" &&
+                d["oldStartsAtLocal"] == "2026-01-15 19:00" &&
+                d["newStartsAtLocal"] == "2026-02-01 21:00" &&
+                d["oldRaidZoneNames"] == "Molten Core" &&
+                d["newRaidZoneNames"] == "Blackwing Lair"),
+            default), Times.Once);
+    }
+
+    // ── Notification gating: published + start time actually changed only ───
+
+    [Fact]
+    public async Task HandleAsync_DraftEventWithTimeChange_DoesNotNotify()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId,
+            PublicationStatus = RaidPublicationStatus.Draft,
+            StartsAtUtc = new DateTime(2026, 1, 1, 20, 0, 0, DateTimeKind.Utc),
+            Assignments = [],
+        });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(
+            It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventWithoutTimeChange_DoesNotNotify()
+    {
+        SetupOfficer();
+        var sameStartsAtUtc = new DateTime(2026, 2, 1, 20, 0, 0, DateTimeKind.Utc);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId,
+            PublicationStatus = RaidPublicationStatus.Published,
+            StartsAtUtc = sameStartsAtUtc,
+            Assignments = [],
+        });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        // MakeCommand's own StartsAtUtc is identical to sameStartsAtUtc — same instant, no reschedule.
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(
+            It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventWithTimeChange_BuildsAndDispatchesRescheduledNotification()
+    {
+        SetupOfficer();
+        var oldStartsAtUtc = new DateTime(2026, 1, 1, 20, 0, 0, DateTimeKind.Utc);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId,
+            PublicationStatus = RaidPublicationStatus.Published,
+            StartsAtUtc = oldStartsAtUtc,
+            Assignments = [],
+        });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+        var embed = new DiscordEmbedContent("Raid rescheduled");
+        _raidNotificationContentBuilder
+            .Setup(b => b.BuildRescheduledAsync(GuildId, RequesterId, It.Is<RaidEvent>(e => e.Id == EventId), oldStartsAtUtc, default))
+            .ReturnsAsync(embed);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidRescheduled, GuildBranchId, embed, default), Times.Once);
     }
 }

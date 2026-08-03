@@ -5,7 +5,9 @@ using RaidOps.Application.Contracts.Raids.Assignments.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Assignments.CommandHandlers;
@@ -43,11 +45,13 @@ public class SwapSlotAssignmentsCommandHandlerTests
         SlotNumberB = slotB,
     };
 
-    private static RaidEvent MakeEvent(int groupCount = 3, int slotsPerGroup = 3) => new()
+    private static RaidEvent MakeEvent(int groupCount = 3, int slotsPerGroup = 3, RaidPublicationStatus status = RaidPublicationStatus.Draft, List<RaidSlotAssignment>? assignments = null) => new()
     {
         Id = EventId,
         GroupCount = groupCount,
         SlotsPerGroup = slotsPerGroup,
+        PublicationStatus = status,
+        Assignments = assignments ?? [],
     };
 
     private void SetupOfficer() =>
@@ -133,5 +137,55 @@ public class SwapSlotAssignmentsCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _compositionRepository.Verify(r => r.SwapAssignmentsAsync(EventId, 1, 1, 2, 2, default), Times.Once);
+    }
+
+    // ── Draft vs Published notification gating ──────────────────────────────
+
+    private const int CharacterAId = 42;
+    private const int CharacterBId = 43;
+
+    private static List<RaidSlotAssignment> MakeOccupants() =>
+    [
+        new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 1, CharacterId = CharacterAId, SpecId = 1 },
+        new RaidSlotAssignment { GroupNumber = 2, SlotNumber = 2, CharacterId = CharacterBId, SpecId = 2 },
+    ];
+
+    [Fact]
+    public async Task HandleAsync_DraftEventBothSlotsOccupied_Succeeds_ButDoesNotNotify()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent(assignments: MakeOccupants()));
+        _compositionRepository.Setup(r => r.SwapAssignmentsAsync(EventId, 1, 1, 2, 2, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotsSwappedAsync(
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventBothSlotsOccupied_NotifiesWithBothResolvedCharacters()
+    {
+        SetupOfficer();
+        var publishedEvent = MakeEvent(status: RaidPublicationStatus.Published, assignments: MakeOccupants());
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _compositionRepository.Setup(r => r.SwapAssignmentsAsync(EventId, 1, 1, 2, 2, default)).ReturnsAsync(true);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterAId, default)).ReturnsAsync(new Character { Id = CharacterAId, Name = "Arthas", ClassId = 6 });
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterBId, default)).ReturnsAsync(new Character { Id = CharacterBId, Name = "Jaina", ClassId = 8 });
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterAId, default)).ReturnsAsync(
+            [new CharacterRaidSpec { CharacterId = CharacterAId, SpecId = 1, Spec = new Spec { Id = 1, Name = "Blood" } }]);
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterBId, default)).ReturnsAsync(
+            [new CharacterRaidSpec { CharacterId = CharacterBId, SpecId = 2, Spec = new Spec { Id = 2, Name = "Frost" } }]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotsSwappedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"), new SlotCoordinate(1, 1),
+            It.Is<RaidCharacterRef>(c => c.Name == "Jaina" && c.ClassId == 8 && c.SpecName == "Frost"), new SlotCoordinate(2, 2),
+            default), Times.Once);
     }
 }

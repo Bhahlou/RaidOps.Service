@@ -7,6 +7,7 @@ using RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Assignments.CommandHandlers;
@@ -241,5 +242,47 @@ public class AssignCharacterToSlotCommandHandlerTests
         var result = await _sut.HandleAsync(MakeCommand(groupNumber: 1, slotNumber: 1));
 
         result.IsSuccess.Should().BeTrue();
+    }
+
+    // ── Draft vs Published notification gating ──────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_DraftEvent_Succeeds_ButDoesNotNotify()
+    {
+        // MakeEvent leaves PublicationStatus at its Draft default.
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotAssignedAsync(
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEvent_NotifiesWithResolvedCharacterClassAndSpec()
+    {
+        var publishedEvent = MakeEvent();
+        publishedEvent.PublicationStatus = RaidPublicationStatus.Published;
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync(new Character
+        {
+            Id = CharacterId,
+            Name = "Arthas",
+            ClassId = 6,
+            UserDiscordId = PlayerDiscordId,
+            IsActiveInRaidOps = true,
+        });
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterId, default)).ReturnsAsync(
+        [
+            new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, IsMain = true, Spec = new Spec { Id = 1, Name = "Blood" } },
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand(groupNumber: 2, slotNumber: 3));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotAssignedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"),
+            new SlotCoordinate(2, 3),
+            default), Times.Once);
     }
 }
