@@ -19,6 +19,10 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     private const string ChangelogSeenUrl = "/api/v1/user/changelog-seen";
     private const string DiscordId = "200000000000000001";
 
+    private static readonly string[] SingleEntryId = ["e1"];
+    private static readonly string[] TwoEntryIds = ["e1", "e2"];
+    private static readonly string[] OverlappingEntryIds = ["e2", "e3"];
+
     // The API serializes enums as strings (see Program.cs's JsonStringEnumConverter registration)
     // but HttpContent.ReadFromJsonAsync defaults to numeric enum parsing unless told otherwise.
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -293,7 +297,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task MarkChangelogSeen_WithoutToken_Returns401()
     {
-        var body = JsonContent.Create(new { entryIds = new[] { "e1" } });
+        var body = JsonContent.Create(new { entryIds = SingleEntryId });
 
         var response = await Client.PostAsync(ChangelogSeenUrl, body);
 
@@ -304,7 +308,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     public async Task MarkChangelogSeen_TokenWithoutSubClaim_Returns401()
     {
         var client = CreateClientWithoutSubClaim();
-        var body = JsonContent.Create(new { entryIds = new[] { "e1" } });
+        var body = JsonContent.Create(new { entryIds = SingleEntryId });
 
         var response = await client.PostAsync(ChangelogSeenUrl, body);
 
@@ -317,7 +321,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         const string id = "200000000000000010";
         await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { entryIds = new[] { "e1", "e2" } });
+        var body = JsonContent.Create(new { entryIds = TwoEntryIds });
 
         var response = await client.PostAsync(ChangelogSeenUrl, body);
 
@@ -326,7 +330,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         using (scope)
         {
             var seenIds = await db2.SeenChangelogEntries.Where(s => s.UserDiscordId == id).Select(s => s.EntryId).ToListAsync();
-            seenIds.Should().BeEquivalentTo(["e1", "e2"]);
+            seenIds.Should().BeEquivalentTo(TwoEntryIds);
         }
     }
 
@@ -337,8 +341,8 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var first = await client.PostAsync(ChangelogSeenUrl, JsonContent.Create(new { entryIds = new[] { "e1", "e2" } }));
-        var second = await client.PostAsync(ChangelogSeenUrl, JsonContent.Create(new { entryIds = new[] { "e2", "e3" } }));
+        var first = await client.PostAsync(ChangelogSeenUrl, JsonContent.Create(new { entryIds = TwoEntryIds }));
+        var second = await client.PostAsync(ChangelogSeenUrl, JsonContent.Create(new { entryIds = OverlappingEntryIds }));
 
         first.StatusCode.Should().Be(HttpStatusCode.OK);
         second.StatusCode.Should().Be(HttpStatusCode.OK);

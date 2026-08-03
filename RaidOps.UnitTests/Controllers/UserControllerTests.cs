@@ -12,6 +12,8 @@ namespace RaidOps.UnitTests.Controllers;
 
 public class UserControllerTests
 {
+    private static readonly string[] SingleEntryId = ["e1"];
+
     private readonly Mock<ICommandDispatcher> _commands = new();
     private readonly Mock<IQueryDispatcher>   _queries  = new();
     private readonly UserController           _sut;
@@ -79,7 +81,7 @@ public class UserControllerTests
 
         result.Should().BeOfType<OkObjectResult>();
         _commands.Verify(c => c.DispatchAsync(
-            It.Is<MarkChangelogSeenCommand>(x => x.RequesterDiscordId == "user-1" && x.EntryIds.SequenceEqual(new[] { "e1" })),
+            It.Is<MarkChangelogSeenCommand>(x => x.RequesterDiscordId == "user-1" && x.EntryIds.SequenceEqual(SingleEntryId)),
             default), Times.Once);
     }
 
