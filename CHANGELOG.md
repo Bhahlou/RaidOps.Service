@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.5.1...v1.6.0) (2026-08-03)
+
+
+### 🚀 Features
+
+* Raid notifications and logs ([#67](https://github.com/Bhahlou/RaidOps.Service/issues/67)) ([6526b47](https://github.com/Bhahlou/RaidOps.Service/commit/6526b473666dfa3a030769bf849782058a2c6219))
+
 ## [1.5.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.5.0...v1.5.1) (2026-08-02)
 
 
