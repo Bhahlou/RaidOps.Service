@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageReference Include="NetCord" Version="1.0.0-alpha.489" />
   </ItemGroup>
@@ -16,6 +17,12 @@
   <ItemGroup>
     <ProjectReference Include="..\RaidOps.Application.Contracts\RaidOps.Application.Contracts.csproj" />
     <ProjectReference Include="..\RaidOps.ExternalApplication.Contracts\RaidOps.ExternalApplication.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>RaidOps.UnitTests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>

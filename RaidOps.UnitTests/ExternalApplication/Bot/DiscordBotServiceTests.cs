@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Moq;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.ExternalApplication.Implementations.Bot;
 
@@ -11,10 +12,12 @@ public class DiscordBotServiceTests
     {
         var cache  = NetCordTestHelpers.EmptyCache();
         var client = NetCordTestHelpers.MakeGatewayClient(cache.Object);
+        var emojiService = new Mock<IEmojiService>();
 
-        var sut = new DiscordBotService(client);
+        var sut = new DiscordBotService(client, emojiService.Object);
 
         sut.Guilds.Should().NotBeNull().And.BeAssignableTo<IGuildService>();
         sut.Messages.Should().NotBeNull().And.BeAssignableTo<IMessageService>();
+        sut.Emojis.Should().BeSameAs(emojiService.Object);
     }
 }

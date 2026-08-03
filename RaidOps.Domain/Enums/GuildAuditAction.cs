@@ -82,4 +82,16 @@ public enum GuildAuditAction
 
     /// <summary>A guild branch's Blizzard API region was set or changed.</summary>
     BranchRegionUpdated = 26,
+
+    /// <summary>A character was assigned to a slot on an already-published raid event.</summary>
+    SlotAssigned = 27,
+
+    /// <summary>A character was unassigned from a slot on an already-published raid event.</summary>
+    SlotUnassigned = 28,
+
+    /// <summary>Two characters' slots were swapped on an already-published raid event.</summary>
+    SlotsSwapped = 29,
+
+    /// <summary>A slot assignment's spec was changed on an already-published raid event.</summary>
+    SlotAssignmentSpecChanged = 30,
 }
