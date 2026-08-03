@@ -13,6 +13,9 @@ public class RaidCompositionNotifier(
     IGuildNotificationDispatcher guildNotificationDispatcher,
     IRaidNotificationContentBuilder raidNotificationContentBuilder) : IRaidCompositionNotifier
 {
+    private const string EventNameKey = "eventName";
+    private const string StartsAtLocalKey = "startsAtLocal";
+
     /// <inheritdoc/>
     public async Task NotifySlotAssignedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, SlotCoordinate slot, CancellationToken cancellationToken = default)
     {
@@ -20,8 +23,8 @@ public class RaidCompositionNotifier(
 
         var variables = new Dictionary<string, string>
         {
-            ["eventName"] = raidEvent.Name,
-            ["startsAtLocal"] = startsAtLocal,
+            [EventNameKey] = raidEvent.Name,
+            [StartsAtLocalKey] = startsAtLocal,
             ["characterName"] = character.Name,
             ["groupNumber"] = slot.GroupNumber.ToString(),
             ["slotNumber"] = slot.SlotNumber.ToString(),
@@ -42,8 +45,8 @@ public class RaidCompositionNotifier(
 
         var variables = new Dictionary<string, string>
         {
-            ["eventName"] = raidEvent.Name,
-            ["startsAtLocal"] = startsAtLocal,
+            [EventNameKey] = raidEvent.Name,
+            [StartsAtLocalKey] = startsAtLocal,
             ["characterName"] = character.Name,
             ["groupNumber"] = slot.GroupNumber.ToString(),
             ["slotNumber"] = slot.SlotNumber.ToString(),
@@ -64,8 +67,8 @@ public class RaidCompositionNotifier(
 
         var variables = new Dictionary<string, string>
         {
-            ["eventName"] = raidEvent.Name,
-            ["startsAtLocal"] = startsAtLocal,
+            [EventNameKey] = raidEvent.Name,
+            [StartsAtLocalKey] = startsAtLocal,
             ["characterAName"] = characterA.Name,
             ["groupNumberA"] = slotA.GroupNumber.ToString(),
             ["slotNumberA"] = slotA.SlotNumber.ToString(),
@@ -91,8 +94,8 @@ public class RaidCompositionNotifier(
 
         var variables = new Dictionary<string, string>
         {
-            ["eventName"] = raidEvent.Name,
-            ["startsAtLocal"] = startsAtLocal,
+            [EventNameKey] = raidEvent.Name,
+            [StartsAtLocalKey] = startsAtLocal,
             ["characterName"] = character.Name,
             ["oldSpecName"] = oldSpecName,
             ["newSpecName"] = newSpecName,
