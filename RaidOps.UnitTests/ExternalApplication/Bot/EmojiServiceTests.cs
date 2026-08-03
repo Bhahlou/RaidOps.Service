@@ -31,12 +31,13 @@ public class EmojiServiceTests
     /// one step — every test needs both since NetCordTestHelpers.MakeFakeRestClient() is the only
     /// way to get a working RestClient without a live gateway connection.
     /// </summary>
-    private static (EmojiService Sut, Mock<IRestRequestHandler> RestHandler) MakeSutWithRest(Mock<IHttpClientFactory>? httpClientFactory = null)
+    private static (EmojiService Sut, Mock<IRestRequestHandler> RestHandler) MakeSutWithRest(
+        Mock<IHttpClientFactory>? httpClientFactory = null, Mock<ILogger<EmojiService>>? logger = null)
     {
         var (rest, restHandler) = NetCordTestHelpers.MakeFakeRestClient();
         var cache = NetCordTestHelpers.EmptyCache();
         var client = NetCordTestHelpers.MakeGatewayClient(cache.Object, rest);
-        var sut = new EmojiService(client, (httpClientFactory ?? MakeHttpClientFactory()).Object, new Mock<ILogger<EmojiService>>().Object);
+        var sut = new EmojiService(client, (httpClientFactory ?? MakeHttpClientFactory()).Object, (logger ?? new Mock<ILogger<EmojiService>>()).Object);
         return (sut, restHandler);
     }
 
@@ -52,10 +53,15 @@ public class EmojiServiceTests
 
     // ── SyncAsync ─────────────────────────────────────────────────────────────
 
-    [Fact]
-    public async Task SyncAsync_NewEntry_CreatesItAndCachesTheReturnedId()
+    // loggerEnabled parameterizes both branches of the IsEnabled guard (CA1873).
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SyncAsync_NewEntry_CreatesItAndCachesTheReturnedId(bool loggerEnabled)
     {
-        var (sut, restHandler) = MakeSutWithRest();
+        var logger = new Mock<ILogger<EmojiService>>();
+        logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(loggerEnabled);
+        var (sut, restHandler) = MakeSutWithRest(logger: logger);
         var callCount = 0;
         restHandler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default)).ReturnsAsync(() =>
         {

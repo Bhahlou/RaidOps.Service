@@ -285,4 +285,30 @@ public class AssignCharacterToSlotCommandHandlerTests
             new SlotCoordinate(2, 3),
             default), Times.Once);
     }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventRepositionedCharacterSpecNoLongerDeclared_NotifiesWithNullSpecName()
+    {
+        // Repositioning keeps the existing assignment's spec (77) without re-querying raid specs
+        // (see HandleAsync_RepositioningWithinSameEvent_KeepsExistingSpecInsteadOfMainSpec) — but
+        // the notify block re-fetches raid specs fresh, and the character may no longer declare
+        // that spec as raid-viable by the time this runs.
+        var publishedEvent = MakeEvent(
+            assignments: [new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 1, CharacterId = CharacterId, SpecId = 77, AssignedPlayerDiscordId = PlayerDiscordId }]);
+        publishedEvent.PublicationStatus = RaidPublicationStatus.Published;
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterId, default)).ReturnsAsync(
+        [
+            new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, IsMain = true, Spec = new Spec { Id = 1, Name = "Blood" } },
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand(groupNumber: 1, slotNumber: 2));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotAssignedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.SpecName == null),
+            new SlotCoordinate(1, 2),
+            default), Times.Once);
+    }
 }

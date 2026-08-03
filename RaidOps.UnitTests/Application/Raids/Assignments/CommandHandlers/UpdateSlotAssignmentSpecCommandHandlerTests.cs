@@ -218,4 +218,26 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotSpecChangedAsync(
             publishedEvent, RequesterId, It.IsAny<RaidCharacterRef>(), "1", "Fury", default), Times.Once);
     }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventCharacterNoLongerExists_FallsBackToCharacterIdAsName()
+    {
+        SetupOfficer();
+        var publishedEvent = MakeEventWithAssignment(status: RaidPublicationStatus.Published, oldSpecId: 1);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterId, default)).ReturnsAsync(
+        [
+            new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, Spec = new Spec { Id = 1, Name = "Arms" } },
+            new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 99, Spec = new Spec { Id = 99, Name = "Fury" } },
+        ]);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync((Character?)null);
+
+        var result = await _sut.HandleAsync(MakeCommand(specId: 99));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotSpecChangedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.Name == CharacterId.ToString() && c.ClassId == null),
+            "Arms", "Fury", default), Times.Once);
+    }
 }

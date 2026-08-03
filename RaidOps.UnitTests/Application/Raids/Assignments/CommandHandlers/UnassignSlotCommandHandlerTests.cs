@@ -68,6 +68,19 @@ public class UnassignSlotCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_EventNotFound_ReturnsRaidEventNotFound()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync((RaidEvent?)null);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.RaidEventNotFound);
+        _compositionRepository.Verify(r => r.UnassignAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), default), Times.Never);
+    }
+
+    [Fact]
     public async Task HandleAsync_SlotAlreadyEmpty_ReturnsNotFound()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
@@ -136,6 +149,27 @@ public class UnassignSlotCommandHandlerTests
             It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"),
             new SlotCoordinate(1, 2),
             default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventAssignmentExistsAtDifferentCoordinate_TreatsOccupantAsNullAndDoesNotNotify()
+    {
+        // Assignment shares the requested GroupNumber (1) but sits at a different SlotNumber (5) —
+        // exercises the SlotNumber half of the predicate short-circuiting to false after the
+        // GroupNumber half already matched. A repository race (DB says occupied, in-memory
+        // snapshot disagrees) still must not crash or notify with garbage data.
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent(status: RaidPublicationStatus.Published, assignments:
+        [
+            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 5, CharacterId = CharacterId, SpecId = 1 },
+        ]));
+        _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
     }
 
     [Fact]

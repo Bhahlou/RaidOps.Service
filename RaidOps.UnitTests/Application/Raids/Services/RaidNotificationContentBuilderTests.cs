@@ -103,6 +103,28 @@ public class RaidNotificationContentBuilderTests
         embed.Author.Should().BeNull();
     }
 
+    [Fact]
+    public async Task BuildPublishedAsync_GuildNotFound_FallsBackToEnglishAndUnshiftedUtcTime()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync((Guild?)null);
+
+        var embed = await _sut.BuildPublishedAsync(GuildId, RequesterId, MakeEvent());
+
+        embed.Title.Should().Be("Raid published");
+        embed.Description.Should().Be("<@42> published **Split 1**.");
+        embed.Fields.Should().ContainSingle(f => f.Name == "Starts" && f.Value == "2/1/2026 at 20:00");
+    }
+
+    [Fact]
+    public async Task BuildPublishedAsync_GuildTimezoneUnset_FormatsStartsFieldAsUnshiftedUtcTime()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Language = "en", Timezone = null });
+
+        var embed = await _sut.BuildPublishedAsync(GuildId, RequesterId, MakeEvent());
+
+        embed.Fields.Should().ContainSingle(f => f.Name == "Starts" && f.Value == "2/1/2026 at 20:00");
+    }
+
     // ── BuildCancelledAsync ───────────────────────────────────────────────────
 
     [Fact]
@@ -128,6 +150,17 @@ public class RaidNotificationContentBuilderTests
         embed.Title.Should().Be("Raid rescheduled");
         embed.ColorHex.Should().Be(0xFEE75C);
         embed.Description.Should().Be("<@42> rescheduled **Split 1**: 1/15/2026 at 19:00 → 2/1/2026 at 21:00.");
+    }
+
+    [Fact]
+    public async Task BuildRescheduledAsync_GuildTimezoneUnset_FormatsBothTimesAsUnshiftedUtc()
+    {
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Language = "en", Timezone = null });
+        var oldStartsAtUtc = new DateTime(2026, 1, 15, 18, 0, 0, DateTimeKind.Utc);
+
+        var embed = await _sut.BuildRescheduledAsync(GuildId, RequesterId, MakeEvent(), oldStartsAtUtc);
+
+        embed.Description.Should().Be("<@42> rescheduled **Split 1**: 1/15/2026 at 18:00 → 2/1/2026 at 20:00.");
     }
 
     // ── BuildSlotAssignedAsync ────────────────────────────────────────────────

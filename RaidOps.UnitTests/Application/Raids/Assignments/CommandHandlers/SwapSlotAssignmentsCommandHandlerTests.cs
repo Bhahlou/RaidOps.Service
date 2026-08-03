@@ -188,4 +188,26 @@ public class SwapSlotAssignmentsCommandHandlerTests
             It.Is<RaidCharacterRef>(c => c.Name == "Jaina" && c.ClassId == 8 && c.SpecName == "Frost"), new SlotCoordinate(2, 2),
             default), Times.Once);
     }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEventCharactersNoLongerExistAndSpecNoLongerDeclared_FallsBackToCharacterIdAndNullSpec()
+    {
+        SetupOfficer();
+        var publishedEvent = MakeEvent(status: RaidPublicationStatus.Published, assignments: MakeOccupants());
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
+        _compositionRepository.Setup(r => r.SwapAssignmentsAsync(EventId, 1, 1, 2, 2, default)).ReturnsAsync(true);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterAId, default)).ReturnsAsync((Character?)null);
+        _characterRepository.Setup(r => r.GetByIdAsync(CharacterBId, default)).ReturnsAsync((Character?)null);
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterAId, default)).ReturnsAsync([]);
+        _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterBId, default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotsSwappedAsync(
+            publishedEvent, RequesterId,
+            It.Is<RaidCharacterRef>(c => c.Name == CharacterAId.ToString() && c.ClassId == null && c.SpecName == null), new SlotCoordinate(1, 1),
+            It.Is<RaidCharacterRef>(c => c.Name == CharacterBId.ToString() && c.ClassId == null && c.SpecName == null), new SlotCoordinate(2, 2),
+            default), Times.Once);
+    }
 }
