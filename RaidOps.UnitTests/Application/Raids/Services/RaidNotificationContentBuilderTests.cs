@@ -163,6 +163,19 @@ public class RaidNotificationContentBuilderTests
         embed.Description.Should().Be("<@42> rescheduled **Split 1**: 1/15/2026 at 18:00 → 2/1/2026 at 20:00.");
     }
 
+    [Fact]
+    public async Task BuildRescheduledAsync_GuildNotFound_FormatsBothTimesAsUnshiftedUtc()
+    {
+        // Distinct from the "Timezone unset" case above: here `guild` itself is null (the `?.`
+        // short-circuits), rather than a found guild whose Timezone property happens to be null.
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync((Guild?)null);
+        var oldStartsAtUtc = new DateTime(2026, 1, 15, 18, 0, 0, DateTimeKind.Utc);
+
+        var embed = await _sut.BuildRescheduledAsync(GuildId, RequesterId, MakeEvent(), oldStartsAtUtc);
+
+        embed.Description.Should().Be("<@42> rescheduled **Split 1**: 1/15/2026 at 18:00 → 2/1/2026 at 20:00.");
+    }
+
     // ── BuildSlotAssignedAsync ────────────────────────────────────────────────
 
     [Fact]

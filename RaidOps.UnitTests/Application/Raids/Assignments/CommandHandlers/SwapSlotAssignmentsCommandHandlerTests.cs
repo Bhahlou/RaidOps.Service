@@ -151,6 +151,28 @@ public class SwapSlotAssignmentsCommandHandlerTests
     ];
 
     [Fact]
+    public async Task HandleAsync_PublishedEventOccupantAAtDifferentGroup_TreatsOccupantAAsNullAndDoesNotNotify()
+    {
+        // Assignment sits at a different GroupNumber (99 vs 1) than requested for side A, with a
+        // matching SlotNumber (1) — the predicate short-circuits to false on the GroupNumber half,
+        // a branch never exercised by MakeOccupants()'s exact-match entries.
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent(status: RaidPublicationStatus.Published, assignments:
+        [
+            new RaidSlotAssignment { GroupNumber = 99, SlotNumber = 1, CharacterId = CharacterAId, SpecId = 1 },
+            new RaidSlotAssignment { GroupNumber = 2, SlotNumber = 2, CharacterId = CharacterBId, SpecId = 2 },
+        ]));
+        _compositionRepository.Setup(r => r.SwapAssignmentsAsync(EventId, 1, 1, 2, 2, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotsSwappedAsync(
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task HandleAsync_DraftEventBothSlotsOccupied_Succeeds_ButDoesNotNotify()
     {
         SetupOfficer();

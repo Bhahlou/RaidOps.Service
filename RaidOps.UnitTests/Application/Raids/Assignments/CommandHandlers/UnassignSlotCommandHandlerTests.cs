@@ -173,6 +173,26 @@ public class UnassignSlotCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PublishedEventAssignmentExistsInDifferentGroup_TreatsOccupantAsNullAndDoesNotNotify()
+    {
+        // Different GroupNumber (99 vs 1) with a matching SlotNumber (2) — the predicate
+        // short-circuits to false on the GroupNumber half, distinct from the SlotNumber-mismatch
+        // case above where GroupNumber already matched.
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent(status: RaidPublicationStatus.Published, assignments:
+        [
+            new RaidSlotAssignment { GroupNumber = 99, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1 },
+        ]));
+        _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+    }
+
+    [Fact]
     public async Task HandleAsync_PublishedEventOccupantCharacterNoLongerExists_FallsBackToCharacterIdAsName()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
