@@ -35,4 +35,9 @@ public class UserResponse
     /// (not already dismissed).
     /// </summary>
     public List<NotificationResponse> Notifications { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the ids of the front-end changelog entries the user has acknowledged.
+    /// </summary>
+    public List<string> SeenChangelogEntryIds { get; set; } = [];
 }
