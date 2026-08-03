@@ -19,4 +19,10 @@
     <ProjectReference Include="..\RaidOps.ExternalApplication.Contracts\RaidOps.ExternalApplication.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>RaidOps.UnitTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>
