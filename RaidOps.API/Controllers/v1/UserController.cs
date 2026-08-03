@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RaidOps.Application.Contracts.Authentication.Commands;
 using RaidOps.Application.Contracts.Authentication.Queries;
 using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Application.Contracts.CQRS;
@@ -10,7 +11,7 @@ using System.IdentityModel.Tokens.Jwt;
 namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
-/// Provides endpoints for querying the authenticated user's own profile.
+/// Provides endpoints for querying and updating the authenticated user's own profile.
 /// All routes require a valid JWT Bearer token.
 /// </summary>
 [ApiVersion("1.0")]
@@ -40,6 +41,23 @@ public class UserController(
             new GetMeQuery { DiscordId = discordId },
             cancellationToken);
 
+        return ToActionResult(result);
+    }
+
+    /// <summary>
+    /// Records that the current user has acknowledged a changelog entry, keeping
+    /// "what's new" state in sync across devices.
+    /// </summary>
+    [HttpPost("changelog-seen")]
+    public async Task<IActionResult> MarkChangelogSeen([FromBody] MarkChangelogSeenCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
         return ToActionResult(result);
     }
 }

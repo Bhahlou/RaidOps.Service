@@ -37,6 +37,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="NotificationDismissal"/> table tracking dismissed in-app notifications.</summary>
     public DbSet<NotificationDismissal> NotificationDismissals => Set<NotificationDismissal>();
 
+    /// <summary>Gets the <see cref="SeenChangelogEntry"/> table tracking acknowledged "what's new" entries.</summary>
+    public DbSet<SeenChangelogEntry> SeenChangelogEntries => Set<SeenChangelogEntry>();
+
     /// <summary>Gets the <see cref="GuildNotificationSetting"/> table (per-event Discord notification preferences).</summary>
     public DbSet<GuildNotificationSetting> GuildNotificationSettings => Set<GuildNotificationSetting>();
 
@@ -286,6 +289,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne<User>()
             .WithMany()
             .HasForeignKey(nd => nd.UserDiscordId);
+
+        // SeenChangelogEntry — composite PK (UserDiscordId, EntryId)
+        modelBuilder.Entity<SeenChangelogEntry>()
+            .HasKey(s => new { s.UserDiscordId, s.EntryId });
+
+        modelBuilder.Entity<SeenChangelogEntry>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(s => s.UserDiscordId);
 
         // GuildNotificationSetting — surrogate PK (Postgres primary keys can't contain a nullable
         // column, and GuildBranchId null = guild-wide fallback row is exactly that column).

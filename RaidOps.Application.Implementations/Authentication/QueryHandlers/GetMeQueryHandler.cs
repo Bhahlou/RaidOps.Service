@@ -16,7 +16,8 @@ public class GetMeQueryHandler(
     IUsersRepository usersRepository,
     IGuildAccessService guildAccessService,
     IUserNotificationService userNotificationService,
-    IActiveRosterBranchResolver activeRosterBranchResolver) : IQueryHandlerAsync<GetMeQuery, UserResponse>
+    IActiveRosterBranchResolver activeRosterBranchResolver,
+    ISeenChangelogEntryRepository seenChangelogEntryRepository) : IQueryHandlerAsync<GetMeQuery, UserResponse>
 {
     /// <summary>
     /// Retrieves the user identified by <see cref="GetMeQuery.DiscordId"/> and maps them
@@ -77,6 +78,7 @@ public class GetMeQueryHandler(
             AvatarHash = user.AvatarHash,
             Guilds = guilds,
             Notifications = await userNotificationService.GetActiveNotificationsAsync(query.DiscordId, eligibleGuilds, cancellationToken),
+            SeenChangelogEntryIds = [.. await seenChangelogEntryRepository.GetSeenEntryIdsAsync(query.DiscordId, cancellationToken)],
         });
     }
 }
