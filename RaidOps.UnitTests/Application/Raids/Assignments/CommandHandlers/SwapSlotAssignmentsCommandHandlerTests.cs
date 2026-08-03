@@ -14,7 +14,9 @@ public class SwapSlotAssignmentsCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
+    private readonly Mock<ICharacterRepository> _characterRepository = new();
     private readonly Mock<IRaidCompositionRepository> _compositionRepository = new();
+    private readonly Mock<IRaidCompositionNotifier> _raidCompositionNotifier = new();
     private readonly SwapSlotAssignmentsCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -24,7 +26,9 @@ public class SwapSlotAssignmentsCommandHandlerTests
 
     public SwapSlotAssignmentsCommandHandlerTests()
     {
-        _sut = new SwapSlotAssignmentsCommandHandler(_access.Object, _raidEventRepository.Object, _compositionRepository.Object);
+        _sut = new SwapSlotAssignmentsCommandHandler(
+            _access.Object, _raidEventRepository.Object, _characterRepository.Object, _compositionRepository.Object,
+            _raidCompositionNotifier.Object);
     }
 
     private static SwapSlotAssignmentsCommand MakeCommand(int groupA = 1, int slotA = 1, int groupB = 2, int slotB = 2) => new()

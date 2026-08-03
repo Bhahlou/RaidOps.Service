@@ -14,7 +14,10 @@ public class DeleteRaidEventCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
+    private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
+    private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
+    private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
     private readonly DeleteRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -24,7 +27,9 @@ public class DeleteRaidEventCommandHandlerTests
 
     public DeleteRaidEventCommandHandlerTests()
     {
-        _sut = new DeleteRaidEventCommandHandler(_access.Object, _raidEventRepository.Object, _auditLogService.Object);
+        _sut = new DeleteRaidEventCommandHandler(
+            _access.Object, _raidEventRepository.Object, _guildsRepository.Object, _auditLogService.Object,
+            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object);
     }
 
     private static DeleteRaidEventCommand MakeCommand() => new()

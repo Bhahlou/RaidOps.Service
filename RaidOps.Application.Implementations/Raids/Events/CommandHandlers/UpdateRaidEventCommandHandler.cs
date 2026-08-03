@@ -2,6 +2,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -15,13 +16,18 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// parent series. Shrinking <see cref="UpdateRaidEventCommand.GroupCount"/>/<see cref="UpdateRaidEventCommand.SlotsPerGroup"/>
 /// below a coordinate that already has an assignment is rejected outright — the grid would
 /// otherwise keep an assignment the UI can never again render or unassign (no slot to click), and
-/// role counters would keep counting a character nobody can see anymore.
+/// role counters would keep counting a character nobody can see anymore. If the event is already
+/// published and the start time actually changes, also posts a "Raid rescheduled" Discord
+/// notification — other field changes (grid size, zones, name) never trigger one.
 /// </summary>
 public class UpdateRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
     IRaidEventRepository raidEventRepository,
     IRaidZoneRepository raidZoneRepository,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateRaidEventCommand>
+    IGuildsRepository guildsRepository,
+    IAuditLogService auditLogService,
+    IGuildNotificationDispatcher guildNotificationDispatcher,
+    IRaidNotificationContentBuilder raidNotificationContentBuilder) : ICommandHandlerAsync<UpdateRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -62,12 +68,29 @@ public class UpdateRaidEventCommandHandler(
         if (!updated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
+        var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
+        var oldStartsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(existing.StartsAtUtc, guild?.Timezone);
+        var newStartsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(command.StartsAtUtc, guild?.Timezone);
+
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
             GuildAuditAction.RaidEventUpdated,
-            new Dictionary<string, string> { ["eventName"] = command.Name },
+            new Dictionary<string, string>
+            {
+                ["eventName"] = command.Name,
+                ["oldStartsAtLocal"] = oldStartsAtLocal.ToString("yyyy-MM-dd HH:mm"),
+                ["newStartsAtLocal"] = newStartsAtLocal.ToString("yyyy-MM-dd HH:mm"),
+                ["oldRaidZoneNames"] = string.Join(", ", existing.TargetZones.Select(z => z.RaidZone.Name)),
+                ["newRaidZoneNames"] = string.Join(", ", zones.Select(z => z.Name)),
+            },
             cancellationToken);
+
+        if (existing.PublicationStatus == RaidPublicationStatus.Published && command.StartsAtUtc != existing.StartsAtUtc)
+        {
+            var embed = await raidNotificationContentBuilder.BuildRescheduledAsync(command.GuildId, command.RequesterDiscordId, raidEvent, existing.StartsAtUtc, cancellationToken);
+            await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidRescheduled, command.GuildBranchId, embed, cancellationToken);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event updated successfully."));
     }

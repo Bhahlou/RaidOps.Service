@@ -15,7 +15,10 @@ public class UpdateRaidEventCommandHandlerTests
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<IRaidZoneRepository> _raidZoneRepository = new();
+    private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
+    private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
+    private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
     private readonly UpdateRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -25,7 +28,9 @@ public class UpdateRaidEventCommandHandlerTests
 
     public UpdateRaidEventCommandHandlerTests()
     {
-        _sut = new UpdateRaidEventCommandHandler(_access.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _auditLogService.Object);
+        _sut = new UpdateRaidEventCommandHandler(
+            _access.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _guildsRepository.Object, _auditLogService.Object,
+            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object);
     }
 
     private static UpdateRaidEventCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null) => new()

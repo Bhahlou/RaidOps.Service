@@ -22,4 +22,25 @@ public enum GuildNotificationEventType
     /// as unavailable on that day.
     /// </summary>
     AbsenceRemoved = 2,
+
+    /// <summary>A raid event was published, becoming visible to non-officer roster members.</summary>
+    RaidPublished = 3,
+
+    /// <summary>An already-published raid event was deleted (there is no separate "cancel" flow).</summary>
+    RaidCancelled = 4,
+
+    /// <summary>An already-published raid event's start time was changed.</summary>
+    RaidRescheduled = 5,
+
+    /// <summary>A character was assigned to a slot on an already-published raid event.</summary>
+    RaidSlotAssigned = 6,
+
+    /// <summary>A character was unassigned from a slot on an already-published raid event.</summary>
+    RaidSlotUnassigned = 7,
+
+    /// <summary>Two characters' slots were swapped on an already-published raid event.</summary>
+    RaidSlotsSwapped = 8,
+
+    /// <summary>A slot assignment's spec was changed on an already-published raid event.</summary>
+    RaidSlotSpecChanged = 9,
 }

@@ -17,6 +17,7 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<ICharacterRepository> _characterRepository = new();
     private readonly Mock<IRaidCompositionRepository> _compositionRepository = new();
+    private readonly Mock<IRaidCompositionNotifier> _raidCompositionNotifier = new();
     private readonly UpdateSlotAssignmentSpecCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -27,7 +28,9 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
 
     public UpdateSlotAssignmentSpecCommandHandlerTests()
     {
-        _sut = new UpdateSlotAssignmentSpecCommandHandler(_access.Object, _raidEventRepository.Object, _characterRepository.Object, _compositionRepository.Object);
+        _sut = new UpdateSlotAssignmentSpecCommandHandler(
+            _access.Object, _raidEventRepository.Object, _characterRepository.Object, _compositionRepository.Object,
+            _raidCompositionNotifier.Object);
     }
 
     private static UpdateSlotAssignmentSpecCommand MakeCommand(int specId = 99) => new()

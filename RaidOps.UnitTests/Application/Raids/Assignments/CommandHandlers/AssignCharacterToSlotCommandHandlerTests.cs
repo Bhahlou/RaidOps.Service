@@ -6,7 +6,6 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
-using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -17,10 +16,9 @@ public class AssignCharacterToSlotCommandHandlerTests
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<ICharacterRepository> _characterRepository = new();
-    private readonly Mock<IGuildMembershipRepository> _guildMembershipRepository = new();
-    private readonly Mock<IRaidAvailabilityService> _raidAvailabilityService = new();
-    private readonly Mock<IRaidLockoutConflictChecker> _raidLockoutConflictChecker = new();
+    private readonly Mock<IRaidSlotEligibilityValidator> _raidSlotEligibilityValidator = new();
     private readonly Mock<IRaidCompositionRepository> _raidCompositionRepository = new();
+    private readonly Mock<IRaidCompositionNotifier> _raidCompositionNotifier = new();
     private readonly AssignCharacterToSlotCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -35,16 +33,14 @@ public class AssignCharacterToSlotCommandHandlerTests
     public AssignCharacterToSlotCommandHandlerTests()
     {
         _sut = new AssignCharacterToSlotCommandHandler(
-            _access.Object, _raidEventRepository.Object, _characterRepository.Object, _guildMembershipRepository.Object,
-            _raidAvailabilityService.Object, _raidLockoutConflictChecker.Object, _raidCompositionRepository.Object);
+            _access.Object, _raidEventRepository.Object, _characterRepository.Object, _raidSlotEligibilityValidator.Object,
+            _raidCompositionRepository.Object, _raidCompositionNotifier.Object);
 
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(MakeEvent());
         _characterRepository.Setup(r => r.GetByIdAsync(CharacterId, default)).ReturnsAsync(MakeCharacter());
-        _guildMembershipRepository.Setup(r => r.GetByCharacterIdAsync(CharacterId, default))
-            .ReturnsAsync([new GuildMembership { CharacterId = CharacterId, GuildId = GuildId, GuildBranchId = GuildBranchId }]);
-        _raidAvailabilityService.Setup(s => s.IsPlayerUnavailableAsync(PlayerDiscordId, GuildId, GuildBranchId, It.IsAny<DateTime>(), default)).ReturnsAsync(false);
-        _raidLockoutConflictChecker.Setup(c => c.FindConflictingZoneNameAsync(It.IsAny<RaidEvent>(), CharacterId, GuildId, GuildBranchId, default)).ReturnsAsync((string?)null);
+        _raidSlotEligibilityValidator.Setup(v => v.ValidateRosterMembershipAsync(CharacterId, GuildBranchId, default)).ReturnsAsync(Result<bool>.Ok(true));
+        _raidSlotEligibilityValidator.Setup(v => v.ValidateAssignabilityAsync(It.IsAny<RaidEvent>(), It.IsAny<Character>(), GuildId, GuildBranchId, default)).ReturnsAsync(Result<bool>.Ok(true));
         _characterRepository.Setup(r => r.GetRaidSpecsAsync(CharacterId, default))
             .ReturnsAsync([new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, IsMain = true }]);
     }
@@ -124,8 +120,8 @@ public class AssignCharacterToSlotCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NoMembershipOnThisGuildBranch_ReturnsCharacterNotOnRoster()
     {
-        _guildMembershipRepository.Setup(r => r.GetByCharacterIdAsync(CharacterId, default))
-            .ReturnsAsync([new GuildMembership { CharacterId = CharacterId, GuildId = GuildId, GuildBranchId = GuildBranchId + 1 }]);
+        _raidSlotEligibilityValidator.Setup(v => v.ValidateRosterMembershipAsync(CharacterId, GuildBranchId, default))
+            .ReturnsAsync(Result<bool>.Fail(ResponseDetail.CharacterNotOnRoster, "Character is not an active member of this guild branch's roster."));
 
         var result = await _sut.HandleAsync(MakeCommand());
 
@@ -173,7 +169,8 @@ public class AssignCharacterToSlotCommandHandlerTests
     [Fact]
     public async Task HandleAsync_PlayerDeclaredUnavailable_ReturnsMemberDeclaredAbsent()
     {
-        _raidAvailabilityService.Setup(s => s.IsPlayerUnavailableAsync(PlayerDiscordId, GuildId, GuildBranchId, EventStartsAtUtc, default)).ReturnsAsync(true);
+        _raidSlotEligibilityValidator.Setup(v => v.ValidateAssignabilityAsync(It.IsAny<RaidEvent>(), It.IsAny<Character>(), GuildId, GuildBranchId, default))
+            .ReturnsAsync(Result<bool>.Fail(ResponseDetail.MemberDeclaredAbsent, "This member's declared availability does not cover the event's start time."));
 
         var result = await _sut.HandleAsync(MakeCommand());
 
@@ -185,8 +182,8 @@ public class AssignCharacterToSlotCommandHandlerTests
     [Fact]
     public async Task HandleAsync_LockoutConflictDetected_ReturnsRaidLockoutConflictWithZoneName()
     {
-        _raidLockoutConflictChecker.Setup(c => c.FindConflictingZoneNameAsync(It.IsAny<RaidEvent>(), CharacterId, GuildId, GuildBranchId, default))
-            .ReturnsAsync("Zul'Gurub");
+        _raidSlotEligibilityValidator.Setup(v => v.ValidateAssignabilityAsync(It.IsAny<RaidEvent>(), It.IsAny<Character>(), GuildId, GuildBranchId, default))
+            .ReturnsAsync(Result<bool>.Fail(ResponseDetail.RaidLockoutConflict, "Character is already locked to 'Zul'Gurub' for this reset window via another event."));
 
         var result = await _sut.HandleAsync(MakeCommand());
 
