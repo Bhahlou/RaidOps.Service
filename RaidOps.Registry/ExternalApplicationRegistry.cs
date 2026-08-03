@@ -26,6 +26,9 @@ internal static class ExternalApplicationsRegistry
         // Battle.net API (OAuth2 + character data)
         services.AddHttpClient<IBnetApiService, BnetApiService>();
 
+        // Plain HttpClientFactory (no typed client) so IEmojiService can fetch manifest image
+        // bytes without tying its own lifetime to the transient default of a typed client.
+        services.AddHttpClient();
 
         // Discord Gateway bot
         services
@@ -36,6 +39,9 @@ internal static class ExternalApplicationsRegistry
             })
             .AddGatewayHandlers(typeof(DiscordBotService).Assembly);
 
+        // Singleton: its application-emoji cache is synced once at bot startup (see ReadyHandler)
+        // and must be shared across every later request-scoped IDiscordBotService/EmojiService use.
+        services.AddSingleton<IEmojiService, EmojiService>();
         services.AddScoped<IDiscordBotService, DiscordBotService>();
 
         return services;

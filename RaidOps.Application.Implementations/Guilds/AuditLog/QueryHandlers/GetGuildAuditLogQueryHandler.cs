@@ -41,6 +41,20 @@ public class GetGuildAuditLogQueryHandler(
         [GuildAuditAction.BranchActivated] = GuildAuditCategory.Branches,
         [GuildAuditAction.BranchDeactivated] = GuildAuditCategory.Branches,
         [GuildAuditAction.BranchRosterSettingsUpdated] = GuildAuditCategory.Branches,
+        [GuildAuditAction.NotificationSettingsReset] = GuildAuditCategory.Settings,
+        [GuildAuditAction.RaidSeriesCreated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidSeriesUpdated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidSeriesDeactivated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidEventCreated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidEventUpdated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidEventCancelled] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidEventDeleted] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidEventPublished] = GuildAuditCategory.Raids,
+        [GuildAuditAction.BranchRegionUpdated] = GuildAuditCategory.Branches,
+        [GuildAuditAction.SlotAssigned] = GuildAuditCategory.Raids,
+        [GuildAuditAction.SlotUnassigned] = GuildAuditCategory.Raids,
+        [GuildAuditAction.SlotsSwapped] = GuildAuditCategory.Raids,
+        [GuildAuditAction.SlotAssignmentSpecChanged] = GuildAuditCategory.Raids,
     };
 
     /// <inheritdoc/>

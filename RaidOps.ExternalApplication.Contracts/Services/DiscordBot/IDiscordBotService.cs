@@ -11,4 +11,7 @@ public interface IDiscordBotService
 
     /// <summary>Operations for sending messages to Discord channels.</summary>
     IMessageService Messages { get; }
+
+    /// <summary>Operations on the bot's application emojis.</summary>
+    IEmojiService Emojis { get; }
 }

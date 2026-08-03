@@ -2,6 +2,7 @@ using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -10,12 +11,15 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// <summary>
 /// Handles <see cref="PublishRaidEventCommand"/> by verifying officer access and marking the event
 /// published — it becomes visible to non-officer roster members and starts counting toward the
-/// "unassigned members" computation.
+/// "unassigned members" computation. Also posts a "Raid published" Discord notification.
 /// </summary>
 public class PublishRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
     IRaidEventRepository raidEventRepository,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<PublishRaidEventCommand>
+    IGuildsRepository guildsRepository,
+    IAuditLogService auditLogService,
+    IGuildNotificationDispatcher guildNotificationDispatcher,
+    IRaidNotificationContentBuilder raidNotificationContentBuilder) : ICommandHandlerAsync<PublishRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(PublishRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -35,6 +39,9 @@ public class PublishRaidEventCommandHandler(
         if (!published)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
+        var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
+        var startsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(raidEvent.StartsAtUtc, guild?.Timezone);
+
         await auditLogService.LogAsync(
             command.GuildId,
             command.RequesterDiscordId,
@@ -42,9 +49,13 @@ public class PublishRaidEventCommandHandler(
             new Dictionary<string, string>
             {
                 ["eventName"] = raidEvent.Name,
-                ["startsAtUtc"] = raidEvent.StartsAtUtc.ToString("yyyy-MM-dd HH:mm"),
+                ["startsAtLocal"] = startsAtLocal.ToString("yyyy-MM-dd HH:mm"),
+                ["raidZoneNames"] = string.Join(", ", raidEvent.TargetZones.Select(z => z.RaidZone.Name)),
             },
             cancellationToken);
+
+        var embed = await raidNotificationContentBuilder.BuildPublishedAsync(command.GuildId, command.RequesterDiscordId, raidEvent, cancellationToken);
+        await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidPublished, command.GuildBranchId, embed, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event published successfully."));
     }

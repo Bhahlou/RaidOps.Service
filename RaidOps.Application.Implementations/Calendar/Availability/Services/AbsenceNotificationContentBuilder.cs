@@ -1,5 +1,6 @@
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Calendar.Availability.Helpers;
+using RaidOps.Application.Implementations.Notifications.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -30,7 +31,7 @@ public class AbsenceNotificationContentBuilder(
         var language = await GetGuildLanguageAsync(guildId, cancellationToken);
         var (title, color) = AbsenceNotificationText.GetTitleAndColor(eventType, kind, language);
         var description = AbsenceNotificationText.GetDescription(eventType, kind, language, requesterDiscordId);
-        var author = ResolveAuthor(guildId, requesterDiscordId, cancellationToken);
+        var author = DiscordEmbedAuthorResolver.Resolve(discordBotService, guildId, requesterDiscordId, cancellationToken);
 
         return new DiscordEmbedContent(
             Title: title,
@@ -53,34 +54,12 @@ public class AbsenceNotificationContentBuilder(
         var language = await GetGuildLanguageAsync(guildId, cancellationToken);
         var (title, color) = AbsenceNotificationText.GetTitleAndColor(eventType, AbsenceKind.RecurringPattern, language);
         var description = AbsenceNotificationText.GetPatternDescription(eventType, language, requesterDiscordId, anchorDate, cycleLengthDays, days);
-        var author = ResolveAuthor(guildId, requesterDiscordId, cancellationToken);
+        var author = DiscordEmbedAuthorResolver.Resolve(discordBotService, guildId, requesterDiscordId, cancellationToken);
 
         return new DiscordEmbedContent(
             Title: title,
             Description: description,
             ColorHex: color,
             Author: author);
-    }
-
-    /// <summary>
-    /// Best-effort — a member not found in the bot's cache (left the server, bot not present)
-    /// just means no author byline, never a failure to notify.
-    /// </summary>
-    private DiscordEmbedAuthor? ResolveAuthor(string guildId, string requesterDiscordId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var member = discordBotService.Guilds.GetUser(guildId, requesterDiscordId, cancellationToken);
-            if (member is null)
-                return null;
-
-            var name = member.Nickname ?? member.GlobalName ?? member.Username;
-            var iconUrl = (member.HasGuildAvatar ? member.GetGuildAvatarUrl() : member.GetAvatarUrl())?.ToString();
-            return new DiscordEmbedAuthor(name, iconUrl);
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
     }
 }
