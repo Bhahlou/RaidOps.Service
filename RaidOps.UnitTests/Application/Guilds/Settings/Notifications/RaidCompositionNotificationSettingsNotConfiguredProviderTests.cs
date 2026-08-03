@@ -19,12 +19,17 @@ public class RaidCompositionNotificationSettingsNotConfiguredProviderTests
         _sut = new RaidCompositionNotificationSettingsNotConfiguredProvider(_notificationSettings.Object);
     }
 
-    private static UserGuild MakeUserGuild(string guildId, bool isAdmin, bool isRegistered, string name = "Guild Name") => new()
+    private static UserGuild MakeUserGuild(
+        string guildId,
+        bool isAdmin,
+        bool isRegistered,
+        string name = "Guild Name",
+        string? timezone = "Europe/Paris") => new()
     {
         UserDiscordId = DiscordId,
         GuildId = guildId,
         IsAdmin = isAdmin,
-        Guild = new Guild { Id = guildId, Name = name, IsRegistered = isRegistered },
+        Guild = new Guild { Id = guildId, Name = name, IsRegistered = isRegistered, Timezone = timezone },
     };
 
     [Fact]
@@ -90,6 +95,17 @@ public class RaidCompositionNotificationSettingsNotConfiguredProviderTests
         var result = await _sut.GetActiveAsync(DiscordId, [guild], default);
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetActiveAsync_GuildStillOnboarding_TimezoneNull_NoNotification()
+    {
+        var guild = MakeUserGuild("g1", isAdmin: true, isRegistered: true, timezone: null);
+
+        var result = await _sut.GetActiveAsync(DiscordId, [guild], default);
+
+        result.Should().BeEmpty();
+        _notificationSettings.Verify(r => r.GetAllForGuildAsync(It.IsAny<string>(), default), Times.Never);
     }
 
     [Fact]

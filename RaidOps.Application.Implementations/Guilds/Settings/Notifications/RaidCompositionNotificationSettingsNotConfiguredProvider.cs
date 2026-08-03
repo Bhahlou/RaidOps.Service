@@ -31,7 +31,7 @@ public class RaidCompositionNotificationSettingsNotConfiguredProvider(
         var notifications = new List<NotificationResponse>();
         foreach (var ug in eligibleGuilds)
         {
-            if (!ug.IsAdmin || !ug.Guild.IsRegistered)
+            if (!ug.IsAdmin || !ug.Guild.IsRegistered || ug.Guild.Timezone == null)
                 continue;
 
             var settings = await notificationSettingsRepository.GetAllForGuildAsync(ug.GuildId, cancellationToken);
