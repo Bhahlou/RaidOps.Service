@@ -1,4 +1,5 @@
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Notifications.Helpers;
 using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -136,7 +137,7 @@ public class RaidNotificationContentBuilder(
         CancellationToken cancellationToken)
     {
         var (title, color) = RaidNotificationText.GetTitleAndColor(eventType, language);
-        var author = ResolveAuthor(guildId, requesterDiscordId, cancellationToken);
+        var author = DiscordEmbedAuthorResolver.Resolve(discordBotService, guildId, requesterDiscordId, cancellationToken);
 
         return new DiscordEmbedContent(
             Title: title,
@@ -144,27 +145,5 @@ public class RaidNotificationContentBuilder(
             ColorHex: color,
             Fields: fields,
             Author: author);
-    }
-
-    /// <summary>
-    /// Best-effort — a member not found in the bot's cache (left the server, bot not present)
-    /// just means no author byline, never a failure to notify.
-    /// </summary>
-    private DiscordEmbedAuthor? ResolveAuthor(string guildId, string requesterDiscordId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var member = discordBotService.Guilds.GetUser(guildId, requesterDiscordId, cancellationToken);
-            if (member is null)
-                return null;
-
-            var name = member.Nickname ?? member.GlobalName ?? member.Username;
-            var iconUrl = (member.HasGuildAvatar ? member.GetGuildAvatarUrl() : member.GetAvatarUrl())?.ToString();
-            return new DiscordEmbedAuthor(name, iconUrl);
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
     }
 }
