@@ -61,15 +61,21 @@ jobs:
 
           # Repo is squash-only, so next's history gets flattened on every
           # promotion — GitHub then has no clean merge-base to diff dev
-          # against next next time, and reports spurious conflicts on
-          # release-please's own bookkeeping files (manifest, CHANGELOG).
-          # dev always wins wholesale here (next never carries independent
-          # changes), so resolve that locally before ever asking GitHub to
-          # compute the PR diff.
+          # against next next time, and a real 3-way `git merge` can pick a
+          # very old common ancestor. Past a certain drift, that makes git's
+          # merge silently duplicate or resurrect content instead of
+          # reporting a conflict (identical/overlapping hunks on both sides
+          # look like independent additions) — seen on both the v1.4.0 and
+          # v1.6.0 promotions, undetected until the next build failed.
+          # `-X theirs`/`checkout --theirs` only ever act on paths git
+          # actually flags as conflicting, so neither one helps here.
+          #
+          # dev always wins wholesale (next never carries independent
+          # changes), so don't ask git to compute a content merge at all —
+          # just force the tree to match dev byte-for-byte.
           BRANCH="promote/${TAG}"
           git checkout -B "$BRANCH" origin/next
-          git merge --no-commit -X theirs origin/dev || true
-          git checkout --theirs -- . 2>/dev/null || true
+          git checkout --no-overlay origin/dev -- .
           git add -A
           git commit -m "chore: promote ${TAG} to next" --allow-empty
           git push origin "$BRANCH" --force-with-lease
