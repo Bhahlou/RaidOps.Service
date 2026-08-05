@@ -4,8 +4,10 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.AuditLog.Queries;
 using RaidOps.Application.Contracts.Guilds.AuditLog.Responses;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Guilds.AuditLog.QueryHandlers;
@@ -17,7 +19,8 @@ namespace RaidOps.Application.Implementations.Guilds.AuditLog.QueryHandlers;
 public class GetGuildAuditLogQueryHandler(
     IGuildAccessService guildAccessService,
     IGuildAuditLogRepository auditLogRepository,
-    IUsersRepository usersRepository) : IQueryHandlerAsync<GetGuildAuditLogQuery, GuildAuditLogPageResponse>
+    IUsersRepository usersRepository,
+    IDiscordBotService discordBotService) : IQueryHandlerAsync<GetGuildAuditLogQuery, GuildAuditLogPageResponse>
 {
     /// <summary>
     /// Single source of truth for which <see cref="GuildAuditCategory"/> each action belongs to,
@@ -80,7 +83,7 @@ public class GetGuildAuditLogQueryHandler(
         var response = new GuildAuditLogPageResponse
         {
             HasMore = hasMore,
-            Entries = [.. page.Select(entry => ToResponse(entry, actorsById))],
+            Entries = [.. page.Select(entry => ToResponse(entry, actorsById, discordBotService, cancellationToken))],
         };
 
         return Result<GuildAuditLogPageResponse>.Ok(response);
@@ -102,16 +105,21 @@ public class GetGuildAuditLogQueryHandler(
         return null;
     }
 
-    private static AuditLogEntryResponse ToResponse(GuildAuditLog entry, Dictionary<string, User> actorsById)
+    private static AuditLogEntryResponse ToResponse(GuildAuditLog entry, Dictionary<string, User> actorsById, IDiscordBotService discordBotService, CancellationToken cancellationToken)
     {
         actorsById.TryGetValue(entry.ActorDiscordId, out var actor);
+        var member = GuildMemberIdentityResolver.TryGetMember(discordBotService, entry.GuildId, entry.ActorDiscordId, cancellationToken);
 
         return new AuditLogEntryResponse
         {
             Id = entry.Id,
             ActorDiscordId = entry.ActorDiscordId,
-            ActorUsername = actor?.Name,
-            ActorAvatarHash = actor?.AvatarHash,
+            ActorUsername = member?.Nickname ?? member?.GlobalName ?? member?.Username ?? actor?.Name,
+            // Prefer the bot's live Gateway cache over the DB snapshot (only refreshed at
+            // login/token-refresh) — a member found in cache always wins, even when they have no
+            // avatar at all (null is a meaningful live value, not "unknown, fall back to the DB").
+            ActorAvatarHash = member is not null ? member.AvatarHash : actor?.AvatarHash,
+            ActorGuildAvatarUrl = member?.HasGuildAvatar == true ? member.GetGuildAvatarUrl()?.ToString() : null,
             ActionType = entry.ActionType,
             Category = CategoryByAction[entry.ActionType],
             Variables = entry.Details != null
