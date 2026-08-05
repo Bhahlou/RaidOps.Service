@@ -8,7 +8,9 @@ using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Reference;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
+using RaidOps.UnitTests.ExternalApplication.Bot;
 
 namespace RaidOps.UnitTests.Application.Guilds.Roster.QueryHandlers;
 
@@ -22,11 +24,15 @@ public class GetGuildRosterQueryHandlerTests
     private readonly Mock<IGuildAccessService>        _access        = new();
     private readonly Mock<IGuildMembershipRepository> _memberships   = new();
     private readonly Mock<IUsersRepository>           _users         = new();
+    private readonly Mock<IDiscordBotService>         _bot           = new();
+    private readonly Mock<IGuildService>              _guildService  = new();
     private readonly GetGuildRosterQueryHandler       _sut;
 
     private const string GuildId       = "guild-1";
     private const string RequesterId   = "user-1";
     private const int    GuildBranchId = 1;
+    private const ulong  OwnerUlong    = 300000000000000001UL;
+    private const ulong  GuildUlong    = 900000000000000001UL;
 
     private static readonly GetGuildRosterQuery Query = new()
     {
@@ -37,7 +43,11 @@ public class GetGuildRosterQueryHandlerTests
 
     public GetGuildRosterQueryHandlerTests()
     {
-        _sut = new GetGuildRosterQueryHandler(_guilds.Object, _guildBranches.Object, _access.Object, _memberships.Object, _users.Object);
+        _bot.Setup(b => b.Guilds).Returns(_guildService.Object);
+        // Default: bot doesn't see the owner in its Gateway cache — every existing test that
+        // doesn't care about live member resolution keeps exercising the DB-fallback path.
+        _guildService.Setup(g => g.GetUser(GuildId, It.IsAny<string>(), default)).Returns((NetCord.GuildUser?)null);
+        _sut = new GetGuildRosterQueryHandler(_guilds.Object, _guildBranches.Object, _access.Object, _memberships.Object, _users.Object, _bot.Object);
         _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
             .ReturnsAsync([]);
     }
@@ -160,6 +170,142 @@ public class GetGuildRosterQueryHandlerTests
         member.PlayerName.Should().Be("Bhahlou");
         member.PlayerAvatarHash.Should().Be("hash123");
         member.CharacterRank.Should().Be(CharacterRank.Split);
+    }
+
+    // ── Guild-local identity (Gateway cache) ────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_OwnerFoundInGatewayCache_PrefersGuildNicknameOverDbName()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = ownerId, Name = "Bhahlou", AvatarHash = "stale-hash" }]);
+        _guildService.Setup(g => g.GetUser(GuildId, ownerId, default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(OwnerUlong, GuildUlong, [], username: "bhahlou", nickname: "Le Boss", avatarHash: "live-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().PlayerName.Should().Be("Le Boss");
+    }
+
+    [Fact]
+    public async Task HandleAsync_OwnerFoundInGatewayCache_PrefersLiveAvatarHashOverStaleDbSnapshot()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = ownerId, Name = "Bhahlou", AvatarHash = "stale-hash" }]);
+        _guildService.Setup(g => g.GetUser(GuildId, ownerId, default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(OwnerUlong, GuildUlong, [], username: "bhahlou", avatarHash: "live-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().PlayerAvatarHash.Should().Be("live-hash");
+    }
+
+    [Fact]
+    public async Task HandleAsync_OwnerFoundInGatewayCacheWithNoAvatar_DoesNotFallBackToStaleDbHash()
+    {
+        // Regression test: the owner removed their Discord avatar entirely, but the DB's User row
+        // (only resynced at login/token-refresh) still holds the old hash. The live Gateway lookup
+        // finding the member with no avatar must win — null is meaningful, not "unknown".
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = ownerId, Name = "Bhahlou", AvatarHash = "stale-hash" }]);
+        _guildService.Setup(g => g.GetUser(GuildId, ownerId, default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(OwnerUlong, GuildUlong, [], username: "bhahlou"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().PlayerAvatarHash.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_OwnerHasGuildAvatarOverride_PopulatesPlayerGuildAvatarUrl()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+        _guildService.Setup(g => g.GetUser(GuildId, ownerId, default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(OwnerUlong, GuildUlong, [], username: "bhahlou", guildAvatarHash: "guild-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().PlayerGuildAvatarUrl.Should().Be($"https://cdn.discordapp.com/guilds/{GuildUlong}/users/{OwnerUlong}/avatars/guild-hash.png");
+    }
+
+    [Fact]
+    public async Task HandleAsync_OwnerHasNoGuildAvatarOverride_PlayerGuildAvatarUrlIsNull()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+        _guildService.Setup(g => g.GetUser(GuildId, ownerId, default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(OwnerUlong, GuildUlong, [], username: "bhahlou", avatarHash: "live-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Single().PlayerGuildAvatarUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BotNotInGuild_FallsBackToDbSnapshotWithoutThrowing()
+    {
+        const string ownerId = "owner-1";
+        _guilds.Setup(g => g.GetByIdAsync(GuildId, default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test", IsRegistered = true });
+        _guildBranches.Setup(b => b.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(MakeBranch());
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _memberships.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync(
+        [
+            BuildMembership(id: 1, name: "Arthas", rank: CharacterRank.Main, ownerId: ownerId),
+        ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = ownerId, Name = "Bhahlou", AvatarHash = "db-hash" }]);
+        _guildService.Setup(g => g.GetUser(GuildId, ownerId, default)).Throws<InvalidOperationException>();
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        var member = result.Value!.Single();
+        member.PlayerName.Should().Be("Bhahlou");
+        member.PlayerAvatarHash.Should().Be("db-hash");
+        member.PlayerGuildAvatarUrl.Should().BeNull();
     }
 
     [Fact]

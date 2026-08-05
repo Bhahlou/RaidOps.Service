@@ -44,6 +44,13 @@ public class GuildRosterMemberResponse
     /// <summary>Discord avatar hash of the player, or <c>null</c> if it could not be resolved.</summary>
     public string? PlayerAvatarHash { get; set; }
 
+    /// <summary>
+    /// The player's server-specific avatar URL (Discord's per-guild avatar override), or
+    /// <c>null</c> if they have none set for this guild. Falls back to <see cref="PlayerAvatarHash"/>
+    /// when absent.
+    /// </summary>
+    public string? PlayerGuildAvatarUrl { get; set; }
+
     /// <summary>User-curated raid-viable specs, main spec first. Empty if none have been curated yet.</summary>
     public required List<CharacterRaidSpecDto> RaidSpecs { get; set; }
 
