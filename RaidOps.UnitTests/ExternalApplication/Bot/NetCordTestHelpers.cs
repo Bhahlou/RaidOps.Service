@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using NetCord;
 using NetCord.Gateway;
+using NetCord.Gateway.JsonModels.EventArgs;
 using NetCord.JsonModels;
 using NetCord.Rest;
 using Moq;
@@ -232,6 +233,27 @@ internal static class NetCordTestHelpers
             .SetValue(user, ju);
 
         return user;
+    }
+
+    // ── GuildUserRemoveEventArgs ────────────────────────────────────────────────
+
+    internal static GuildUserRemoveEventArgs MakeGuildUserRemoveEventArgs(ulong guildId, ulong userId)
+    {
+        var jsonArgs = Uninitialized<JsonGuildUserRemoveEventArgs>();
+        SetField(jsonArgs, typeof(JsonGuildUserRemoveEventArgs), "<GuildId>k__BackingField", guildId);
+
+        var jsonUserType = Type.GetType("NetCord.JsonModels.JsonUser, NetCord")!;
+        var ju = RuntimeHelpers.GetUninitializedObject(jsonUserType);
+        SetField(ju, jsonUserType.BaseType!, "<Id>k__BackingField", userId);
+
+        var user = Uninitialized<User>();
+        SetField(user, typeof(User), "_jsonModel", ju);
+
+        var args = Uninitialized<GuildUserRemoveEventArgs>();
+        SetField(args, typeof(GuildUserRemoveEventArgs), "<jsonModel>P", jsonArgs);
+        SetField(args, typeof(GuildUserRemoveEventArgs), "<User>k__BackingField", user);
+
+        return args;
     }
 
     // ── Role ──────────────────────────────────────────────────────────────────
