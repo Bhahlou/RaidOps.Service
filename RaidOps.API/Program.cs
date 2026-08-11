@@ -7,10 +7,12 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using NetCord.Hosting.Services.ApplicationCommands;
 using RaidOps.API.Hubs;
 using RaidOps.Application.Contracts.Configuration;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
+using RaidOps.ExternalApplication.Implementations.Bot.Commands;
 using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Registry;
 using Serilog;
@@ -182,6 +184,8 @@ namespace RaidOps.API
             builder.Services.AddRaidOps(builder.Configuration);
 
             var app = builder.Build();
+
+            app.AddApplicationCommandModule<RaidCommandModule>();
 
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {

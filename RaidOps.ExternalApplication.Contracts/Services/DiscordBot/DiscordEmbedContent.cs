@@ -25,7 +25,8 @@ public record DiscordEmbedContent(
 /// <summary>A single name/value field of a <see cref="DiscordEmbedContent"/>.</summary>
 /// <param name="Name">Field label.</param>
 /// <param name="Value">Field content.</param>
-public record DiscordEmbedField(string Name, string Value);
+/// <param name="Inline">Whether this field can sit side-by-side with adjacent inline fields (Discord fits up to 3 per row) instead of always taking the full width.</param>
+public record DiscordEmbedField(string Name, string Value, bool Inline = false);
 
 /// <summary>The small byline (name + icon) shown above a <see cref="DiscordEmbedContent"/>'s title.</summary>
 /// <param name="Name">Author display name.</param>

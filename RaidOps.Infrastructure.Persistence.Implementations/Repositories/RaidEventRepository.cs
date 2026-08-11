@@ -107,6 +107,16 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     }
 
     /// <inheritdoc/>
+    public async Task UpdateCompositionAnnouncementReferenceAsync(int id, int guildBranchId, string channelId, string messageId, CancellationToken cancellationToken = default)
+    {
+        await context.RaidEvents
+            .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
+            .ExecuteUpdateAsync(e => e
+                .SetProperty(x => x.CompositionAnnouncementChannelId, channelId)
+                .SetProperty(x => x.CompositionAnnouncementMessageId, messageId), cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<int> DeleteEmptyDraftOccurrencesForSeriesAsync(int raidSeriesId, int guildBranchId, CancellationToken cancellationToken = default)
         => await context.RaidEvents
             .Where(e => e.RaidSeriesId == raidSeriesId
@@ -114,4 +124,14 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
                 && e.PublicationStatus == RaidPublicationStatus.Draft
                 && !e.Assignments.Any())
             .ExecuteDeleteAsync(cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<List<RaidEvent>> GetUpcomingPublishedForGuildAsync(string guildId, DateTime fromUtc, int limit, CancellationToken cancellationToken = default)
+        => await context.RaidEvents
+            .Where(e => e.GuildId == guildId && e.PublicationStatus == RaidPublicationStatus.Published && e.StartsAtUtc >= fromUtc)
+            .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .AsNoTracking()
+            .OrderBy(e => e.StartsAtUtc)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
 }

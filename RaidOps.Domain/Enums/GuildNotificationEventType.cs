@@ -43,4 +43,18 @@ public enum GuildNotificationEventType
 
     /// <summary>A slot assignment's spec was changed on an already-published raid event.</summary>
     RaidSlotSpecChanged = 9,
+
+    /// <summary>
+    /// The standing "current composition" embed for a published raid event is posted/updated in a
+    /// Discord channel — edited in place as the roster changes, rather than a new message per
+    /// change like <see cref="RaidSlotAssigned"/> and friends.
+    /// </summary>
+    RaidCompositionAnnouncementPosted = 10,
+
+    /// <summary>
+    /// A player is DMed because they were added to or removed from a published raid event's
+    /// composition. Independent of <see cref="RaidCompositionAnnouncementPosted"/> — either, both,
+    /// or neither can be enabled.
+    /// </summary>
+    RaidCompositionAnnouncementDm = 11,
 }

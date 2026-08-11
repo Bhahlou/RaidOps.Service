@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageReference Include="NetCord" Version="1.0.0-alpha.489" />
+    <PackageReference Include="NetCord.Services" Version="1.0.0-alpha.489" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,6 +24,10 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>RaidOps.UnitTests</_Parameter1>
     </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Bot\Commands\Localizations\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -15,6 +15,7 @@ namespace RaidOps.Application.Implementations.Raids.Series.CommandHandlers;
 public class CreateRaidSeriesCommandHandler(
     IRaidGridAndZoneValidator gridAndZoneValidator,
     IRaidSeriesRepository raidSeriesRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<CreateRaidSeriesCommand>
 {
     /// <inheritdoc/>
@@ -27,6 +28,8 @@ public class CreateRaidSeriesCommandHandler(
 
         var distinctZoneIds = validation.Value!;
 
+        var branch = await guildBranchesRepository.GetByIdAsync(command.GuildBranchId, cancellationToken);
+
         var series = new RaidSeries
         {
             GuildId = command.GuildId,
@@ -37,7 +40,7 @@ public class CreateRaidSeriesCommandHandler(
             RecurrenceIntervalWeeks = command.RecurrenceIntervalWeeks <= 0 ? 1 : command.RecurrenceIntervalWeeks,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,
-            SignupMode = SignupMode.DefaultPresent,
+            SignupMode = branch?.SignupMode ?? SignupMode.DefaultPresent,
             IsActive = true,
             CreatedByDiscordId = command.RequesterDiscordId,
             CreatedAt = DateTime.UtcNow,

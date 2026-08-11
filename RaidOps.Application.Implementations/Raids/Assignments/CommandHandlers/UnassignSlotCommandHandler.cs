@@ -47,6 +47,7 @@ public class UnassignSlotCommandHandler(
             await raidCompositionNotifier.NotifySlotUnassignedAsync(
                 raidEvent, command.RequesterDiscordId,
                 new RaidCharacterRef(characterName, character?.ClassId, specName),
+                occupant.AssignedPlayerDiscordId,
                 new SlotCoordinate(command.GroupNumber, command.SlotNumber),
                 cancellationToken);
         }

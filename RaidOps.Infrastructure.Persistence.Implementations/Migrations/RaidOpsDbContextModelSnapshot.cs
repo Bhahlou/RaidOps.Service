@@ -461,6 +461,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<int?>("SignupMode")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
@@ -644,6 +647,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CompositionAnnouncementChannelId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompositionAnnouncementMessageId")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

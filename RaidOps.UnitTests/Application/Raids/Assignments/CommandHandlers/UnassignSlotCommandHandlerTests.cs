@@ -25,6 +25,7 @@ public class UnassignSlotCommandHandlerTests
     private const int GuildBranchId = 10;
     private const string RequesterId = "officer-1";
     private const int EventId = 5;
+    private const string PlayerDiscordId = "player-1";
 
     public UnassignSlotCommandHandlerTests()
     {
@@ -122,7 +123,7 @@ public class UnassignSlotCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
-            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<string>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
     }
 
     [Fact]
@@ -131,7 +132,7 @@ public class UnassignSlotCommandHandlerTests
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         var publishedEvent = MakeEvent(status: RaidPublicationStatus.Published, assignments:
         [
-            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1 },
+            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1, AssignedPlayerDiscordId = PlayerDiscordId },
         ]);
         _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
         _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
@@ -147,6 +148,7 @@ public class UnassignSlotCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
             publishedEvent, RequesterId,
             It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"),
+            PlayerDiscordId,
             new SlotCoordinate(1, 2),
             default), Times.Once);
     }
@@ -169,7 +171,7 @@ public class UnassignSlotCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
-            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<string>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
     }
 
     [Fact]
@@ -189,7 +191,7 @@ public class UnassignSlotCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
-            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<string>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
     }
 
     [Fact]
@@ -198,7 +200,7 @@ public class UnassignSlotCommandHandlerTests
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         var publishedEvent = MakeEvent(status: RaidPublicationStatus.Published, assignments:
         [
-            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1 },
+            new RaidSlotAssignment { GroupNumber = 1, SlotNumber = 2, CharacterId = CharacterId, SpecId = 1, AssignedPlayerDiscordId = PlayerDiscordId },
         ]);
         _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(publishedEvent);
         _compositionRepository.Setup(r => r.UnassignAsync(EventId, 1, 2, default)).ReturnsAsync(true);
@@ -211,6 +213,7 @@ public class UnassignSlotCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotUnassignedAsync(
             publishedEvent, RequesterId,
             It.Is<RaidCharacterRef>(c => c.Name == CharacterId.ToString() && c.ClassId == null && c.SpecName == null),
+            PlayerDiscordId,
             new SlotCoordinate(1, 2),
             default), Times.Once);
     }

@@ -62,6 +62,14 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task UpdateSignupMode_WithoutToken_Returns401()
+    {
+        var body = JsonContent.Create(new { signupMode = "Signup" });
+        var response = await Client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/signup-mode", body);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetBranches_TokenWithoutSubClaim_Returns401()
     {
         var client = CreateClientWithoutSubClaim();
@@ -109,6 +117,17 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
         var body = JsonContent.Create(new { region = "eu" });
 
         var response = await client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/region", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateSignupMode_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var body = JsonContent.Create(new { signupMode = "Signup" });
+
+        var response = await client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/signup-mode", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -464,6 +483,90 @@ public class GuildBranchesControllerTests(RaidOpsWebApplicationFactory factory)
 
             var variables = JsonSerializer.Deserialize<Dictionary<string, string>>(log.Details!);
             variables.Should().ContainKey("newRegion").WhoseValue.Should().Be("eu");
+        }
+    }
+
+    // ── UpdateSignupMode ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateSignupMode_WhenOfficerOfBranch_Returns200AndPersists()
+    {
+        const string id      = "700000000000000015";
+        const string guildId = "970000000000000015";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { signupMode = "Signup" });
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/signup-mode", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var updated = await db.GuildBranches.FindAsync(branch.Id);
+            updated!.SignupMode.Should().Be(SignupMode.Signup);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSignupMode_WhenNotOfficerOfBranch_Returns400()
+    {
+        const string id      = "700000000000000016";
+        const string guildId = "970000000000000016";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { signupMode = "Signup" });
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/signup-mode", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateSignupMode_OnSuccess_WritesAuditLog()
+    {
+        const string id      = "700000000000000017";
+        const string guildId = "970000000000000017";
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, officerRoleIds: []);
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.GuildBranches.Add(branch);
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { signupMode = "Signup" });
+
+        await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branch.Id}/signup-mode", body);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var log = await db.GuildAuditLogs.FirstOrDefaultAsync(l =>
+                l.GuildId == guildId && l.ActionType == GuildAuditAction.BranchSignupModeUpdated);
+            log.Should().NotBeNull();
+            log!.ActorDiscordId.Should().Be(id);
+
+            var variables = JsonSerializer.Deserialize<Dictionary<string, string>>(log.Details!);
+            variables.Should().ContainKey("newSignupMode").WhoseValue.Should().Be("Signup");
         }
     }
 }

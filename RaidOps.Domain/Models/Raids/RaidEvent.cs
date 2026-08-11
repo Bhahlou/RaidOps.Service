@@ -70,6 +70,20 @@ public class RaidEvent
     /// <summary>UTC timestamp of the last update, or <c>null</c> if never updated.</summary>
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>
+    /// Discord snowflake ID of the channel the standing "current composition" announcement embed
+    /// was posted in, or <c>null</c> if it's never been posted (composition announcements are
+    /// disabled for this guild/branch, or the event isn't published yet).
+    /// </summary>
+    public string? CompositionAnnouncementChannelId { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of the standing "current composition" announcement message — edited in
+    /// place as the roster changes, rather than reposted. <c>null</c> alongside
+    /// <see cref="CompositionAnnouncementChannelId"/>.
+    /// </summary>
+    public string? CompositionAnnouncementMessageId { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The guild this event belongs to.</summary>

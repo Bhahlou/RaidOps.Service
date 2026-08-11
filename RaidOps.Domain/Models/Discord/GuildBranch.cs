@@ -33,6 +33,13 @@ public class GuildBranch
     public RosterMode? RosterMode { get; set; }
 
     /// <summary>
+    /// How attendance is determined by default for new raid events created on this branch. Null
+    /// until the guild owner configures it, in which case <see cref="Enums.SignupMode.DefaultPresent"/>
+    /// applies.
+    /// </summary>
+    public SignupMode? SignupMode { get; set; }
+
+    /// <summary>
     /// Discord snowflake IDs of the roles that grant roster access on this branch. Holding any
     /// one of these roles is sufficient — an explicit set, not a hierarchy-position threshold,
     /// since two branches' roles can sit at unrelated positions on the same flat Discord axis.

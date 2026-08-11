@@ -23,6 +23,9 @@ public class GuildBranchResponse
     /// <summary>Controls who may join this branch's roster, or <c>null</c> if not yet configured.</summary>
     public RosterMode? RosterMode { get; set; }
 
+    /// <summary>Default signup mode for new raid events on this branch, or <c>null</c> if not yet configured.</summary>
+    public SignupMode? SignupMode { get; set; }
+
     /// <summary>Discord snowflake IDs of the roles that grant roster access on this branch.</summary>
     public List<string> RosterRoleIds { get; set; } = [];
 

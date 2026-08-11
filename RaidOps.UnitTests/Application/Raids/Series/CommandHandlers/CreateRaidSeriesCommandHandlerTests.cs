@@ -14,6 +14,7 @@ public class CreateRaidSeriesCommandHandlerTests
 {
     private readonly Mock<IRaidGridAndZoneValidator> _gridAndZoneValidator = new();
     private readonly Mock<IRaidSeriesRepository> _raidSeriesRepository = new();
+    private readonly Mock<IGuildBranchesRepository> _guildBranchesRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly CreateRaidSeriesCommandHandler _sut;
 
@@ -23,7 +24,8 @@ public class CreateRaidSeriesCommandHandlerTests
 
     public CreateRaidSeriesCommandHandlerTests()
     {
-        _sut = new CreateRaidSeriesCommandHandler(_gridAndZoneValidator.Object, _raidSeriesRepository.Object, _auditLogService.Object);
+        _sut = new CreateRaidSeriesCommandHandler(
+            _gridAndZoneValidator.Object, _raidSeriesRepository.Object, _guildBranchesRepository.Object, _auditLogService.Object);
 
         _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
             .ReturnsAsync(Result<List<int>>.Ok([1]));

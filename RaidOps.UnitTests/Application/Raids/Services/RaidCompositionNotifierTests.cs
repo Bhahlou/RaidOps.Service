@@ -16,15 +16,19 @@ public class RaidCompositionNotifierTests
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
     private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
+    private readonly Mock<IRaidCompositionAnnouncementService> _raidCompositionAnnouncementService = new();
     private readonly RaidCompositionNotifier _sut;
 
     private const string GuildId = "guild-1";
     private const int GuildBranchId = 10;
     private const string RequesterId = "officer-1";
+    private const string PlayerDiscordId = "player-1";
 
     public RaidCompositionNotifierTests()
     {
-        _sut = new RaidCompositionNotifier(_guildsRepository.Object, _auditLogService.Object, _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object);
+        _sut = new RaidCompositionNotifier(
+            _guildsRepository.Object, _auditLogService.Object, _guildNotificationDispatcher.Object,
+            _raidNotificationContentBuilder.Object, _raidCompositionAnnouncementService.Object);
 
         _guildsRepository.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Timezone = "Europe/Paris" });
     }
@@ -49,7 +53,7 @@ public class RaidCompositionNotifierTests
         var embed = new DiscordEmbedContent("Character added");
         _raidNotificationContentBuilder.Setup(b => b.BuildSlotAssignedAsync(GuildId, RequesterId, raidEvent, character, slot, default)).ReturnsAsync(embed);
 
-        await _sut.NotifySlotAssignedAsync(raidEvent, RequesterId, character, slot);
+        await _sut.NotifySlotAssignedAsync(raidEvent, RequesterId, character, PlayerDiscordId, slot);
 
         _auditLogService.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.SlotAssigned,
@@ -72,7 +76,7 @@ public class RaidCompositionNotifierTests
         var slot = new SlotCoordinate(1, 1);
         _raidNotificationContentBuilder.Setup(b => b.BuildSlotAssignedAsync(GuildId, RequesterId, raidEvent, character, slot, default)).ReturnsAsync(new DiscordEmbedContent("x"));
 
-        await _sut.NotifySlotAssignedAsync(raidEvent, RequesterId, character, slot);
+        await _sut.NotifySlotAssignedAsync(raidEvent, RequesterId, character, PlayerDiscordId, slot);
 
         _auditLogService.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.SlotAssigned,
@@ -91,7 +95,7 @@ public class RaidCompositionNotifierTests
         var embed = new DiscordEmbedContent("Character removed");
         _raidNotificationContentBuilder.Setup(b => b.BuildSlotUnassignedAsync(GuildId, RequesterId, raidEvent, character, slot, default)).ReturnsAsync(embed);
 
-        await _sut.NotifySlotUnassignedAsync(raidEvent, RequesterId, character, slot);
+        await _sut.NotifySlotUnassignedAsync(raidEvent, RequesterId, character, PlayerDiscordId, slot);
 
         _auditLogService.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.SlotUnassigned,
@@ -135,7 +139,7 @@ public class RaidCompositionNotifierTests
         var embed = new DiscordEmbedContent("Slot spec changed");
         _raidNotificationContentBuilder.Setup(b => b.BuildSlotSpecChangedAsync(GuildId, RequesterId, raidEvent, character, "Arms", "Fury", default)).ReturnsAsync(embed);
 
-        await _sut.NotifySlotSpecChangedAsync(raidEvent, RequesterId, character, "Arms", "Fury");
+        await _sut.NotifySlotSpecChangedAsync(raidEvent, RequesterId, character, PlayerDiscordId, "Arms", "Fury");
 
         _auditLogService.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.SlotAssignmentSpecChanged,
@@ -155,7 +159,7 @@ public class RaidCompositionNotifierTests
         var slot = new SlotCoordinate(1, 1);
         _raidNotificationContentBuilder.Setup(b => b.BuildSlotAssignedAsync(GuildId, RequesterId, raidEvent, character, slot, default)).ReturnsAsync(new DiscordEmbedContent("x"));
 
-        await _sut.NotifySlotAssignedAsync(raidEvent, RequesterId, character, slot);
+        await _sut.NotifySlotAssignedAsync(raidEvent, RequesterId, character, PlayerDiscordId, slot);
 
         _auditLogService.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.SlotAssigned,

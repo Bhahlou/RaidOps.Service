@@ -33,6 +33,7 @@ internal static class ApplicationRegistry
         services.AddScoped<IRaidSlotEligibilityValidator, RaidSlotEligibilityValidator>();
         services.AddScoped<IRaidGridAndZoneValidator, RaidGridAndZoneValidator>();
         services.AddScoped<IRaidNotificationContentBuilder, RaidNotificationContentBuilder>();
+        services.AddScoped<IRaidCompositionAnnouncementService, RaidCompositionAnnouncementService>();
         services.AddScoped<IRaidCompositionNotifier, RaidCompositionNotifier>();
         return services;
     }
