@@ -106,4 +106,164 @@ public class RaidNotificationTextTests
     {
         RaidNotificationText.GetPublishedDescription("1", "Split 1", "es").Should().Be("<@1> published **Split 1**.");
     }
+
+    // ── GetTitleAndColor (composition announcement) ─────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Current composition")]
+    [InlineData("fr", "Composition actuelle")]
+    [InlineData("de", "Aktuelle Zusammensetzung")]
+    public void GetTitleAndColor_RaidCompositionAnnouncementPosted_ReturnsLocalizedTitle(string language, string expectedTitle)
+    {
+        var (title, color) = RaidNotificationText.GetTitleAndColor(GuildNotificationEventType.RaidCompositionAnnouncementPosted, language);
+
+        title.Should().Be(expectedTitle);
+        color.Should().Be(0x5865F2);
+    }
+
+    // ── GetCompositionAnnouncementDescription ────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "starts · updated automatically.")]
+    [InlineData("fr", "starts · mis à jour automatiquement.")]
+    [InlineData("de", "starts · wird automatisch aktualisiert.")]
+    public void GetCompositionAnnouncementDescription_LocalizesTrailingPhrase(string language, string expected)
+    {
+        RaidNotificationText.GetCompositionAnnouncementDescription("starts", language).Should().Be(expected);
+    }
+
+    // ── GetGroupLabel ─────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Group 2:")]
+    [InlineData("fr", "Groupe 2 :")]
+    [InlineData("de", "Gruppe 2:")]
+    public void GetGroupLabel_LocalizesGroupWording(string language, string expected)
+    {
+        RaidNotificationText.GetGroupLabel(2, language).Should().Be(expected);
+    }
+
+    // ── GetPlayerAddedDmTitleAndColor ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Added to the raid")]
+    [InlineData("fr", "Ajouté au raid")]
+    [InlineData("de", "Zum Raid hinzugefügt")]
+    public void GetPlayerAddedDmTitleAndColor_ReturnsLocalizedTitle(string language, string expectedTitle)
+    {
+        var (title, color) = RaidNotificationText.GetPlayerAddedDmTitleAndColor(language);
+
+        title.Should().Be(expectedTitle);
+        color.Should().Be(0x57F287);
+    }
+
+    // ── GetPlayerRemovedDmTitleAndColor ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Removed from the raid")]
+    [InlineData("fr", "Retiré du raid")]
+    [InlineData("de", "Vom Raid entfernt")]
+    public void GetPlayerRemovedDmTitleAndColor_ReturnsLocalizedTitle(string language, string expectedTitle)
+    {
+        var (title, color) = RaidNotificationText.GetPlayerRemovedDmTitleAndColor(language);
+
+        title.Should().Be(expectedTitle);
+        color.Should().Be(0xED4245);
+    }
+
+    // ── GetRaidPublishedDmTitleAndColor ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Split 1 published")]
+    [InlineData("fr", "Split 1 publié")]
+    [InlineData("de", "Split 1 veröffentlicht")]
+    public void GetRaidPublishedDmTitleAndColor_LocalizesAroundEventName(string language, string expectedTitle)
+    {
+        var (title, color) = RaidNotificationText.GetRaidPublishedDmTitleAndColor("Split 1", language);
+
+        title.Should().Be(expectedTitle);
+        color.Should().Be(0x57F287);
+    }
+
+    // ── GetPlayerCompositionDmDescription ─────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", true, "You've been added to **Split 1** (starts) with X.")]
+    [InlineData("fr", true, "Tu as été ajouté à **Split 1** (starts) avec X.")]
+    [InlineData("de", true, "Du wurdest mit X zu **Split 1** (starts) hinzugefügt.")]
+    [InlineData("en", false, "You've been removed from **Split 1** (starts) with X.")]
+    [InlineData("fr", false, "Tu as été retiré de **Split 1** (starts) avec X.")]
+    [InlineData("de", false, "Du wurdest mit X von **Split 1** (starts) entfernt.")]
+    public void GetPlayerCompositionDmDescription_LocalizesAddedOrRemovedVerb(string language, bool added, string expected)
+    {
+        RaidNotificationText.GetPlayerCompositionDmDescription("Split 1", "starts", "X", added, language).Should().Be(expected);
+    }
+
+    // ── GetPlayerSpecChangedDmTitleAndColor ───────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Spec changed")]
+    [InlineData("fr", "Spécialisation changée")]
+    [InlineData("de", "Skillung geändert")]
+    public void GetPlayerSpecChangedDmTitleAndColor_ReturnsLocalizedTitle(string language, string expectedTitle)
+    {
+        var (title, color) = RaidNotificationText.GetPlayerSpecChangedDmTitleAndColor(language);
+
+        title.Should().Be(expectedTitle);
+        color.Should().Be(0xFEE75C);
+    }
+
+    // ── GetPlayerSpecChangedDmDescription ─────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Your spec for **Split 1** (starts) changed on X: OLD → NEW.")]
+    [InlineData("fr", "Ta spécialisation pour **Split 1** (starts) a changé sur X : OLD → NEW.")]
+    [InlineData("de", "Deine Skillung für **Split 1** (starts) wurde auf X geändert: OLD → NEW.")]
+    public void GetPlayerSpecChangedDmDescription_LocalizesOldAndNewSpec(string language, string expected)
+    {
+        RaidNotificationText.GetPlayerSpecChangedDmDescription("Split 1", "starts", "X", "OLD", "NEW", language).Should().Be(expected);
+    }
+
+    // ── GetRaidCancelledDmTitleAndColor ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "Raid cancelled")]
+    [InlineData("fr", "Raid annulé")]
+    [InlineData("de", "Raid abgesagt")]
+    public void GetRaidCancelledDmTitleAndColor_ReturnsLocalizedTitle(string language, string expectedTitle)
+    {
+        var (title, color) = RaidNotificationText.GetRaidCancelledDmTitleAndColor(language);
+
+        title.Should().Be(expectedTitle);
+        color.Should().Be(0xED4245);
+    }
+
+    // ── GetRaidCancelledDmDescription ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "The raid **Split 1** (starts) you were in with X has been cancelled.")]
+    [InlineData("fr", "Le raid **Split 1** (starts) auquel tu participais avec X a été annulé.")]
+    [InlineData("de", "Der Raid **Split 1** (starts), an dem du mit X teilgenommen hast, wurde abgesagt.")]
+    public void GetRaidCancelledDmDescription_LocalizesBody(string language, string expected)
+    {
+        RaidNotificationText.GetRaidCancelledDmDescription("Split 1", "starts", "X", language).Should().Be(expected);
+    }
+
+    // ── GetGroupingPingMessage ─────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "<@1>\n**Split 1** - grouping in progress. /w Arthas inv")]
+    [InlineData("fr", "<@1>\n**Split 1** - groupage en cours. /w Arthas inv")]
+    [InlineData("de", "<@1>\n**Split 1** - Gruppierung läuft. /w Arthas inv")]
+    public void GetGroupingPingMessage_LocalizesGroupingPhraseKeepsWhisperCommandLiteral(string language, string expected)
+    {
+        RaidNotificationText.GetGroupingPingMessage("<@1>", "Split 1", "Arthas", language).Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetGroupingPingMessage_UnsupportedLanguage_FallsBackToEnglish()
+    {
+        RaidNotificationText.GetGroupingPingMessage("<@1>", "Split 1", "Arthas", "es")
+            .Should().Be("<@1>\n**Split 1** - grouping in progress. /w Arthas inv");
+    }
 }

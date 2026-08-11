@@ -5,8 +5,10 @@ using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -157,5 +159,39 @@ public class PublishRaidEventCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidPublished, GuildBranchId, embed, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Success_PublishesAnnouncementAndDmsEveryAlreadyAssignedPlayer()
+    {
+        SetupOfficer();
+        var assignments = new List<RaidSlotAssignment>
+        {
+            new()
+            {
+                AssignedPlayerDiscordId = "player-1",
+                Character = new Character { Id = 1, Name = "Arthas", ClassId = 6 },
+                Spec = new Spec { Name = "Blood" },
+            },
+            new()
+            {
+                AssignedPlayerDiscordId = "player-2",
+                Character = new Character { Id = 2, Name = "Jaina", ClassId = 8 },
+                Spec = new Spec { Name = "Frost" },
+            },
+        };
+        var raidEvent = MakeEvent();
+        raidEvent.Assignments = assignments;
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(raidEvent);
+        _raidEventRepository.Setup(r => r.PublishAsync(EventId, GuildBranchId, RequesterId, default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionAnnouncementService.Verify(s => s.PublishOrUpdateAnnouncementAsync(raidEvent, default), Times.Once);
+        _raidCompositionAnnouncementService.Verify(s => s.NotifyPlayerAddedAsync(
+            raidEvent, "player-1", It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"), true, default), Times.Once);
+        _raidCompositionAnnouncementService.Verify(s => s.NotifyPlayerAddedAsync(
+            raidEvent, "player-2", It.Is<RaidCharacterRef>(c => c.Name == "Jaina" && c.ClassId == 8 && c.SpecName == "Frost"), true, default), Times.Once);
     }
 }

@@ -5,8 +5,10 @@ using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Reference;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -141,5 +143,38 @@ public class DeleteRaidEventCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidCancelled, GuildBranchId, embed, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishedEvent_DeletesAnnouncementAndNotifiesEveryAssignedPlayerOfCancellation()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        var assignments = new List<RaidSlotAssignment>
+        {
+            new()
+            {
+                AssignedPlayerDiscordId = "player-1",
+                Character = new Character { Id = 1, Name = "Arthas", ClassId = 6 },
+                Spec = new Spec { Name = "Blood" },
+            },
+            new()
+            {
+                AssignedPlayerDiscordId = "player-2",
+                Character = new Character { Id = 2, Name = "Jaina", ClassId = 8 },
+                Spec = new Spec { Name = "Frost" },
+            },
+        };
+        var existing = new RaidEvent { Id = EventId, Name = "Split 1", PublicationStatus = RaidPublicationStatus.Published, Assignments = assignments };
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(existing);
+        _raidNotificationContentBuilder.Setup(b => b.BuildCancelledAsync(GuildId, RequesterId, existing, default)).ReturnsAsync(new DiscordEmbedContent("Raid cancelled"));
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidCompositionAnnouncementService.Verify(s => s.DeleteAnnouncementAsync(existing, default), Times.Once);
+        _raidCompositionAnnouncementService.Verify(s => s.NotifyPlayerRaidCancelledAsync(
+            existing, "player-1", It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"), default), Times.Once);
+        _raidCompositionAnnouncementService.Verify(s => s.NotifyPlayerRaidCancelledAsync(
+            existing, "player-2", It.Is<RaidCharacterRef>(c => c.Name == "Jaina" && c.ClassId == 8 && c.SpecName == "Frost"), default), Times.Once);
     }
 }
