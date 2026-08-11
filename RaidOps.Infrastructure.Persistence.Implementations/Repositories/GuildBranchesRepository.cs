@@ -98,4 +98,15 @@ public class GuildBranchesRepository(RaidOpsDbContext context) : IGuildBranchesR
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <inheritdoc/>
+    public async Task<bool> UpdateSignupModeAsync(int guildBranchId, SignupMode signupMode, CancellationToken cancellationToken = default)
+    {
+        var branch = await context.GuildBranches.FindAsync([guildBranchId], cancellationToken);
+        if (branch == null) return false;
+
+        branch.SignupMode = signupMode;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
 }

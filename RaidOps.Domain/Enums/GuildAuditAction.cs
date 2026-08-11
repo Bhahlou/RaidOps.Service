@@ -94,4 +94,7 @@ public enum GuildAuditAction
 
     /// <summary>A slot assignment's spec was changed on an already-published raid event.</summary>
     SlotAssignmentSpecChanged = 30,
+
+    /// <summary>A guild branch's default raid signup mode was set or changed.</summary>
+    BranchSignupModeUpdated = 31,
 }

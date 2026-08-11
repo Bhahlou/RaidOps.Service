@@ -254,7 +254,7 @@ public class AssignCharacterToSlotCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _raidCompositionNotifier.Verify(n => n.NotifySlotAssignedAsync(
-            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<string>(), It.IsAny<SlotCoordinate>(), default), Times.Never);
     }
 
     [Fact]
@@ -282,6 +282,7 @@ public class AssignCharacterToSlotCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotAssignedAsync(
             publishedEvent, RequesterId,
             It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"),
+            PlayerDiscordId,
             new SlotCoordinate(2, 3),
             default), Times.Once);
     }
@@ -308,6 +309,7 @@ public class AssignCharacterToSlotCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotAssignedAsync(
             publishedEvent, RequesterId,
             It.Is<RaidCharacterRef>(c => c.SpecName == null),
+            PlayerDiscordId,
             new SlotCoordinate(1, 2),
             default), Times.Once);
     }

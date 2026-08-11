@@ -26,6 +26,7 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
     private const string RequesterId = "officer-1";
     private const int EventId = 5;
     private const int CharacterId = 42;
+    private const string PlayerDiscordId = "player-1";
 
     public UpdateSlotAssignmentSpecCommandHandlerTests()
     {
@@ -49,7 +50,7 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
     {
         Id = EventId,
         PublicationStatus = status,
-        Assignments = [new RaidSlotAssignment { GroupNumber = groupNumber, SlotNumber = slotNumber, CharacterId = CharacterId, SpecId = oldSpecId }],
+        Assignments = [new RaidSlotAssignment { GroupNumber = groupNumber, SlotNumber = slotNumber, CharacterId = CharacterId, SpecId = oldSpecId, AssignedPlayerDiscordId = PlayerDiscordId }],
     };
 
     private void SetupOfficer() =>
@@ -173,7 +174,7 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _raidCompositionNotifier.Verify(n => n.NotifySlotSpecChangedAsync(
-            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+            It.IsAny<RaidEvent>(), It.IsAny<string>(), It.IsAny<RaidCharacterRef>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
 
     [Fact]
@@ -195,7 +196,7 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotSpecChangedAsync(
             publishedEvent, RequesterId,
             It.Is<RaidCharacterRef>(c => c.Name == "Bhahlouslam" && c.ClassId == 1 && c.SpecName == null),
-            "Arms", "Fury",
+            PlayerDiscordId, "Arms", "Fury",
             default), Times.Once);
     }
 
@@ -216,7 +217,7 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _raidCompositionNotifier.Verify(n => n.NotifySlotSpecChangedAsync(
-            publishedEvent, RequesterId, It.IsAny<RaidCharacterRef>(), "1", "Fury", default), Times.Once);
+            publishedEvent, RequesterId, It.IsAny<RaidCharacterRef>(), PlayerDiscordId, "1", "Fury", default), Times.Once);
     }
 
     [Fact]
@@ -238,6 +239,6 @@ public class UpdateSlotAssignmentSpecCommandHandlerTests
         _raidCompositionNotifier.Verify(n => n.NotifySlotSpecChangedAsync(
             publishedEvent, RequesterId,
             It.Is<RaidCharacterRef>(c => c.Name == CharacterId.ToString() && c.ClassId == null),
-            "Arms", "Fury", default), Times.Once);
+            PlayerDiscordId, "Arms", "Fury", default), Times.Once);
     }
 }

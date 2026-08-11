@@ -106,32 +106,4 @@ public class RaidNotificationTextTests
     {
         RaidNotificationText.GetPublishedDescription("1", "Split 1", "es").Should().Be("<@1> published **Split 1**.");
     }
-
-    // ── FormatDateTime ────────────────────────────────────────────────────────
-
-    private static readonly DateTime SampleDateTime = new(2026, 2, 1, 21, 5, 0);
-
-    [Fact]
-    public void FormatDateTime_English_UsesSlashDateAndAtConnector()
-    {
-        RaidNotificationText.FormatDateTime(SampleDateTime, "en").Should().Be("2/1/2026 at 21:05");
-    }
-
-    [Fact]
-    public void FormatDateTime_French_UsesSlashDateAndHeureConnector()
-    {
-        RaidNotificationText.FormatDateTime(SampleDateTime, "fr").Should().Be("01/02/2026 à 21h05");
-    }
-
-    [Fact]
-    public void FormatDateTime_German_UsesDottedDateAndUmConnector()
-    {
-        RaidNotificationText.FormatDateTime(SampleDateTime, "de").Should().Be("01.02.2026 um 21:05");
-    }
-
-    [Fact]
-    public void FormatDateTime_UnsupportedLanguage_FallsBackToEnglishFormat()
-    {
-        RaidNotificationText.FormatDateTime(SampleDateTime, "es").Should().Be("2/1/2026 at 21:05");
-    }
 }

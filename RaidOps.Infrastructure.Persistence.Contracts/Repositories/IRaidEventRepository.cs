@@ -35,10 +35,24 @@ public interface IRaidEventRepository
     Task<bool> DeleteAsync(int id, int guildBranchId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Persists the Discord channel/message ID of the standing "current composition" announcement
+    /// for the given event — set on first post, or refreshed if the message had to be re-posted.
+    /// </summary>
+    Task UpdateCompositionAnnouncementReferenceAsync(int id, int guildBranchId, string channelId, string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bulk deletes every occurrence of <paramref name="raidSeriesId"/> that's still a draft with no
     /// slot assignments — used when deactivating a series to clear the empty occurrences it already
     /// produced. Published events and events with roster history are never touched. Returns the
     /// number of events deleted.
     /// </summary>
     Task<int> DeleteEmptyDraftOccurrencesForSeriesAsync(int raidSeriesId, int guildBranchId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the guild's published events starting at or after <paramref name="fromUtc"/>, across
+    /// every branch, earliest first — backs the Discord bot's <c>/raid invite</c> subcommand
+    /// autocomplete, which has no branch context to scope by. Includes each event's branch (for its
+    /// display name).
+    /// </summary>
+    Task<List<RaidEvent>> GetUpcomingPublishedForGuildAsync(string guildId, DateTime fromUtc, int limit, CancellationToken cancellationToken = default);
 }

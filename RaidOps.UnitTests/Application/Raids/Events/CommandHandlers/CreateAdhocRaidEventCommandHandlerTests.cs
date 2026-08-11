@@ -17,6 +17,7 @@ public class CreateAdhocRaidEventCommandHandlerTests
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<IRaidZoneRepository> _raidZoneRepository = new();
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
+    private readonly Mock<IGuildBranchesRepository> _guildBranchesRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly CreateAdhocRaidEventCommandHandler _sut;
 
@@ -27,7 +28,8 @@ public class CreateAdhocRaidEventCommandHandlerTests
     public CreateAdhocRaidEventCommandHandlerTests()
     {
         _sut = new CreateAdhocRaidEventCommandHandler(
-            _gridAndZoneValidator.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _guildsRepository.Object, _auditLogService.Object);
+            _gridAndZoneValidator.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _guildsRepository.Object,
+            _guildBranchesRepository.Object, _auditLogService.Object);
 
         _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
             .ReturnsAsync(Result<List<int>>.Ok([1]));

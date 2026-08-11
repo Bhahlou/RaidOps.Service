@@ -21,7 +21,8 @@ public class DeleteRaidEventCommandHandler(
     IGuildsRepository guildsRepository,
     IAuditLogService auditLogService,
     IGuildNotificationDispatcher guildNotificationDispatcher,
-    IRaidNotificationContentBuilder raidNotificationContentBuilder) : ICommandHandlerAsync<DeleteRaidEventCommand>
+    IRaidNotificationContentBuilder raidNotificationContentBuilder,
+    IRaidCompositionAnnouncementService raidCompositionAnnouncementService) : ICommandHandlerAsync<DeleteRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeleteRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -55,6 +56,16 @@ public class DeleteRaidEventCommandHandler(
         {
             var embed = await raidNotificationContentBuilder.BuildCancelledAsync(command.GuildId, command.RequesterDiscordId, existing, cancellationToken);
             await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidCancelled, command.GuildBranchId, embed, cancellationToken);
+
+            await raidCompositionAnnouncementService.DeleteAnnouncementAsync(existing, cancellationToken);
+
+            // Sent unconditionally (ignores the DM setting) — the only guaranteed way an assigned
+            // player learns their raid was cancelled, since the public embed never pings anyone.
+            foreach (var assignment in existing.Assignments)
+            {
+                var character = new RaidCharacterRef(assignment.Character.Name, assignment.Character.ClassId, assignment.Spec.Name);
+                await raidCompositionAnnouncementService.NotifyPlayerRaidCancelledAsync(existing, assignment.AssignedPlayerDiscordId, character, cancellationToken);
+            }
         }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event deleted successfully."));

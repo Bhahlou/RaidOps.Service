@@ -7,6 +7,8 @@ using NetCord.Gateway;
 using NetCord.Gateway.JsonModels.EventArgs;
 using NetCord.JsonModels;
 using NetCord.Rest;
+using NetCord.Rest.JsonModels;
+using NetCord.Services.ApplicationCommands;
 using Moq;
 
 namespace RaidOps.UnitTests.ExternalApplication.Bot;
@@ -306,6 +308,94 @@ internal static class NetCordTestHelpers
         cache.Setup(c => c.Guilds)
              .Returns(new Dictionary<ulong, Guild>());
         return cache;
+    }
+
+    // ── Slash command / autocomplete interaction contexts ───────────────────────
+
+    /// <summary>
+    /// Builds a real <see cref="ApplicationCommandContext"/> backed by a real
+    /// <see cref="SlashCommandInteraction"/> — unlike the sealed gateway-cache types above, these
+    /// NetCord types have public constructors and fully public settable JSON models, so no
+    /// reflection is needed to build the object graph itself. <paramref name="guild"/> is passed
+    /// straight to the interaction's constructor exactly as NetCord's own gateway dispatch would:
+    /// <c>null</c> for a DM-context interaction, exercising the same <c>Context.Guild is null</c>
+    /// path a real DM invocation would hit.
+    /// </summary>
+    /// <summary>
+    /// Base <see cref="JsonInteraction"/> with every collection <see cref="NetCord.Interaction"/>'s
+    /// ctor unconditionally <c>.Select()</c>s/dereferences pre-populated to a non-null (if empty)
+    /// value — <c>Channel</c>, <c>Entitlements</c>, <c>Data</c> (whose own <c>Options</c> array is
+    /// itself read the same unconditional way one level down). Every field left unset here defaults
+    /// safely to <c>null</c>/empty on its own.
+    /// </summary>
+    private static JsonInteraction MakeBaseJsonInteraction() => new()
+    {
+        ApplicationId = 1,
+        Token = "token",
+        User = new JsonUser { Id = 1 },
+        Channel = new JsonChannel { Id = 1, Type = ChannelType.TextGuildChannel, PermissionOverwrites = [] },
+        Entitlements = [],
+        Data = new JsonInteractionData { Id = 1, Name = "raid", Options = [] },
+    };
+
+    internal static ApplicationCommandContext MakeSlashCommandContext(ulong userId, Guild? guild, RestClient rest)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+        jsonInteraction.User = new JsonUser { Id = userId };
+
+        var interaction = new SlashCommandInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new ApplicationCommandContext(interaction, gatewayClient);
+    }
+
+    /// <summary>Same shape as <see cref="MakeSlashCommandContext"/>, for <see cref="AutocompleteInteractionContext"/>.</summary>
+    internal static AutocompleteInteractionContext MakeAutocompleteContext(Guild? guild, RestClient rest)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+
+        var interaction = new AutocompleteInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new AutocompleteInteractionContext(interaction, gatewayClient);
+    }
+
+    /// <summary>
+    /// The delegate an <see cref="NetCord.Interaction"/> uses for its very first response
+    /// (<c>RespondAsync</c>) — unlike every later call (<c>ModifyResponseAsync</c>, follow-ups),
+    /// which goes through the injected <see cref="RestClient"/>'s faked <c>IRestRequestHandler</c>
+    /// seam, this initial one is a plain delegate NetCord's real dispatch machinery supplies
+    /// itself. The returned response is never inspected by any of this repo's command modules
+    /// (they only ever <c>await</c> it), so a minimal non-null instance is enough.
+    /// </summary>
+    private static Func<IInteraction, InteractionCallbackProperties, bool, RestRequestProperties?, CancellationToken, Task<InteractionCallbackResponse?>> MakeSendResponseDelegate(RestClient rest) =>
+        (_, _, _, _, _) => Task.FromResult<InteractionCallbackResponse?>(new InteractionCallbackResponse(
+            new JsonInteractionCallbackResponse
+            {
+                Interaction = new JsonInteractionCallbackResponseInteraction(),
+                Resource = new JsonInteractionCallbackResponseResource(),
+            },
+            rest));
+
+    /// <summary>
+    /// Sets a <c>NetCord.Services.ApplicationCommands.ApplicationCommandModule{T}</c> (or
+    /// autocomplete provider context field)'s backing <c>_context</c> field directly. NetCord sets
+    /// this via an explicit interface implementation of the internal <c>IBaseModule&lt;T&gt;.SetContext</c>
+    /// — inaccessible from this assembly since the interface itself isn't public — so this bypasses
+    /// it the same way the rest of this class bypasses other constructor-less NetCord types.
+    /// </summary>
+    internal static void SetModuleContext(object module, object context)
+    {
+        var t = module.GetType();
+        while (t is not null && t != typeof(object))
+        {
+            var field = t.GetField("_context", Private);
+            if (field is not null)
+            {
+                field.SetValue(module, context);
+                return;
+            }
+            t = t.BaseType;
+        }
+        throw new InvalidOperationException($"'_context' field not found in the type hierarchy of {module.GetType()}");
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

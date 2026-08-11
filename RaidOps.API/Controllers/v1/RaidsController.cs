@@ -170,6 +170,21 @@ public class RaidsController(
         return ToActionResult(result);
     }
 
+    /// <summary>Returns a single raid event's minimal identity (id + name) — backs the raid detail page's breadcrumb.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}")]
+    public async Task<IActionResult> GetEventSummary(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetRaidEventSummaryQuery, RaidEventSummaryResponse>(
+            new GetRaidEventSummaryQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
     /// <summary>Creates a standalone raid event, not tied to any recurring series.</summary>
     [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events")]
     public async Task<IActionResult> CreateEvent(string guildId, int guildBranchId, [FromBody] CreateAdhocRaidEventCommand command, CancellationToken cancellationToken)
@@ -230,6 +245,38 @@ public class RaidsController(
             new PublishRaidEventCommand { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, EventId = eventId },
             cancellationToken);
 
+        return ToActionResult(result);
+    }
+
+    /// <summary>Returns the characters currently assigned to a raid event — backs the "who should players whisper?" picker.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/assigned-characters")]
+    public async Task<IActionResult> GetAssignedCharacters(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetRaidEventAssignedCharactersQuery, List<RaidEventAssignedCharacterResponse>>(
+            new GetRaidEventAssignedCharactersQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>Posts a one-off "grouping up now" ping, referencing the requester's (or an explicitly named) assigned character, in the branch's composition-announcement channel.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/announce-grouping")]
+    public async Task<IActionResult> AnnounceGrouping(string guildId, int guildBranchId, int eventId, [FromBody] TriggerRaidGroupingCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+        command.EventId = eventId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
         return ToActionResult(result);
     }
 

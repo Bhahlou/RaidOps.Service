@@ -18,6 +18,7 @@ public class CreateAdhocRaidEventCommandHandler(
     IRaidEventRepository raidEventRepository,
     IRaidZoneRepository raidZoneRepository,
     IGuildsRepository guildsRepository,
+    IGuildBranchesRepository guildBranchesRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<CreateAdhocRaidEventCommand>
 {
     /// <inheritdoc/>
@@ -30,6 +31,8 @@ public class CreateAdhocRaidEventCommandHandler(
 
         var distinctZoneIds = validation.Value!;
 
+        var branch = await guildBranchesRepository.GetByIdAsync(command.GuildBranchId, cancellationToken);
+
         // PublicationStatus is left unset here, relying on RaidEvent's own Draft default —
         // ad-hoc events are never created pre-published, only PublishRaidEventCommand can do that.
         var raidEvent = new RaidEvent
@@ -41,7 +44,7 @@ public class CreateAdhocRaidEventCommandHandler(
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,
-            SignupMode = SignupMode.DefaultPresent,
+            SignupMode = branch?.SignupMode ?? SignupMode.DefaultPresent,
             Status = RaidEventStatus.Scheduled,
             CreatedByDiscordId = command.RequesterDiscordId,
             CreatedAt = DateTime.UtcNow,

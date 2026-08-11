@@ -20,6 +20,7 @@ public class PublishRaidEventCommandHandlerTests
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
     private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
+    private readonly Mock<IRaidCompositionAnnouncementService> _raidCompositionAnnouncementService = new();
     private readonly PublishRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -31,7 +32,7 @@ public class PublishRaidEventCommandHandlerTests
     {
         _sut = new PublishRaidEventCommandHandler(
             _access.Object, _raidEventRepository.Object, _guildsRepository.Object, _auditLogService.Object,
-            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object);
+            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object, _raidCompositionAnnouncementService.Object);
     }
 
     private static PublishRaidEventCommand MakeCommand() => new()

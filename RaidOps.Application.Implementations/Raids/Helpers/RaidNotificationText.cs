@@ -1,4 +1,3 @@
-using System.Globalization;
 using RaidOps.Domain.Enums;
 
 namespace RaidOps.Application.Implementations.Raids.Helpers;
@@ -45,6 +44,10 @@ internal static class RaidNotificationText
         [(GuildNotificationEventType.RaidSlotSpecChanged, "en")] = ("Slot spec changed", 0x5865F2),
         [(GuildNotificationEventType.RaidSlotSpecChanged, "fr")] = ("Spécialisation changée", 0x5865F2),
         [(GuildNotificationEventType.RaidSlotSpecChanged, "de")] = ("Skillung geändert", 0x5865F2),
+
+        [(GuildNotificationEventType.RaidCompositionAnnouncementPosted, "en")] = ("Current composition", 0x5865F2),
+        [(GuildNotificationEventType.RaidCompositionAnnouncementPosted, "fr")] = ("Composition actuelle", 0x5865F2),
+        [(GuildNotificationEventType.RaidCompositionAnnouncementPosted, "de")] = ("Aktuelle Zusammensetzung", 0x5865F2),
     };
 
     public static (string Title, int Color) GetTitleAndColor(GuildNotificationEventType eventType, string language)
@@ -110,11 +113,110 @@ internal static class RaidNotificationText
         _ => $"<@{requesterDiscordId}> changed {characterLabel}'s spec from {oldSpecLabel} to {newSpecLabel} in **{eventName}**.",
     };
 
-    /// <summary>French/German read raid times with a "at"/"um" connector and locale digit-grouping; mirrors <c>AbsenceNotificationText</c>'s per-language time formatting.</summary>
-    public static string FormatDateTime(DateTime guildLocalDateTime, string language) => language switch
+    /// <summary>
+    /// Discord's native <c>&lt;t:unix:format&gt;</c> markup — the client renders it in each
+    /// reader's own local timezone/locale, so unlike a pre-formatted string this needs no
+    /// guild-timezone conversion or per-language formatting on our end. <paramref name="format"/>
+    /// defaults to <c>F</c> ("long date/time", e.g. "Tuesday, 1 February 2026 21:05").
+    /// </summary>
+    public static string DiscordTimestamp(DateTime utc, char format = 'F') =>
+        $"<t:{new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeSeconds()}:{format}>";
+
+    public static string GetCompositionAnnouncementDescription(string startsAt, string language) => language switch
     {
-        "fr" => guildLocalDateTime.ToString("dd/MM/yyyy 'à' HH'h'mm", CultureInfo.InvariantCulture),
-        "de" => guildLocalDateTime.ToString("dd.MM.yyyy 'um' HH:mm", CultureInfo.InvariantCulture),
-        _ => guildLocalDateTime.ToString("M/d/yyyy 'at' HH:mm", CultureInfo.InvariantCulture),
+        "fr" => $"{startsAt} · mis à jour automatiquement.",
+        "de" => $"{startsAt} · wird automatisch aktualisiert.",
+        _ => $"{startsAt} · updated automatically.",
+    };
+
+    public static string GetGroupLabel(int groupNumber, string language) => language switch
+    {
+        "fr" => $"Groupe {groupNumber} :",
+        "de" => $"Gruppe {groupNumber}:",
+        _ => $"Group {groupNumber}:",
+    };
+
+    public static (string Title, int Color) GetPlayerAddedDmTitleAndColor(string language) => language switch
+    {
+        "fr" => ("Ajouté au raid", 0x57F287),
+        "de" => ("Zum Raid hinzugefügt", 0x57F287),
+        _ => ("Added to the raid", 0x57F287),
+    };
+
+    public static (string Title, int Color) GetPlayerRemovedDmTitleAndColor(string language) => language switch
+    {
+        "fr" => ("Retiré du raid", 0xED4245),
+        "de" => ("Vom Raid entfernt", 0xED4245),
+        _ => ("Removed from the raid", 0xED4245),
+    };
+
+    /// <summary>
+    /// Title/color for the "added" DM specifically when it's sent because the raid was just
+    /// published with the player already in its roster from the draft phase — distinct from
+    /// <see cref="GetPlayerAddedDmTitleAndColor"/> (used when a slot assignment adds them to an
+    /// already-published raid), since "you were added" reads oddly for someone who's been on the
+    /// roster the whole time; "the raid went live" is what actually happened for them.
+    /// </summary>
+    public static (string Title, int Color) GetRaidPublishedDmTitleAndColor(string eventName, string language) => language switch
+    {
+        "fr" => ($"{eventName} publié", 0x57F287),
+        "de" => ($"{eventName} veröffentlicht", 0x57F287),
+        _ => ($"{eventName} published", 0x57F287),
+    };
+
+    /// <summary>
+    /// Shared body for both composition DMs — identical shape (event, time, character) for added
+    /// and removed alike, only the verb differs, so the two can never drift out of sync.
+    /// </summary>
+    public static string GetPlayerCompositionDmDescription(string eventName, string startsAt, string characterLabel, bool added, string language) => language switch
+    {
+        "fr" => $"Tu as été {(added ? "ajouté à" : "retiré de")} **{eventName}** ({startsAt}) avec {characterLabel}.",
+        "de" => $"Du wurdest mit {characterLabel} {(added ? "zu" : "von")} **{eventName}** ({startsAt}) {(added ? "hinzugefügt" : "entfernt")}.",
+        _ => $"You've been {(added ? "added to" : "removed from")} **{eventName}** ({startsAt}) with {characterLabel}.",
+    };
+
+    public static (string Title, int Color) GetPlayerSpecChangedDmTitleAndColor(string language) => language switch
+    {
+        "fr" => ("Spécialisation changée", 0xFEE75C),
+        "de" => ("Skillung geändert", 0xFEE75C),
+        _ => ("Spec changed", 0xFEE75C),
+    };
+
+    public static string GetPlayerSpecChangedDmDescription(string eventName, string startsAt, string characterLabel, string oldSpecLabel, string newSpecLabel, string language) => language switch
+    {
+        "fr" => $"Ta spécialisation pour **{eventName}** ({startsAt}) a changé sur {characterLabel} : {oldSpecLabel} → {newSpecLabel}.",
+        "de" => $"Deine Skillung für **{eventName}** ({startsAt}) wurde auf {characterLabel} geändert: {oldSpecLabel} → {newSpecLabel}.",
+        _ => $"Your spec for **{eventName}** ({startsAt}) changed on {characterLabel}: {oldSpecLabel} → {newSpecLabel}.",
+    };
+
+    /// <summary>
+    /// Sent unconditionally (see <see cref="RaidOps.Application.Contracts.Services.IRaidCompositionAnnouncementService.NotifyPlayerRaidCancelledAsync"/>)
+    /// — deliberately not folded into <see cref="GetPlayerCompositionDmDescription"/>'s
+    /// added/removed shape, since this is a guaranteed safety-net message, not an opt-in one.
+    /// </summary>
+    public static (string Title, int Color) GetRaidCancelledDmTitleAndColor(string language) => language switch
+    {
+        "fr" => ("Raid annulé", 0xED4245),
+        "de" => ("Raid abgesagt", 0xED4245),
+        _ => ("Raid cancelled", 0xED4245),
+    };
+
+    public static string GetRaidCancelledDmDescription(string eventName, string startsAt, string characterLabel, string language) => language switch
+    {
+        "fr" => $"Le raid **{eventName}** ({startsAt}) auquel tu participais avec {characterLabel} a été annulé.",
+        "de" => $"Der Raid **{eventName}** ({startsAt}), an dem du mit {characterLabel} teilgenommen hast, wurde abgesagt.",
+        _ => $"The raid **{eventName}** ({startsAt}) you were in with {characterLabel} has been cancelled.",
+    };
+
+    /// <summary>A one-off plain-text ping (not an embed) — <paramref name="mentions"/> is the space-separated <c>&lt;@id&gt;</c> list built by the caller.</summary>
+    /// <summary>
+    /// The <c>/w ... inv</c> part is a literal WoW client whisper command, kept identical across
+    /// locales — only the "grouping in progress" phrase around it is translated.
+    /// </summary>
+    public static string GetGroupingPingMessage(string mentions, string eventName, string characterName, string language) => language switch
+    {
+        "fr" => $"{mentions}\n**{eventName}** - groupage en cours. /w {characterName} inv",
+        "de" => $"{mentions}\n**{eventName}** - Gruppierung läuft. /w {characterName} inv",
+        _ => $"{mentions}\n**{eventName}** - grouping in progress. /w {characterName} inv",
     };
 }

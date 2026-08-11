@@ -84,6 +84,7 @@ public class AssignCharacterToSlotCommandHandler(
             await raidCompositionNotifier.NotifySlotAssignedAsync(
                 raidEvent, command.RequesterDiscordId,
                 new RaidCharacterRef(character.Name, character.ClassId, specName),
+                character.UserDiscordId,
                 new SlotCoordinate(command.GroupNumber, command.SlotNumber),
                 cancellationToken);
         }

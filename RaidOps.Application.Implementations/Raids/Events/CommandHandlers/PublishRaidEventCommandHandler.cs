@@ -19,7 +19,8 @@ public class PublishRaidEventCommandHandler(
     IGuildsRepository guildsRepository,
     IAuditLogService auditLogService,
     IGuildNotificationDispatcher guildNotificationDispatcher,
-    IRaidNotificationContentBuilder raidNotificationContentBuilder) : ICommandHandlerAsync<PublishRaidEventCommand>
+    IRaidNotificationContentBuilder raidNotificationContentBuilder,
+    IRaidCompositionAnnouncementService raidCompositionAnnouncementService) : ICommandHandlerAsync<PublishRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(PublishRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -56,6 +57,17 @@ public class PublishRaidEventCommandHandler(
 
         var embed = await raidNotificationContentBuilder.BuildPublishedAsync(command.GuildId, command.RequesterDiscordId, raidEvent, cancellationToken);
         await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidPublished, command.GuildBranchId, embed, cancellationToken);
+
+        await raidCompositionAnnouncementService.PublishOrUpdateAnnouncementAsync(raidEvent, cancellationToken);
+
+        // The public embed never pings anyone (it's edited in place on every future change, so
+        // pinging would spam on every roster edit) — DM every already-assigned player now, since
+        // this publish is otherwise the only moment they'd learn they're in the raid.
+        foreach (var assignment in raidEvent.Assignments)
+        {
+            var character = new RaidCharacterRef(assignment.Character.Name, assignment.Character.ClassId, assignment.Spec.Name);
+            await raidCompositionAnnouncementService.NotifyPlayerAddedAsync(raidEvent, assignment.AssignedPlayerDiscordId, character, isInitialPublish: true, cancellationToken);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event published successfully."));
     }
