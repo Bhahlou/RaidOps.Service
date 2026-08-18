@@ -3,8 +3,6 @@ using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ComponentInteractions;
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Guilds.Settings.Queries;
-using RaidOps.Application.Contracts.Guilds.Settings.Responses;
 using RaidOps.Application.Contracts.Raids.Signups.Queries;
 using RaidOps.Application.Contracts.Raids.Signups.Responses;
 using RaidOps.Domain.Enums;
@@ -174,16 +172,9 @@ public class RaidSignupInteractionModule(
         return id is { } value ? EmojiProperties.Custom(value) : null;
     }
 
-    private EmojiProperties? SpecEmojiProperties(int classId, string specName)
-    {
-        var id = discordBotService.Emojis.GetId(WowSpecEmojiNames.GetName(classId, specName));
-        return id is { } value ? EmojiProperties.Custom(value) : null;
-    }
+    private EmojiProperties? SpecEmojiProperties(int classId, string specName) =>
+        RaidSignupInteractionHelpers.SpecEmojiProperties(discordBotService, classId, specName);
 
-    private async Task<string> ResolveLanguageAsync(string guildId, string requesterDiscordId)
-    {
-        var settingsResult = await queryDispatcher.DispatchAsync<GetGuildSettingsQuery, GuildSettingsResponse>(
-            new GetGuildSettingsQuery { GuildId = guildId, RequesterDiscordId = requesterDiscordId });
-        return settingsResult.Value?.Language ?? "en";
-    }
+    private Task<string> ResolveLanguageAsync(string guildId, string requesterDiscordId) =>
+        RaidSignupInteractionHelpers.ResolveLanguageAsync(queryDispatcher, guildId, requesterDiscordId);
 }

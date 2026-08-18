@@ -80,6 +80,7 @@ public class RaidSignupResponseBuilderTests
         response.ClassName.Should().Be("Warrior");
         response.SpecId.Should().Be(71);
         response.SpecName.Should().Be("Arms");
+        response.SpecIconUrl.Should().Be("arms.png");
     }
 
     [Fact]

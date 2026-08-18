@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
@@ -6,7 +5,6 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids;
-using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
@@ -32,12 +30,7 @@ public class UpdateRaidEventCommandHandler(
     IRaidZoneRepository raidZoneRepository,
     IGuildsRepository guildsRepository,
     IAuditLogService auditLogService,
-    IGuildNotificationDispatcher guildNotificationDispatcher,
-    IRaidNotificationContentBuilder raidNotificationContentBuilder,
-    IRaidSignupAnnouncementService raidSignupAnnouncementService,
-    IRaidCompositionAnnouncementService raidCompositionAnnouncementService,
-    IDiscordBotService discordBotService,
-    ILogger<UpdateRaidEventCommandHandler> logger) : ICommandHandlerAsync<UpdateRaidEventCommand>
+    IRaidEventUpdateNotifier raidEventUpdateNotifier) : ICommandHandlerAsync<UpdateRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -83,7 +76,7 @@ public class UpdateRaidEventCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
         if (channelChanged)
-            await MoveDedicatedChannelAsync(command, existing, cancellationToken);
+            await raidEventUpdateNotifier.MoveDedicatedChannelAsync(command.EventId, command.GuildBranchId, existing, cancellationToken);
 
         var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
         var oldStartsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(existing.StartsAtUtc, guild?.Timezone);
@@ -104,48 +97,8 @@ public class UpdateRaidEventCommandHandler(
             cancellationToken);
 
         if (existing.PublicationStatus == RaidPublicationStatus.Published && command.StartsAtUtc != existing.StartsAtUtc)
-        {
-            var embed = await raidNotificationContentBuilder.BuildRescheduledAsync(command.GuildId, command.RequesterDiscordId, raidEvent, existing.StartsAtUtc, cancellationToken);
-            await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidRescheduled, command.GuildBranchId, embed, cancellationToken);
-        }
+            await raidEventUpdateNotifier.NotifyRescheduledAsync(command.GuildId, command.RequesterDiscordId, command.GuildBranchId, raidEvent, existing.StartsAtUtc, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event updated successfully."));
-    }
-
-    /// <summary>
-    /// Drops the standing embeds from <paramref name="existing"/>'s old channel (best-effort — a
-    /// message already gone, or the bot losing access, must never fail the update that already
-    /// succeeded), clears their cached references, deletes the old channel itself if RaidOps had
-    /// created it for this event, then re-posts the signup-call embed fresh in the new channel for
-    /// Signup-mode events (composition re-posts lazily on the next assignment change instead, since
-    /// there's no assignment-independent trigger to hang an immediate re-post off here).
-    /// </summary>
-    private async Task MoveDedicatedChannelAsync(UpdateRaidEventCommand command, RaidEvent existing, CancellationToken cancellationToken)
-    {
-        await raidSignupAnnouncementService.DeleteSignupCallAsync(existing, cancellationToken);
-        await raidCompositionAnnouncementService.DeleteAnnouncementAsync(existing, cancellationToken);
-        await raidEventRepository.ClearAnnouncementReferencesAsync(command.EventId, command.GuildBranchId, cancellationToken);
-
-        if (existing.DedicatedAnnouncementChannelIsBotOwned && existing.DedicatedAnnouncementChannelId is not null)
-        {
-            try
-            {
-                await discordBotService.Guilds.DeleteChannelAsync(existing.DedicatedAnnouncementChannelId, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(
-                    ex,
-                    "Failed to delete old bot-owned dedicated channel {ChannelId} for raid event {RaidEventId} after moving it",
-                    existing.DedicatedAnnouncementChannelId, command.EventId);
-            }
-        }
-
-        if (existing.SignupMode == SignupMode.Signup)
-        {
-            var refreshed = await raidEventRepository.GetByIdAsync(command.EventId, command.GuildBranchId, cancellationToken);
-            if (refreshed is not null)
-                await raidSignupAnnouncementService.PublishOrUpdateSignupCallAsync(refreshed, cancellationToken);
-        }
     }
 }

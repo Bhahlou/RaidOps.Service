@@ -122,9 +122,9 @@ public class MessageServiceTests
         var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
         string? lastBody = null;
         handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
-            .Returns((HttpRequestMessage req, CancellationToken _) =>
+            .Returns((HttpRequestMessage req, CancellationToken ct) =>
             {
-                lastBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+                lastBody = req.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
                 return Task.FromResult(NetCordTestHelpers.JsonResponse(MessageJson));
             });
         var cache = NetCordTestHelpers.EmptyCache();

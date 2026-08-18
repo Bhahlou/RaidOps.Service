@@ -40,6 +40,7 @@ public class RaidSignupResponseBuilder(
                     ClassName = signup?.Character?.Class.Name,
                     SpecId = signup?.SpecId,
                     SpecName = signup?.Spec?.Name,
+                    SpecIconUrl = signup?.Spec?.IconUrl,
                 };
             })];
     }
