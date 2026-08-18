@@ -661,6 +661,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("DedicatedAnnouncementChannelId")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("DedicatedAnnouncementChannelIsBotOwned")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("GroupCount")
                         .HasColumnType("integer");
 
@@ -687,6 +693,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.Property<int?>("RaidSeriesId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SignupCallAnnouncementChannelId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SignupCallAnnouncementMessageId")
+                        .HasColumnType("text");
 
                     b.Property<int>("SignupMode")
                         .HasColumnType("integer");
@@ -782,6 +794,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("DedicatedAnnouncementChannelCategoryId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DedicatedAnnouncementChannelId")
+                        .HasColumnType("text");
+
                     b.Property<int>("GroupCount")
                         .HasColumnType("integer");
 
@@ -837,6 +855,37 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("RaidZoneId");
 
                     b.ToTable("RaidSeriesZones");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSignup", b =>
+                {
+                    b.Property<int>("RaidEventId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserDiscordId")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("CharacterId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RespondedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SpecId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RaidEventId", "UserDiscordId");
+
+                    b.HasIndex("CharacterId");
+
+                    b.HasIndex("SpecId");
+
+                    b.HasIndex("UserDiscordId");
+
+                    b.ToTable("RaidSignups");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSlotAssignment", b =>
@@ -2330,6 +2379,39 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("RaidZone");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSignup", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Character.Character", "Character")
+                        .WithMany()
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidEvent", "RaidEvent")
+                        .WithMany("Signups")
+                        .HasForeignKey("RaidEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spec", "Spec")
+                        .WithMany()
+                        .HasForeignKey("SpecId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RaidOps.Domain.Models.Discord.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserDiscordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Character");
+
+                    b.Navigation("RaidEvent");
+
+                    b.Navigation("Spec");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidSlotAssignment", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Character.Character", "Character")
@@ -2436,6 +2518,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
                 {
                     b.Navigation("Assignments");
+
+                    b.Navigation("Signups");
 
                     b.Navigation("TargetZones");
                 });

@@ -120,6 +120,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="RaidSlotAssignment"/> table (sparse group/slot grid assignments).</summary>
     public DbSet<RaidSlotAssignment> RaidSlotAssignments => Set<RaidSlotAssignment>();
 
+    /// <summary>Gets the <see cref="RaidSignup"/> table (member Accepted/Tentative/Declined responses for Signup-mode events).</summary>
+    public DbSet<RaidSignup> RaidSignups => Set<RaidSignup>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -559,6 +562,34 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         modelBuilder.Entity<RaidSlotAssignment>()
             .HasIndex(a => new { a.RaidEventId, a.AssignedPlayerDiscordId })
             .IsUnique();
+
+        // RaidSignup — composite PK (RaidEventId, UserDiscordId); deleting an event drops its responses
+        modelBuilder.Entity<RaidSignup>()
+            .HasKey(s => new { s.RaidEventId, s.UserDiscordId });
+
+        modelBuilder.Entity<RaidSignup>()
+            .HasOne(s => s.RaidEvent)
+            .WithMany(e => e.Signups)
+            .HasForeignKey(s => s.RaidEventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidSignup>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(s => s.UserDiscordId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidSignup>()
+            .HasOne(s => s.Character)
+            .WithMany()
+            .HasForeignKey(s => s.CharacterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidSignup>()
+            .HasOne(s => s.Spec)
+            .WithMany()
+            .HasForeignKey(s => s.SpecId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     // ── Static seed data ──────────────────────────────────────────────────

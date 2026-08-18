@@ -30,9 +30,7 @@ public class GetRaidBoardQueryHandler(
     IGuildsRepository guildsRepository,
     IRaidEventRepository raidEventRepository,
     IGuildMembershipRepository guildMembershipRepository,
-    IRaidAvailabilityService raidAvailabilityService,
-    IUsersRepository usersRepository,
-    ICharacterRepository characterRepository) : IQueryHandlerAsync<GetRaidBoardQuery, RaidBoardResponse>
+    IRaidBoardEnrichmentDataLoader enrichmentDataLoader) : IQueryHandlerAsync<GetRaidBoardQuery, RaidBoardResponse>
 {
     /// <inheritdoc/>
     public async Task<Result<RaidBoardResponse>> HandleAsync(GetRaidBoardQuery query, CancellationToken cancellationToken)
@@ -53,27 +51,22 @@ public class GetRaidBoardQueryHandler(
 
         var events = await raidEventRepository.GetForGuildBranchInRangeAsync(query.GuildBranchId, rangeStartUtc, rangeEndUtc, cancellationToken);
 
-        // Draft events stay private to officers preparing the raid — a Roster requester only ever
-        // sees the "official" schedule that's already been published.
+        // Draft DefaultPresent events stay private to officers preparing the raid — a Roster
+        // requester only ever sees the "official" schedule that's already been published. Signup
+        // events are the exception: the whole point of Signup mode is gathering responses before
+        // the raid is built (the Discord signup call is already posted from creation, with no
+        // Published gate of its own — see SetMyRaidSignupCommandHandler), so hiding a draft Signup
+        // event from the web board would leave roster members able to respond on Discord but blind
+        // to that same event here.
         if (accessLevel < GuildAccessLevel.Officer)
-            events = [.. events.Where(e => e.PublicationStatus == RaidPublicationStatus.Published)];
+            events = [.. events.Where(e => e.PublicationStatus == RaidPublicationStatus.Published || e.SignupMode == SignupMode.Signup)];
 
         var rosterMemberships = await guildMembershipRepository.GetByGuildBranchIdAsync(query.GuildBranchId, cancellationToken);
         var rosterPlayerIds = rosterMemberships.Select(m => m.Character.UserDiscordId).Distinct().ToList();
 
-        var availabilityLookup = await raidAvailabilityService.LoadRosterAvailabilityAsync(rosterPlayerIds, query.GuildId, query.GuildBranchId, query.RangeStart, query.RangeEnd, cancellationToken);
+        var enrichment = await enrichmentDataLoader.LoadAsync(events, rosterPlayerIds, query.GuildId, query.GuildBranchId, query.RangeStart, query.RangeEnd, cancellationToken);
 
-        var assignedPlayerIds = events.SelectMany(e => e.Assignments).Select(a => a.AssignedPlayerDiscordId).Distinct().ToList();
-        var players = await usersRepository.FindAsync(u => assignedPlayerIds.Contains(u.DiscordId), cancellationToken);
-        var playersById = players.ToDictionary(u => u.DiscordId);
-
-        var assignedCharacterIds = events.SelectMany(e => e.Assignments).Select(a => a.CharacterId).Distinct().ToList();
-        var raidSpecs = await characterRepository.GetRaidSpecsForCharactersAsync(assignedCharacterIds, cancellationToken);
-        var raidSpecsByCharacter = raidSpecs
-            .GroupBy(rs => rs.CharacterId)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var context = new BoardMappingContext(guild, rosterPlayerIds, playersById, availabilityLookup, raidSpecsByCharacter);
+        var context = new BoardMappingContext(guild, rosterPlayerIds, enrichment.PlayersById, enrichment.AvailabilityLookup, enrichment.SignupsByEvent, enrichment.RaidSpecsByCharacter, query.RequesterDiscordId);
         var response = new RaidBoardResponse
         {
             Events = [.. events.Select(e => MapEvent(e, context))],
@@ -88,7 +81,9 @@ public class GetRaidBoardQueryHandler(
         List<string> RosterPlayerIds,
         Dictionary<string, User> PlayersById,
         IRaidAvailabilityLookup AvailabilityLookup,
-        Dictionary<int, List<CharacterRaidSpec>> RaidSpecsByCharacter);
+        Dictionary<int, Dictionary<string, RaidSignup>> SignupsByEvent,
+        Dictionary<int, List<CharacterRaidSpec>> RaidSpecsByCharacter,
+        string RequesterDiscordId);
 
     private static RaidEventResponse MapEvent(RaidEvent raidEvent, BoardMappingContext ctx)
     {
@@ -96,9 +91,17 @@ public class GetRaidBoardQueryHandler(
         var localDate = DateOnly.FromDateTime(localDateTime);
         var localTime = TimeOnly.FromDateTime(localDateTime);
 
-        var absentPlayerIds = ctx.RosterPlayerIds
-            .Where(playerId => ctx.AvailabilityLookup.IsUnavailableAt(playerId, localDate, localTime))
-            .ToList();
+        var eventSignups = ctx.SignupsByEvent.GetValueOrDefault(raidEvent.Id, []);
+
+        var ineligiblePlayerIds = raidEvent.SignupMode == SignupMode.Signup
+            ? [.. ctx.RosterPlayerIds.Where(playerId => eventSignups.GetValueOrDefault(playerId)?.Status != SignupStatus.Accepted)]
+            : ctx.RosterPlayerIds.Where(playerId => ctx.AvailabilityLookup.IsUnavailableAt(playerId, localDate, localTime)).ToList();
+
+        var acceptedCharacterIdsByPlayer = raidEvent.SignupMode == SignupMode.Signup
+            ? eventSignups
+                .Where(kv => kv.Value.Status == SignupStatus.Accepted && kv.Value.CharacterId != null)
+                .ToDictionary(kv => kv.Key, kv => kv.Value.CharacterId!.Value)
+            : [];
 
         return new RaidEventResponse
         {
@@ -121,12 +124,18 @@ public class GetRaidBoardQueryHandler(
                 Name = z.RaidZone.Name,
                 ShortCode = z.RaidZone.ShortCode,
             })],
-            Assignments = [.. raidEvent.Assignments.Select(a => MapAssignment(a, localDate, ctx))],
-            AbsentPlayerDiscordIds = absentPlayerIds,
+            Assignments = [.. raidEvent.Assignments.Select(a => MapAssignment(a, localDate, eventSignups, ctx))],
+            IneligiblePlayerDiscordIds = ineligiblePlayerIds,
+            MySignupStatus = eventSignups.GetValueOrDefault(ctx.RequesterDiscordId)?.Status,
+            MySignupCharacterId = eventSignups.GetValueOrDefault(ctx.RequesterDiscordId)?.CharacterId,
+            MySignupSpecId = eventSignups.GetValueOrDefault(ctx.RequesterDiscordId)?.SpecId,
+            AcceptedCharacterIdsByPlayerDiscordId = acceptedCharacterIdsByPlayer,
+            DedicatedAnnouncementChannelId = raidEvent.DedicatedAnnouncementChannelId,
+            DedicatedAnnouncementChannelIsBotOwned = raidEvent.DedicatedAnnouncementChannelIsBotOwned,
         };
     }
 
-    private static RaidSlotAssignmentResponse MapAssignment(RaidSlotAssignment assignment, DateOnly eventLocalDate, BoardMappingContext ctx)
+    private static RaidSlotAssignmentResponse MapAssignment(RaidSlotAssignment assignment, DateOnly eventLocalDate, Dictionary<string, RaidSignup> eventSignups, BoardMappingContext ctx)
     {
         ctx.PlayersById.TryGetValue(assignment.AssignedPlayerDiscordId, out var player);
 
@@ -144,6 +153,7 @@ public class GetRaidBoardQueryHandler(
             PlayerDiscordId = assignment.AssignedPlayerDiscordId,
             PlayerName = player?.Name,
             AvailabilityStatus = availabilityStatus,
+            SignupStatus = eventSignups.GetValueOrDefault(assignment.AssignedPlayerDiscordId)?.Status,
             Spec = MapSpecRef(assignment.Spec),
             AvailableSpecs = [.. characterRaidSpecs.Select(rs => MapSpecRef(rs.Spec))],
         };

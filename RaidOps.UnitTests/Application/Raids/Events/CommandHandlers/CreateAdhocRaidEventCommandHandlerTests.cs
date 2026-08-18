@@ -19,6 +19,7 @@ public class CreateAdhocRaidEventCommandHandlerTests
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IGuildBranchesRepository> _guildBranchesRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
+    private readonly Mock<IRaidSignupAnnouncementService> _raidSignupAnnouncementService = new();
     private readonly CreateAdhocRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -29,13 +30,15 @@ public class CreateAdhocRaidEventCommandHandlerTests
     {
         _sut = new CreateAdhocRaidEventCommandHandler(
             _gridAndZoneValidator.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _guildsRepository.Object,
-            _guildBranchesRepository.Object, _auditLogService.Object);
+            _guildBranchesRepository.Object, _auditLogService.Object, _raidSignupAnnouncementService.Object);
 
         _gridAndZoneValidator.Setup(v => v.ValidateAsync(RequesterId, GuildId, GuildBranchId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default))
             .ReturnsAsync(Result<List<int>>.Ok([1]));
     }
 
-    private static CreateAdhocRaidEventCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null) => new()
+    private static CreateAdhocRaidEventCommand MakeCommand(
+        int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null,
+        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false) => new()
     {
         GuildId = GuildId,
         RequesterDiscordId = RequesterId,
@@ -45,6 +48,8 @@ public class CreateAdhocRaidEventCommandHandlerTests
         GroupCount = groupCount,
         SlotsPerGroup = slotsPerGroup,
         RaidZoneIds = zoneIds ?? [1],
+        DedicatedAnnouncementChannelId = dedicatedAnnouncementChannelId,
+        DedicatedAnnouncementChannelIsBotOwned = dedicatedAnnouncementChannelIsBotOwned,
     };
 
     [Fact]
@@ -105,6 +110,70 @@ public class CreateAdhocRaidEventCommandHandlerTests
                 d["eventName"] == "One-shot Kara clear" &&
                 d["startsAtLocal"] == "2026-02-01 21:00" &&
                 d["raidZoneNames"] == "Molten Core"),
+            default), Times.Once);
+    }
+
+    // ── DedicatedAnnouncementChannelIsBotOwned ──────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEvent_PublishesTheSignupCall()
+    {
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        var command = MakeCommand();
+        command.SignupModeOverride = SignupMode.Signup;
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.PublishOrUpdateSignupCallAsync(It.Is<RaidEvent>(e => e.Id == 77), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DefaultPresentEvent_NeverPublishesASignupCall()
+    {
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.PublishOrUpdateSignupCallAsync(It.IsAny<RaidEvent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelIdSetAndBotOwnedTrue_PersistsBotOwnedTrue()
+    {
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "999", dedicatedAnnouncementChannelIsBotOwned: true));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e =>
+            e.DedicatedAnnouncementChannelId == "999" && e.DedicatedAnnouncementChannelIsBotOwned),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BotOwnedTrueButNoChannelId_GuardsToFalse()
+    {
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        // A caller sending IsBotOwned=true without a channel id is nonsensical — the handler must
+        // never persist a bot-owned flag with no channel behind it, or a later delete would try to
+        // delete a null channel id.
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: null, dedicatedAnnouncementChannelIsBotOwned: true));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e =>
+            e.DedicatedAnnouncementChannelId == null && !e.DedicatedAnnouncementChannelIsBotOwned),
             default), Times.Once);
     }
 }

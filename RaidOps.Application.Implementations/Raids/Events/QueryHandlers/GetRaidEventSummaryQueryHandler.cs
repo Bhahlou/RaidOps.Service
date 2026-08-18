@@ -4,6 +4,7 @@ using RaidOps.Application.Contracts.Raids.Events.Queries;
 using RaidOps.Application.Contracts.Raids.Events.Responses;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Raids;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Raids.Events.QueryHandlers;
@@ -11,7 +12,8 @@ namespace RaidOps.Application.Implementations.Raids.Events.QueryHandlers;
 /// <inheritdoc cref="GetRaidEventSummaryQuery"/>
 public class GetRaidEventSummaryQueryHandler(
     IGuildAccessService guildAccessService,
-    IRaidEventRepository raidEventRepository) : IQueryHandlerAsync<GetRaidEventSummaryQuery, RaidEventSummaryResponse>
+    IRaidEventRepository raidEventRepository,
+    IRaidSignupRepository raidSignupRepository) : IQueryHandlerAsync<GetRaidEventSummaryQuery, RaidEventSummaryResponse>
 {
     /// <inheritdoc/>
     public async Task<Result<RaidEventSummaryResponse>> HandleAsync(GetRaidEventSummaryQuery query, CancellationToken cancellationToken)
@@ -24,6 +26,18 @@ public class GetRaidEventSummaryQueryHandler(
         if (raidEvent == null)
             return Result<RaidEventSummaryResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{query.EventId}' does not exist.");
 
-        return Result<RaidEventSummaryResponse>.Ok(new RaidEventSummaryResponse { Id = raidEvent.Id, Name = raidEvent.Name });
+        RaidSignup? mySignup = null;
+        if (raidEvent.SignupMode == SignupMode.Signup)
+            mySignup = await raidSignupRepository.GetAsync(raidEvent.Id, query.RequesterDiscordId, cancellationToken);
+
+        return Result<RaidEventSummaryResponse>.Ok(new RaidEventSummaryResponse
+        {
+            Id = raidEvent.Id,
+            Name = raidEvent.Name,
+            SignupMode = raidEvent.SignupMode,
+            MySignupStatus = mySignup?.Status,
+            MySignupCharacterId = mySignup?.CharacterId,
+            MySignupSpecId = mySignup?.SpecId,
+        });
     }
 }

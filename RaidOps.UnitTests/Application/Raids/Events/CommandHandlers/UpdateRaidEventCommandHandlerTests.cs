@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
@@ -21,6 +22,11 @@ public class UpdateRaidEventCommandHandlerTests
     private readonly Mock<IAuditLogService> _auditLogService = new();
     private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
     private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
+    private readonly Mock<IRaidSignupAnnouncementService> _raidSignupAnnouncementService = new();
+    private readonly Mock<IRaidCompositionAnnouncementService> _raidCompositionAnnouncementService = new();
+    private readonly Mock<IDiscordBotService> _discordBotService = new();
+    private readonly Mock<IGuildService> _guildService = new();
+    private readonly Mock<ILogger<UpdateRaidEventCommandHandler>> _logger = new();
     private readonly UpdateRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -30,12 +36,16 @@ public class UpdateRaidEventCommandHandlerTests
 
     public UpdateRaidEventCommandHandlerTests()
     {
+        _discordBotService.Setup(d => d.Guilds).Returns(_guildService.Object);
         _sut = new UpdateRaidEventCommandHandler(
             _access.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _guildsRepository.Object, _auditLogService.Object,
-            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object);
+            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object, _raidSignupAnnouncementService.Object,
+            _raidCompositionAnnouncementService.Object, _discordBotService.Object, _logger.Object);
     }
 
-    private static UpdateRaidEventCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null) => new()
+    private static UpdateRaidEventCommand MakeCommand(
+        int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null,
+        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false) => new()
     {
         GuildId = GuildId,
         RequesterDiscordId = RequesterId,
@@ -46,7 +56,18 @@ public class UpdateRaidEventCommandHandlerTests
         GroupCount = groupCount,
         SlotsPerGroup = slotsPerGroup,
         RaidZoneIds = zoneIds ?? [1],
+        DedicatedAnnouncementChannelId = dedicatedAnnouncementChannelId,
+        DedicatedAnnouncementChannelIsBotOwned = dedicatedAnnouncementChannelIsBotOwned,
     };
+
+    /// <summary>Wires the successful-update happy path shared by every dedicated-channel test below.</summary>
+    private void SetupSuccessfulUpdate(RaidEvent existing)
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(existing);
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+    }
 
     private void SetupOfficer() =>
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
@@ -277,5 +298,108 @@ public class UpdateRaidEventCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidRescheduled, GuildBranchId, embed, default), Times.Once);
+    }
+
+    // ── Dedicated channel move ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_ChannelUnchanged_DoesNotMoveAnything()
+    {
+        SetupSuccessfulUpdate(new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = true });
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "111", dedicatedAnnouncementChannelIsBotOwned: true));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.DeleteSignupCallAsync(It.IsAny<RaidEvent>(), default), Times.Never);
+        _raidCompositionAnnouncementService.Verify(s => s.DeleteAnnouncementAsync(It.IsAny<RaidEvent>(), default), Times.Never);
+        _raidEventRepository.Verify(r => r.ClearAnnouncementReferencesAsync(It.IsAny<int>(), It.IsAny<int>(), default), Times.Never);
+        _guildService.Verify(g => g.DeleteChannelAsync(It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChanged_DropsOldEmbedsAndClearsReferences()
+    {
+        var existing = new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = false };
+        SetupSuccessfulUpdate(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.DeleteSignupCallAsync(existing, default), Times.Once);
+        _raidCompositionAnnouncementService.Verify(s => s.DeleteAnnouncementAsync(existing, default), Times.Once);
+        _raidEventRepository.Verify(r => r.ClearAnnouncementReferencesAsync(EventId, GuildBranchId, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChangedAndOldWasBotOwned_DeletesOldChannel()
+    {
+        var existing = new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = true };
+        SetupSuccessfulUpdate(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+        _guildService.Verify(g => g.DeleteChannelAsync("111", default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChangedButOldWasNotBotOwned_NeverDeletesOldChannel()
+    {
+        var existing = new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = false };
+        SetupSuccessfulUpdate(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+        _guildService.Verify(g => g.DeleteChannelAsync(It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChangedOldChannelDeleteThrows_StillSucceeds()
+    {
+        var existing = new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = true };
+        SetupSuccessfulUpdate(existing);
+        _guildService.Setup(g => g.DeleteChannelAsync("111", default)).ThrowsAsync(new InvalidOperationException("gone"));
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChangedAndSignupMode_RepostsSignupCallInNewChannel()
+    {
+        var existing = new RaidEvent { Id = EventId, SignupMode = SignupMode.Signup, DedicatedAnnouncementChannelId = "111" };
+        SetupSuccessfulUpdate(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.PublishOrUpdateSignupCallAsync(It.Is<RaidEvent>(e => e.Id == EventId), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChangedAndNotSignupMode_NeverRepostsSignupCall()
+    {
+        var existing = new RaidEvent { Id = EventId, SignupMode = SignupMode.DefaultPresent, DedicatedAnnouncementChannelId = "111" };
+        SetupSuccessfulUpdate(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.PublishOrUpdateSignupCallAsync(It.IsAny<RaidEvent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelIdSetAndBotOwnedTrue_PersistsBotOwnedTrue()
+    {
+        SetupSuccessfulUpdate(new RaidEvent { Id = EventId });
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222", dedicatedAnnouncementChannelIsBotOwned: true));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.UpdateAsync(
+            It.Is<RaidEvent>(e => e.DedicatedAnnouncementChannelId == "222" && e.DedicatedAnnouncementChannelIsBotOwned),
+            GuildBranchId, It.IsAny<IEnumerable<int>>(), default), Times.Once);
     }
 }

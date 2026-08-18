@@ -1,9 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NetCord;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services.ApplicationCommands;
+using NetCord.Hosting.Services.ComponentInteractions;
 using NetCord.Services.ApplicationCommands;
+using NetCord.Services.ComponentInteractions;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
@@ -50,7 +53,9 @@ internal static class ExternalApplicationsRegistry
                     DirectoryPath = Path.Combine(AppContext.BaseDirectory, "Bot", "Commands", "Localizations"),
                     FileNameFormat = "*.json",
                 });
-            });
+            })
+            .AddComponentInteractions<ButtonInteraction, ButtonInteractionContext>()
+            .AddComponentInteractions<StringMenuInteraction, StringMenuInteractionContext>();
 
         // Singleton: its application-emoji cache is synced once at bot startup (see ReadyHandler)
         // and must be shared across every later request-scoped IDiscordBotService/EmojiService use.

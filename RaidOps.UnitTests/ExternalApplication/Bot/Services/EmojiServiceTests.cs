@@ -52,6 +52,16 @@ public class EmojiServiceTests
         sut.GetMarkdown("class_warrior").Should().BeNull();
     }
 
+    // ── GetId ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetId_UnknownName_ReturnsNull()
+    {
+        var (sut, _) = MakeSutWithRest();
+
+        sut.GetId("class_warrior").Should().BeNull();
+    }
+
     // ── SyncAsync ─────────────────────────────────────────────────────────────
 
     // loggerEnabled parameterizes both branches of the IsEnabled guard (CA1873).
@@ -79,6 +89,7 @@ public class EmojiServiceTests
 
         restHandler.Verify(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default), Times.Exactly(3));
         sut.GetMarkdown("class_warrior").Should().Be("<:class_warrior:111>");
+        sut.GetId("class_warrior").Should().Be(111UL);
     }
 
     [Fact]

@@ -112,6 +112,43 @@ public class MessageServiceTests
         handler.Verify(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default), Times.Once);
     }
 
+    [Theory]
+    [InlineData(DiscordEmbedButtonStyle.Primary)]
+    [InlineData(DiscordEmbedButtonStyle.Success)]
+    [InlineData(DiscordEmbedButtonStyle.Danger)]
+    [InlineData(DiscordEmbedButtonStyle.Secondary)]
+    public async Task PostEmbedAsync_WithButtons_SerializesTheButtonIntoTheRequestBody(DiscordEmbedButtonStyle style)
+    {
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        string? lastBody = null;
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .Returns((HttpRequestMessage req, CancellationToken _) =>
+            {
+                lastBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+                return Task.FromResult(NetCordTestHelpers.JsonResponse(MessageJson));
+            });
+        var cache = NetCordTestHelpers.EmptyCache();
+        var client = NetCordTestHelpers.MakeGatewayClient(cache.Object, rest);
+        var sut = new MessageService(client);
+        var embed = new DiscordEmbedContent("Raid signup", Buttons: [new DiscordEmbedButton("Accept", "accept", style)]);
+
+        await sut.PostEmbedAsync(ChannelId, embed);
+
+        lastBody.Should().Contain("\"custom_id\":\"accept\"");
+    }
+
+    [Fact]
+    public async Task PostEmbedAsync_NoButtons_SendsOneRequestWithoutComponents()
+    {
+        var sut = MakeSut(out var handler);
+        var embed = new DiscordEmbedContent("Raid signup", Buttons: null);
+
+        var act = () => sut.PostEmbedAsync(ChannelId, embed);
+
+        await act.Should().NotThrowAsync();
+        handler.Verify(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default), Times.Once);
+    }
+
     [Fact]
     public async Task PostEmbedAsync_ReturnsThePostedMessageId()
     {

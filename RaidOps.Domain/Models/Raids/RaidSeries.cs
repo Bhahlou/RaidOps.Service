@@ -51,6 +51,24 @@ public class RaidSeries
     public SignupMode SignupMode { get; set; } = SignupMode.DefaultPresent;
 
     /// <summary>
+    /// Discord snowflake ID of a dedicated channel this series' occurrences should post all their
+    /// raid-related notifications (published/composition/signup-call) to, instead of whatever's
+    /// configured guild-wide — copied onto each materialized <see cref="RaidEvent"/>. <c>null</c>
+    /// means "use the guild-wide configured channel," the default for every series.
+    /// </summary>
+    public string? DedicatedAnnouncementChannelId { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of a category — when set (instead of, never alongside,
+    /// <see cref="DedicatedAnnouncementChannelId"/>), each materialized occurrence gets its own
+    /// fresh channel created in this category at materialization time (named after the raid and
+    /// that occurrence's own date), rather than every occurrence sharing one fixed channel. Lets an
+    /// officer get a distinct, recognizable channel per raid instead of one channel accumulating
+    /// every week's chatter. <c>null</c> means "no per-occurrence channel," the default.
+    /// </summary>
+    public string? DedicatedAnnouncementChannelCategoryId { get; set; }
+
+    /// <summary>
     /// Whether this series is still active. Deactivating a series stops future materialization
     /// but never deletes or alters the events it already produced.
     /// </summary>

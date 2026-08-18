@@ -1,3 +1,4 @@
+using NetCord;
 using NetCord.Gateway;
 using NetCord.Rest;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
@@ -35,6 +36,7 @@ public class MessageService(GatewayClient gatewayClient) : IMessageService
     public async Task<ulong> PostEmbedAsync(ulong channelId, DiscordEmbedContent embed, CancellationToken cancellationToken = default)
     {
         var message = new MessageProperties().WithEmbeds([BuildEmbedProperties(embed)]);
+        ApplyComponents(message, embed);
         var posted = await gatewayClient.Rest.SendMessageAsync(channelId, message, cancellationToken: cancellationToken);
         return posted.Id;
     }
@@ -43,9 +45,13 @@ public class MessageService(GatewayClient gatewayClient) : IMessageService
     public async Task EditEmbedAsync(ulong channelId, ulong messageId, DiscordEmbedContent embed, CancellationToken cancellationToken = default)
     {
         var embedProperties = BuildEmbedProperties(embed);
+        var components = embed.Buttons is { Count: > 0 }
+            ? new[] { new ActionRowProperties(embed.Buttons.Select(BuildButtonProperties)) }
+            : [];
+
         await gatewayClient.Rest.ModifyMessageAsync(
             channelId, messageId,
-            options => options.WithEmbeds([embedProperties]),
+            options => options.WithEmbeds([embedProperties]).WithComponents(components),
             cancellationToken: cancellationToken);
     }
 
@@ -91,4 +97,23 @@ public class MessageService(GatewayClient gatewayClient) : IMessageService
 
         return embedProperties;
     }
+
+    private static void ApplyComponents(MessageProperties message, DiscordEmbedContent embed)
+    {
+        if (embed.Buttons is not { Count: > 0 })
+            return;
+
+        message.WithComponents([new ActionRowProperties(embed.Buttons.Select(BuildButtonProperties))]);
+    }
+
+    private static ButtonProperties BuildButtonProperties(DiscordEmbedButton button) =>
+        new(button.CustomId, button.Label, MapStyle(button.Style));
+
+    private static ButtonStyle MapStyle(DiscordEmbedButtonStyle style) => style switch
+    {
+        DiscordEmbedButtonStyle.Primary => ButtonStyle.Primary,
+        DiscordEmbedButtonStyle.Success => ButtonStyle.Success,
+        DiscordEmbedButtonStyle.Danger => ButtonStyle.Danger,
+        _ => ButtonStyle.Secondary,
+    };
 }

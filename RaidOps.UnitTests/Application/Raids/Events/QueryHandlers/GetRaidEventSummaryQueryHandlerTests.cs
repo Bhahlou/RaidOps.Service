@@ -14,6 +14,7 @@ public class GetRaidEventSummaryQueryHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
+    private readonly Mock<IRaidSignupRepository> _raidSignupRepository = new();
     private readonly GetRaidEventSummaryQueryHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -23,7 +24,7 @@ public class GetRaidEventSummaryQueryHandlerTests
 
     public GetRaidEventSummaryQueryHandlerTests()
     {
-        _sut = new GetRaidEventSummaryQueryHandler(_access.Object, _raidEventRepository.Object);
+        _sut = new GetRaidEventSummaryQueryHandler(_access.Object, _raidEventRepository.Object, _raidSignupRepository.Object);
     }
 
     private static GetRaidEventSummaryQuery MakeQuery() => new()
@@ -80,5 +81,47 @@ public class GetRaidEventSummaryQueryHandlerTests
         var result = await _sut.HandleAsync(MakeQuery(), default);
 
         result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DefaultPresentEvent_NeverLooksUpASignup()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Name = "Split 1", SignupMode = SignupMode.DefaultPresent });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.MySignupStatus.Should().BeNull();
+        _raidSignupRepository.Verify(r => r.GetAsync(It.IsAny<int>(), It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEventWithAResponse_MapsMySignupFields()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Name = "Split 1", SignupMode = SignupMode.Signup });
+        _raidSignupRepository.Setup(r => r.GetAsync(EventId, RequesterId, default))
+            .ReturnsAsync(new RaidSignup { RaidEventId = EventId, UserDiscordId = RequesterId, Status = SignupStatus.Accepted, CharacterId = 42, SpecId = 71 });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.MySignupStatus.Should().Be(SignupStatus.Accepted);
+        result.Value.MySignupCharacterId.Should().Be(42);
+        result.Value.MySignupSpecId.Should().Be(71);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEventWithoutAResponseYet_MySignupStatusIsNull()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Name = "Split 1", SignupMode = SignupMode.Signup });
+        _raidSignupRepository.Setup(r => r.GetAsync(EventId, RequesterId, default)).ReturnsAsync((RaidSignup?)null);
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.MySignupStatus.Should().BeNull();
     }
 }

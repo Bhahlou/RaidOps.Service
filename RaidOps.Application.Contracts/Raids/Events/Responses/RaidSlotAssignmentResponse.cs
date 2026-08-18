@@ -35,6 +35,13 @@ public class RaidSlotAssignmentResponse
     /// </summary>
     public required DayAvailabilityStatus AvailabilityStatus { get; set; }
 
+    /// <summary>
+    /// The assigned player's current response, populated only when the event is in
+    /// <see cref="SignupMode.Signup"/> mode (always <c>null</c> for <see cref="SignupMode.DefaultPresent"/>
+    /// events, mirroring how <see cref="AvailabilityStatus"/> is the counterpart badge for that mode).
+    /// </summary>
+    public SignupStatus? SignupStatus { get; set; }
+
     /// <summary>The spec this character is playing for this assignment — defaults to their main raid spec when first assigned.</summary>
     public required RaidSpecRefResponse Spec { get; set; }
 

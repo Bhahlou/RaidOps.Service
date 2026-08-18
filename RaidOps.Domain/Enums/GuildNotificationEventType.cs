@@ -57,4 +57,12 @@ public enum GuildNotificationEventType
     /// or neither can be enabled.
     /// </summary>
     RaidCompositionAnnouncementDm = 11,
+
+    /// <summary>
+    /// The standing signup-call embed (Accept/Tentative/Decline buttons) for a published
+    /// <see cref="Models.Raids.RaidEvent"/> in <see cref="SignupMode.Signup"/> mode is posted/updated
+    /// in a Discord channel — edited in place as responses come in, mirroring
+    /// <see cref="RaidCompositionAnnouncementPosted"/>.
+    /// </summary>
+    RaidSignupCallPosted = 12,
 }

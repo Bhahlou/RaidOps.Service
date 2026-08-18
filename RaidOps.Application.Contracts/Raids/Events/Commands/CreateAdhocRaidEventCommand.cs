@@ -1,4 +1,5 @@
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Domain.Enums;
 
 namespace RaidOps.Application.Contracts.Raids.Events.Commands;
 
@@ -31,4 +32,26 @@ public class CreateAdhocRaidEventCommand : ICommandRequest
 
     /// <summary>IDs of the raid zones this event targets. Must contain at least one zone.</summary>
     public required List<int> RaidZoneIds { get; set; }
+
+    /// <summary>
+    /// Overrides the guild branch's default <see cref="SignupMode"/> for this one event, e.g. an
+    /// exceptional Signup-mode raid on an otherwise DefaultPresent branch. <c>null</c> means "use
+    /// the branch default," the common case.
+    /// </summary>
+    public SignupMode? SignupModeOverride { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of a dedicated channel this event's raid-related notifications
+    /// (published/composition/signup-call) should all post to instead of the guild-wide configured
+    /// channel. <c>null</c> means "use the guild-wide configured channel," the common case.
+    /// </summary>
+    public string? DedicatedAnnouncementChannelId { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="DedicatedAnnouncementChannelId"/> was just created by RaidOps for this
+    /// event rather than an existing channel the officer picked — ignored when
+    /// <see cref="DedicatedAnnouncementChannelId"/> is <c>null</c>. See
+    /// <see cref="Domain.Models.Raids.RaidEvent.DedicatedAnnouncementChannelIsBotOwned"/>.
+    /// </summary>
+    public bool DedicatedAnnouncementChannelIsBotOwned { get; set; }
 }

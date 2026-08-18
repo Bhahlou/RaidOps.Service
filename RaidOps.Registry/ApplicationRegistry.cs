@@ -35,6 +35,12 @@ internal static class ApplicationRegistry
         services.AddScoped<IRaidNotificationContentBuilder, RaidNotificationContentBuilder>();
         services.AddScoped<IRaidCompositionAnnouncementService, RaidCompositionAnnouncementService>();
         services.AddScoped<IRaidCompositionNotifier, RaidCompositionNotifier>();
+        services.AddScoped<IRaidSignupAnnouncementService, RaidSignupAnnouncementService>();
+        services.AddScoped<IRaidEventDeletionNotifier, RaidEventDeletionNotifier>();
+        services.AddScoped<IRaidSignupResponseBuilder, RaidSignupResponseBuilder>();
+        services.AddScoped<IRaidSlotUnassignmentService, RaidSlotUnassignmentService>();
+        services.AddScoped<IRaidSignupChangeNotifier, RaidSignupChangeNotifier>();
+        services.AddScoped<IRaidBoardEnrichmentDataLoader, RaidBoardEnrichmentDataLoader>();
         return services;
     }
 }

@@ -14,6 +14,9 @@ using RaidOps.Application.Contracts.Raids.Roster.Responses;
 using RaidOps.Application.Contracts.Raids.Series.Commands;
 using RaidOps.Application.Contracts.Raids.Series.Queries;
 using RaidOps.Application.Contracts.Raids.Series.Responses;
+using RaidOps.Application.Contracts.Raids.Signups.Commands;
+using RaidOps.Application.Contracts.Raids.Signups.Queries;
+using RaidOps.Application.Contracts.Raids.Signups.Responses;
 using RaidOps.Application.Contracts.Raids.Zones.Queries;
 using RaidOps.Application.Contracts.Raids.Zones.Responses;
 using System.IdentityModel.Tokens.Jwt;
@@ -345,6 +348,54 @@ public class RaidsController(
         command.EventId = eventId;
 
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Officer-only — creates a new Discord text channel, for immediate use as a raid's dedicated announcement channel.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/announcement-channel")]
+    public async Task<IActionResult> CreateAnnouncementChannel(string guildId, int guildBranchId, [FromBody] CreateRaidAnnouncementChannelCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Sets the requesting member's own Accepted/Tentative/Declined response to a Signup-mode raid event.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/signup")]
+    public async Task<IActionResult> SetMySignup(string guildId, int guildBranchId, int eventId, [FromBody] SetMyRaidSignupCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+        command.EventId = eventId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Returns every roster member's current response to a Signup-mode raid event.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/signups")]
+    public async Task<IActionResult> GetSignups(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetRaidSignupsQuery, List<RaidSignupResponse>>(
+            new GetRaidSignupsQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
+            cancellationToken);
+
         return ToActionResult(result);
     }
 
