@@ -74,7 +74,7 @@ public class GetRaidBoardQueryHandlerTests
         Class = Warrior,
     };
 
-    private static RaidEvent MakeEvent(RaidPublicationStatus publicationStatus, List<RaidSlotAssignment>? assignments = null, List<RaidEventZone>? targetZones = null) => new()
+    private static RaidEvent MakeEvent(RaidPublicationStatus publicationStatus, List<RaidSlotAssignment>? assignments = null, List<RaidEventZone>? targetZones = null, SignupMode signupMode = SignupMode.DefaultPresent) => new()
     {
         Id = 100,
         GuildBranchId = GuildBranchId,
@@ -83,7 +83,7 @@ public class GetRaidBoardQueryHandlerTests
         StartsAtUtc = EventStartsAtUtc,
         GroupCount = 2,
         SlotsPerGroup = 5,
-        SignupMode = SignupMode.DefaultPresent,
+        SignupMode = signupMode,
         Status = RaidEventStatus.Scheduled,
         PublicationStatus = publicationStatus,
         TargetZones = targetZones ?? [new RaidEventZone { RaidZoneId = 7, RaidZone = new RaidZone { Id = 7, Name = "Molten Core", ShortCode = "MC" } }],
@@ -295,5 +295,57 @@ public class GetRaidBoardQueryHandlerTests
             It.Is<List<RaidEvent>>(events => events.Count == 2),
             It.Is<List<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")),
             GuildId, GuildBranchId, query.RangeStart, query.RangeEnd, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEvent_IneligiblePlayersAreThoseWithoutAnAcceptedSignup()
+    {
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published, signupMode: SignupMode.Signup);
+        var characterA = new Character { Id = 98, UserDiscordId = "player-a", Class = Warrior };
+        var characterB = new Character { Id = 99, UserDiscordId = "player-b", Class = Warrior };
+        _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
+            .ReturnsAsync([
+                new GuildMembership { CharacterId = 98, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterA },
+                new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterB },
+            ]);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+        SetEnrichment(signupsByEvent: new Dictionary<int, Dictionary<string, RaidSignup>>
+        {
+            [raidEvent.Id] = new()
+            {
+                ["player-a"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-a", Status = SignupStatus.Accepted, CharacterId = 98 },
+                ["player-b"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-b", Status = SignupStatus.Declined },
+            },
+        });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        var ev = result.Value!.Events.Single();
+        ev.IneligiblePlayerDiscordIds.Should().Contain("player-b");
+        ev.IneligiblePlayerDiscordIds.Should().NotContain("player-a");
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEvent_MapsAcceptedCharacterIdsByPlayerDiscordId()
+    {
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published, signupMode: SignupMode.Signup);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+        SetEnrichment(signupsByEvent: new Dictionary<int, Dictionary<string, RaidSignup>>
+        {
+            [raidEvent.Id] = new()
+            {
+                ["player-a"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-a", Status = SignupStatus.Accepted, CharacterId = 98 },
+                ["player-b"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-b", Status = SignupStatus.Declined, CharacterId = null },
+                ["player-c"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-c", Status = SignupStatus.Tentative, CharacterId = null },
+            },
+        });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        var ev = result.Value!.Events.Single();
+        ev.AcceptedCharacterIdsByPlayerDiscordId.Should().ContainSingle();
+        ev.AcceptedCharacterIdsByPlayerDiscordId["player-a"].Should().Be(98);
     }
 }

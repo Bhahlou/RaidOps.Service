@@ -260,6 +260,16 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task GetCategories_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/123456789012345678/categories");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetCategories_WhenUserNotAdmin_Returns400()
     {
         const string id      = "510000000000000009";
