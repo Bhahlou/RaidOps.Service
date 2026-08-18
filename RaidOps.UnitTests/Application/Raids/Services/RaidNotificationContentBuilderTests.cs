@@ -415,6 +415,40 @@ public class RaidNotificationContentBuilderTests
     }
 
     [Fact]
+    public async Task BuildSignupCallAsync_AcceptedWithNoCharacterOrPlayerName_FallsBackToDiscordId()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("99", SignupStatus.Accepted, characterName: null, classId: 1, playerName: null) };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        var warriorField = embed.Fields!.Single(f => f.Name.Contains("Warrior"));
+        warriorField.Value.Should().Be("99");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_TentativeWithNoCharacterName_FallsBackToPlayerName()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("1", SignupStatus.Tentative, characterName: null, playerName: "Bhahlou") };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Tentative (1)") && f.Value == "Bhahlou");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_TentativeWithNoCharacterOrPlayerName_FallsBackToDiscordId()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("99", SignupStatus.Tentative, characterName: null, playerName: null) };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Tentative (1)") && f.Value == "99");
+    }
+
+    [Fact]
     public async Task BuildSignupCallAsync_ClassWithNoAcceptedSignups_FieldValueIsDash()
     {
         var raidEvent = MakeCompositionEvent(1, 1);
@@ -458,6 +492,26 @@ public class RaidNotificationContentBuilderTests
         var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
 
         embed.Fields!.Should().Contain(f => f.Name.Contains("Evoker"));
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_GuildBranchFoundButBranchNotFound_ShowsEveryClass()
+    {
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(10, default)).ReturnsAsync(new GuildBranch { Id = 10, GuildId = GuildId, BranchId = 1 });
+        _branchRepository.Setup(r => r.GetByIdAsync(1, default)).ReturnsAsync((Branch?)null);
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Fields!.Should().Contain(f => f.Name.Contains("Evoker"));
+    }
+
+    [Fact]
+    public void ClassEmoji_UnknownClassId_ReturnsEmptyString()
+    {
+        var result = _sut.ClassEmoji(999);
+
+        result.Should().BeEmpty();
     }
 
     [Fact]

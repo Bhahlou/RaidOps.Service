@@ -363,7 +363,7 @@ public class RaidNotificationContentBuilder(
     }
 
     /// <summary><c>"{class emoji} "</c> (trailing space, so the caller can safely concatenate), or an empty string when the icon isn't resolvable/synced yet — used for the signup call's per-class field titles.</summary>
-    private string ClassEmoji(int classId)
+    internal string ClassEmoji(int classId)
     {
         var emoji = WowClassEmojiNames.ByClassId.TryGetValue(classId, out var className)
             ? discordBotService.Emojis.GetMarkdown(className)

@@ -142,6 +142,23 @@ public class RaidSignupInteractionModuleTests
         _commandDispatcher.Verify(d => d.DispatchAsync(It.Is<SetMyRaidSignupCommand>(c => c.CharacterId == null), default), Times.Once);
     }
 
+    [Theory]
+    [InlineData("accepted")]
+    [InlineData("tentative")]
+    public async Task HandleAsync_RosterCharactersQueryFails_TreatsItAsZeroCharacters(string status)
+    {
+        Attach(MakeGuild());
+        _queryDispatcher
+            .Setup(q => q.DispatchAsync<GetMyRosterCharactersQuery, List<RaidSignupCharacterResponse>>(It.IsAny<GetMyRosterCharactersQuery>(), default))
+            .ReturnsAsync(Result<List<RaidSignupCharacterResponse>>.Fail(ResponseDetail.Forbidden));
+        _commandDispatcher.Setup(d => d.DispatchAsync(It.IsAny<SetMyRaidSignupCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.CharacterRequiredForSignup));
+
+        await _sut.HandleAsync(GuildBranchId, EventId, status);
+
+        _commandDispatcher.Verify(d => d.DispatchAsync(It.Is<SetMyRaidSignupCommand>(c => c.CharacterId == null), default), Times.Once);
+    }
+
     // ── Accepted/Tentative — exactly one character ──────────────────────────────
 
     [Fact]

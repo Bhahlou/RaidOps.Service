@@ -171,6 +171,27 @@ public class MessageServiceTests
     }
 
     [Fact]
+    public async Task EditEmbedAsync_WithButtons_SerializesTheButtonIntoTheRequestBody()
+    {
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        string? lastBody = null;
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .Returns((HttpRequestMessage req, CancellationToken ct) =>
+            {
+                lastBody = req.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+                return Task.FromResult(NetCordTestHelpers.JsonResponse(MessageJson));
+            });
+        var cache = NetCordTestHelpers.EmptyCache();
+        var client = NetCordTestHelpers.MakeGatewayClient(cache.Object, rest);
+        var sut = new MessageService(client);
+        var embed = new DiscordEmbedContent("Updated", Buttons: [new DiscordEmbedButton("Accept", "accept", DiscordEmbedButtonStyle.Primary)]);
+
+        await sut.EditEmbedAsync(ChannelId, MessageId, embed);
+
+        lastBody.Should().Contain("\"custom_id\":\"accept\"");
+    }
+
+    [Fact]
     public async Task SendDirectMessageEmbedAsync_ResolvesDmChannelThenSendsEmbed()
     {
         var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();

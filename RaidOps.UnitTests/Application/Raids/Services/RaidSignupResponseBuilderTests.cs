@@ -84,6 +84,67 @@ public class RaidSignupResponseBuilderTests
     }
 
     [Fact]
+    public async Task BuildAsync_MemberWithNoMatchingUser_PlayerNameIsNull()
+    {
+        _guildMembershipRepository.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([MakeMembership("player-1")]);
+
+        var result = await _sut.BuildAsync(new RaidEvent { Id = EventId, GuildBranchId = GuildBranchId });
+
+        result.Should().ContainSingle(r => r.UserDiscordId == "player-1" && r.PlayerName == null);
+    }
+
+    [Fact]
+    public async Task BuildAsync_DeclinedResponseWithNoCharacter_CharacterAndSpecFieldsAreNull()
+    {
+        _guildMembershipRepository.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([MakeMembership("player-1")]);
+        _usersRepository.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = "player-1", Name = "Thrall" }]);
+        _raidSignupRepository.Setup(r => r.GetForEventAsync(EventId, default)).ReturnsAsync(
+        [
+            new RaidSignup { RaidEventId = EventId, UserDiscordId = "player-1", Status = SignupStatus.Declined },
+        ]);
+
+        var result = await _sut.BuildAsync(new RaidEvent { Id = EventId, GuildBranchId = GuildBranchId });
+
+        var response = result.Should().ContainSingle().Which;
+        response.Status.Should().Be(SignupStatus.Declined);
+        response.CharacterId.Should().BeNull();
+        response.CharacterName.Should().BeNull();
+        response.ClassId.Should().BeNull();
+        response.ClassName.Should().BeNull();
+        response.SpecId.Should().BeNull();
+        response.SpecName.Should().BeNull();
+        response.SpecIconUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task BuildAsync_AcceptedResponseWithCharacterButNoSpec_SpecFieldsAreNull()
+    {
+        _guildMembershipRepository.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([MakeMembership("player-1")]);
+        _usersRepository.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = "player-1", Name = "Thrall" }]);
+        _raidSignupRepository.Setup(r => r.GetForEventAsync(EventId, default)).ReturnsAsync(
+        [
+            new RaidSignup
+            {
+                RaidEventId = EventId,
+                UserDiscordId = "player-1",
+                Status = SignupStatus.Accepted,
+                CharacterId = 42,
+                Character = new Character { Id = 42, Name = "Arthas", ClassId = 1, Class = new WowClass { Id = 1, Name = "Warrior", Color = "C79C6E" } },
+            },
+        ]);
+
+        var result = await _sut.BuildAsync(new RaidEvent { Id = EventId, GuildBranchId = GuildBranchId });
+
+        var response = result.Should().ContainSingle().Which;
+        response.CharacterName.Should().Be("Arthas");
+        response.SpecId.Should().BeNull();
+        response.SpecName.Should().BeNull();
+        response.SpecIconUrl.Should().BeNull();
+    }
+
+    [Fact]
     public async Task BuildAsync_DuplicateGuildBranchIdsAcrossMemberships_DeduplicatesPlayers()
     {
         _guildMembershipRepository.Setup(m => m.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([MakeMembership("player-1"), MakeMembership("player-1")]);

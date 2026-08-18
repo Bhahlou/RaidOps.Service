@@ -53,6 +53,17 @@ public class RaidSignupHubTests
     }
 
     [Fact]
+    public async Task JoinRaidEvent_NoUserPrincipal_DoesNotJoinGroup()
+    {
+        _context.Setup(c => c.User).Returns((System.Security.Claims.ClaimsPrincipal?)null!);
+
+        await _sut.JoinRaidEvent(GuildId, GuildBranchId, EventId);
+
+        _groups.Verify(g => g.AddToGroupAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _guildAccessService.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
+    }
+
+    [Fact]
     public async Task JoinRaidEvent_BelowRosterAccess_DoesNotJoinGroup()
     {
         SetUser(DiscordId);

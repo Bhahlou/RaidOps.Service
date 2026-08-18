@@ -303,10 +303,12 @@ public class GetRaidBoardQueryHandlerTests
         var raidEvent = MakeEvent(RaidPublicationStatus.Published, signupMode: SignupMode.Signup);
         var characterA = new Character { Id = 98, UserDiscordId = "player-a", Class = Warrior };
         var characterB = new Character { Id = 99, UserDiscordId = "player-b", Class = Warrior };
+        var characterC = new Character { Id = 97, UserDiscordId = "player-c", Class = Warrior };
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
             .ReturnsAsync([
                 new GuildMembership { CharacterId = 98, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterA },
                 new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterB },
+                new GuildMembership { CharacterId = 97, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterC },
             ]);
         _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
             .ReturnsAsync([raidEvent]);
@@ -316,6 +318,7 @@ public class GetRaidBoardQueryHandlerTests
             {
                 ["player-a"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-a", Status = SignupStatus.Accepted, CharacterId = 98 },
                 ["player-b"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-b", Status = SignupStatus.Declined },
+                // player-c has no entry at all — hasn't responded to the signup call yet.
             },
         });
 
@@ -323,6 +326,7 @@ public class GetRaidBoardQueryHandlerTests
 
         var ev = result.Value!.Events.Single();
         ev.IneligiblePlayerDiscordIds.Should().Contain("player-b");
+        ev.IneligiblePlayerDiscordIds.Should().Contain("player-c");
         ev.IneligiblePlayerDiscordIds.Should().NotContain("player-a");
     }
 

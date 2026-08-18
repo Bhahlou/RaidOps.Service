@@ -163,6 +163,19 @@ public class RaidSignupPickerModuleTests
         _commandDispatcher.Verify(d => d.DispatchAsync(It.Is<SetMyRaidSignupCommand>(c => c.CharacterId == 999 && c.SpecId == null), default), Times.Once);
     }
 
+    [Fact]
+    public async Task HandleCharacterAsync_RosterCharactersQueryFails_DispatchesWithNullSpecLeftToValidation()
+    {
+        Attach(MakeGuild(), CharacterId.ToString());
+        _queryDispatcher
+            .Setup(q => q.DispatchAsync<GetMyRosterCharactersQuery, List<RaidSignupCharacterResponse>>(It.IsAny<GetMyRosterCharactersQuery>(), default))
+            .ReturnsAsync(Result<List<RaidSignupCharacterResponse>>.Fail(ResponseDetail.Forbidden));
+
+        await _sut.HandleCharacterAsync(GuildBranchId, EventId, "accepted");
+
+        _commandDispatcher.Verify(d => d.DispatchAsync(It.Is<SetMyRaidSignupCommand>(c => c.CharacterId == CharacterId && c.SpecId == null), default), Times.Once);
+    }
+
     // ══════════════════════ HandleSpecAsync ═══════════════════════════════════
 
     [Fact]
@@ -230,5 +243,20 @@ public class RaidSignupPickerModuleTests
         await _sut.HandleSpecAsync(GuildBranchId, EventId, CharacterId, "accepted");
 
         body()!.Should().Contain("Response saved!");
+    }
+
+    [Fact]
+    public async Task HandleSpecAsync_RosterCharactersQueryFails_DispatchesWithParsedSpecId()
+    {
+        Attach(MakeGuild(), "71");
+        _queryDispatcher
+            .Setup(q => q.DispatchAsync<GetMyRosterCharactersQuery, List<RaidSignupCharacterResponse>>(It.IsAny<GetMyRosterCharactersQuery>(), default))
+            .ReturnsAsync(Result<List<RaidSignupCharacterResponse>>.Fail(ResponseDetail.Forbidden));
+
+        await _sut.HandleSpecAsync(GuildBranchId, EventId, CharacterId, "accepted");
+
+        _commandDispatcher.Verify(d => d.DispatchAsync(
+            It.Is<SetMyRaidSignupCommand>(c => c.CharacterId == CharacterId && c.SpecId == 71),
+            default), Times.Once);
     }
 }
