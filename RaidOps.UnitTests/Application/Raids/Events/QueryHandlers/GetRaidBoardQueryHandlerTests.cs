@@ -234,6 +234,38 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_AssignedPlayerHasRespondedToTheSignupCall_MapsAssignmentSignupStatus()
+    {
+        var character = MakeAssignedCharacter();
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)], signupMode: SignupMode.Signup);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+        SetEnrichment(signupsByEvent: new Dictionary<int, Dictionary<string, RaidSignup>>
+        {
+            [raidEvent.Id] = new()
+            {
+                [AssignedPlayerId] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = AssignedPlayerId, Status = SignupStatus.Accepted, CharacterId = CharacterId },
+            },
+        });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.Value!.Events.Single().Assignments.Single().SignupStatus.Should().Be(SignupStatus.Accepted);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AssignedPlayerHasNotRespondedToTheSignupCall_AssignmentSignupStatusIsNull()
+    {
+        var character = MakeAssignedCharacter();
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)], signupMode: SignupMode.Signup)]);
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.Value!.Events.Single().Assignments.Single().SignupStatus.Should().BeNull();
+    }
+
+    [Fact]
     public async Task HandleAsync_AssignmentAvailabilityStatus_ReflectsLookupResolvedStatus()
     {
         var character = MakeAssignedCharacter();
