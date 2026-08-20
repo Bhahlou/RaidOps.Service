@@ -173,16 +173,16 @@ public class RaidsController(
         return ToActionResult(result);
     }
 
-    /// <summary>Returns a single raid event's minimal identity (id + name) — backs the raid detail page's breadcrumb.</summary>
+    /// <summary>Returns a single raid event, with target zones and slot assignments — backs the raid detail page.</summary>
     [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}")]
-    public async Task<IActionResult> GetEventSummary(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetEvent(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
-        var result = await QueryDispatcher.DispatchAsync<GetRaidEventSummaryQuery, RaidEventSummaryResponse>(
-            new GetRaidEventSummaryQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
+        var result = await QueryDispatcher.DispatchAsync<GetRaidEventQuery, RaidEventResponse>(
+            new GetRaidEventQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
             cancellationToken);
 
         return ToActionResult(result);
