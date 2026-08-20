@@ -20,6 +20,13 @@ internal class NoOpGuildService : IGuildService
 
     public IEnumerable<DiscordChannelInfo> GetChannels(string guildId, CancellationToken cancellationToken = default) => [];
 
+    public DiscordCategoriesInfo GetCategories(string guildId, CancellationToken cancellationToken = default) => new(true, []);
+
+    public Task<DiscordChannelInfo> CreateTextChannelAsync(string guildId, string name, string? categoryId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new DiscordChannelInfo(0, name, []));
+
+    public Task DeleteChannelAsync(string channelId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
     public string? GetPreferredLocale(string guildId, CancellationToken cancellationToken = default) => null;
 
     public GuildUser? GetUser(string guildId, string userId, CancellationToken cancellationToken = default) => null;

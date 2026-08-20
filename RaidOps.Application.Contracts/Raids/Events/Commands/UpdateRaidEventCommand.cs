@@ -36,4 +36,18 @@ public class UpdateRaidEventCommand : ICommandRequest
 
     /// <summary>IDs of the raid zones this event targets. Must contain at least one zone.</summary>
     public required List<int> RaidZoneIds { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of a dedicated channel this event's raid-related notifications should
+    /// all post to, or <c>null</c>. Only ever changed for a <see cref="Domain.Enums.SignupMode.Signup"/>
+    /// event — the front end omits it otherwise, which round-trips as <c>null</c>, the only value a
+    /// non-Signup event can have today. Changing it (vs. the event's current channel) deletes the
+    /// standing signup-call/composition embeds from the old channel and re-posts the signup-call one
+    /// fresh in the new channel; the event's <see cref="Domain.Enums.SignupMode"/> itself can never
+    /// be changed here.
+    /// </summary>
+    public string? DedicatedAnnouncementChannelId { get; set; }
+
+    /// <inheritdoc cref="CreateAdhocRaidEventCommand.DedicatedAnnouncementChannelIsBotOwned"/>
+    public bool DedicatedAnnouncementChannelIsBotOwned { get; set; }
 }

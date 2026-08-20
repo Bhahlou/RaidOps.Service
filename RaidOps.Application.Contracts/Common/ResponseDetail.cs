@@ -69,4 +69,14 @@ public static class ResponseDetail
     public const string CharacterHasNoRaidSpec = nameof(CharacterHasNoRaidSpec);
     public const string SpecNotAvailableForCharacter = nameof(SpecNotAvailableForCharacter);
     public const string GridShrinkWouldOrphanAssignments = nameof(GridShrinkWouldOrphanAssignments);
+    public const string RaidEventNotPublished = nameof(RaidEventNotPublished);
+    public const string NoAnnouncementChannelConfigured = nameof(NoAnnouncementChannelConfigured);
+    public const string NoAssignmentsToNotify = nameof(NoAssignmentsToNotify);
+    public const string RaidGroupingRequesterHasNoCharacter = nameof(RaidGroupingRequesterHasNoCharacter);
+    public const string RaidGroupingCharacterNotFound = nameof(RaidGroupingCharacterNotFound);
+    public const string RaidEventNotInSignupMode = nameof(RaidEventNotInSignupMode);
+    public const string PlayerHasNotAcceptedSignup = nameof(PlayerHasNotAcceptedSignup);
+    public const string CharacterRequiredForSignup = nameof(CharacterRequiredForSignup);
+    public const string SpecRequiredForSignup = nameof(SpecRequiredForSignup);
+    public const string DiscordChannelCreationFailed = nameof(DiscordChannelCreationFailed);
 }

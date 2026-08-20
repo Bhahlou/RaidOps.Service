@@ -6,19 +6,25 @@ using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.AuditLog.QueryHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
+using RaidOps.UnitTests.ExternalApplication.Bot;
 
 namespace RaidOps.UnitTests.Application.Guilds.AuditLog.QueryHandlers;
 
 public class GetGuildAuditLogQueryHandlerTests
 {
-    private readonly Mock<IGuildAccessService>      _access     = new();
-    private readonly Mock<IGuildAuditLogRepository> _auditLog   = new();
-    private readonly Mock<IUsersRepository>         _users      = new();
+    private readonly Mock<IGuildAccessService>      _access       = new();
+    private readonly Mock<IGuildAuditLogRepository> _auditLog     = new();
+    private readonly Mock<IUsersRepository>         _users        = new();
+    private readonly Mock<IDiscordBotService>       _bot          = new();
+    private readonly Mock<IGuildService>            _guildService = new();
     private readonly GetGuildAuditLogQueryHandler   _sut;
 
     private const string GuildId     = "guild-1";
     private const string RequesterId = "user-1";
+    private const ulong  ActorUlong  = 300000000000000001UL;
+    private const ulong  GuildUlong  = 900000000000000001UL;
 
     private static readonly GetGuildAuditLogQuery Query = new()
     {
@@ -30,7 +36,11 @@ public class GetGuildAuditLogQueryHandlerTests
 
     public GetGuildAuditLogQueryHandlerTests()
     {
-        _sut = new GetGuildAuditLogQueryHandler(_access.Object, _auditLog.Object, _users.Object);
+        _bot.Setup(b => b.Guilds).Returns(_guildService.Object);
+        // Default: bot doesn't see the actor in its Gateway cache — every existing test that
+        // doesn't care about live member resolution keeps exercising the DB-fallback path.
+        _guildService.Setup(g => g.GetUser(GuildId, It.IsAny<string>(), default)).Returns((NetCord.GuildUser?)null);
+        _sut = new GetGuildAuditLogQueryHandler(_access.Object, _auditLog.Object, _users.Object, _bot.Object);
     }
 
     private void SetupAdmin(bool isAdmin = true) =>
@@ -214,6 +224,121 @@ public class GetGuildAuditLogQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value?.Entries[0].ActorUsername.Should().BeNull();
         result.Value?.Entries[0].ActorAvatarHash.Should().BeNull();
+    }
+
+    // ── Guild-local identity (Gateway cache) ────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_ActorFoundInGatewayCache_PrefersGuildNicknameOverDbName()
+    {
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = "actor-1", ActionType = GuildAuditAction.GuildRegistered, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = "actor-1", Name = "Bhahlou", AvatarHash = "stale-hash", RefreshToken = "x", LastRefresh = DateTimeOffset.UtcNow }]);
+        _guildService.Setup(g => g.GetUser(GuildId, "actor-1", default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(ActorUlong, GuildUlong, [], username: "bhahlou", nickname: "Le Boss", avatarHash: "live-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value?.Entries[0].ActorUsername.Should().Be("Le Boss");
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActorFoundInGatewayCache_PrefersLiveAvatarHashOverStaleDbSnapshot()
+    {
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = "actor-1", ActionType = GuildAuditAction.GuildRegistered, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = "actor-1", Name = "Bhahlou", AvatarHash = "stale-hash", RefreshToken = "x", LastRefresh = DateTimeOffset.UtcNow }]);
+        _guildService.Setup(g => g.GetUser(GuildId, "actor-1", default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(ActorUlong, GuildUlong, [], username: "bhahlou", avatarHash: "live-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value?.Entries[0].ActorAvatarHash.Should().Be("live-hash");
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActorFoundInGatewayCacheWithNoAvatar_DoesNotFallBackToStaleDbHash()
+    {
+        // Regression test: the actor removed their Discord avatar entirely, but the DB's User
+        // row (only resynced at login/token-refresh) still holds the old hash. The live Gateway
+        // lookup finding the member with no avatar must win — null is meaningful, not "unknown".
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = "actor-1", ActionType = GuildAuditAction.GuildRegistered, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = "actor-1", Name = "Bhahlou", AvatarHash = "stale-hash", RefreshToken = "x", LastRefresh = DateTimeOffset.UtcNow }]);
+        _guildService.Setup(g => g.GetUser(GuildId, "actor-1", default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(ActorUlong, GuildUlong, [], username: "bhahlou"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value?.Entries[0].ActorAvatarHash.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActorHasGuildAvatarOverride_PopulatesActorGuildAvatarUrl()
+    {
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = "actor-1", ActionType = GuildAuditAction.GuildRegistered, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([]);
+        _guildService.Setup(g => g.GetUser(GuildId, "actor-1", default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(ActorUlong, GuildUlong, [], username: "bhahlou", guildAvatarHash: "guild-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value?.Entries[0].ActorGuildAvatarUrl.Should().Be($"https://cdn.discordapp.com/guilds/{GuildUlong}/users/{ActorUlong}/avatars/guild-hash.png");
+    }
+
+    [Fact]
+    public async Task HandleAsync_ActorHasNoGuildAvatarOverride_ActorGuildAvatarUrlIsNull()
+    {
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = "actor-1", ActionType = GuildAuditAction.GuildRegistered, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([]);
+        _guildService.Setup(g => g.GetUser(GuildId, "actor-1", default))
+            .Returns(NetCordTestHelpers.MakeGuildUser(ActorUlong, GuildUlong, [], username: "bhahlou", avatarHash: "live-hash"));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value?.Entries[0].ActorGuildAvatarUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_BotNotInGuild_FallsBackToDbSnapshotWithoutThrowing()
+    {
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = "actor-1", ActionType = GuildAuditAction.GuildRegistered, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([new User { DiscordId = "actor-1", Name = "Bhahlou", AvatarHash = "db-hash", RefreshToken = "x", LastRefresh = DateTimeOffset.UtcNow }]);
+        _guildService.Setup(g => g.GetUser(GuildId, "actor-1", default)).Throws<InvalidOperationException>();
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value?.Entries[0].ActorUsername.Should().Be("Bhahlou");
+        result.Value?.Entries[0].ActorAvatarHash.Should().Be("db-hash");
+        result.Value?.Entries[0].ActorGuildAvatarUrl.Should().BeNull();
     }
 
     [Theory]

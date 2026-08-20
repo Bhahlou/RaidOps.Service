@@ -1,4 +1,5 @@
 using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Domain.Enums;
 
 namespace RaidOps.Application.Contracts.Raids.Series.Commands;
 
@@ -37,4 +38,17 @@ public class CreateRaidSeriesCommand : ICommandRequest
 
     /// <summary>IDs of the raid zones every materialized occurrence targets by default. Must contain at least one zone.</summary>
     public required List<int> RaidZoneIds { get; set; }
+
+    /// <summary>Overrides the guild branch's default <see cref="SignupMode"/> for this series. <c>null</c> means "use the branch default."</summary>
+    public SignupMode? SignupModeOverride { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of a dedicated channel every occurrence of this series should post its
+    /// raid-related notifications to instead of the guild-wide configured channel. <c>null</c> means
+    /// "use the guild-wide configured channel."
+    /// </summary>
+    public string? DedicatedAnnouncementChannelId { get; set; }
+
+    /// <inheritdoc cref="Domain.Models.Raids.RaidSeries.DedicatedAnnouncementChannelCategoryId"/>
+    public string? DedicatedAnnouncementChannelCategoryId { get; set; }
 }

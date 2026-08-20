@@ -56,6 +56,7 @@ public class UpdateSlotAssignmentSpecCommandHandler(
             await raidCompositionNotifier.NotifySlotSpecChangedAsync(
                 raidEvent, command.RequesterDiscordId,
                 new RaidCharacterRef(characterName, character?.ClassId),
+                assignment.AssignedPlayerDiscordId,
                 oldSpecName, newSpec.Spec.Name,
                 cancellationToken);
         }

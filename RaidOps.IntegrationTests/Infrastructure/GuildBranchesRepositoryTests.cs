@@ -134,4 +134,44 @@ public class GuildBranchesRepositoryTests(RaidOpsWebApplicationFactory factory)
             updated!.Region.Should().Be("eu");
         }
     }
+
+    // ── UpdateSignupModeAsync ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateSignupModeAsync_BranchNotFound_ReturnsFalse()
+    {
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+            var result = await repo.UpdateSignupModeAsync(guildBranchId: -1, SignupMode.Signup);
+
+            result.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSignupModeAsync_Success_PersistsSignupModeAndReturnsTrue()
+    {
+        const string guildId = "960000000000000004";
+        await SeedGuildAsync(guildId);
+        var branch = TestDataBuilder.CreateGuildBranch(guildId);
+        await SeedAsync(db =>
+        {
+            db.GuildBranches.Add(branch);
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+            var result = await repo.UpdateSignupModeAsync(branch.Id, SignupMode.Signup);
+
+            result.Should().BeTrue();
+
+            var updated = await db.GuildBranches.FindAsync(branch.Id);
+            updated!.SignupMode.Should().Be(SignupMode.Signup);
+        }
+    }
 }

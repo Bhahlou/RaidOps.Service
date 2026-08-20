@@ -18,6 +18,7 @@ public class GetMeQueryHandlerTests
     private readonly Mock<IGuildAccessService>           _access              = new();
     private readonly Mock<IUserNotificationService>      _userNotifications   = new();
     private readonly Mock<IActiveRosterBranchResolver>   _activeRosterBranches = new();
+    private readonly Mock<ISeenChangelogEntryRepository> _seenChangelog       = new();
     private readonly GetMeQueryHandler                   _sut;
 
     private const string DiscordId = "user-1";
@@ -36,7 +37,10 @@ public class GetMeQueryHandlerTests
         // No active roster branches by default — individual tests opt in.
         _activeRosterBranches.Setup(r => r.GetActiveBranchesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object, _activeRosterBranches.Object);
+        // No seen changelog entries by default — individual tests opt in.
+        _seenChangelog.Setup(r => r.GetSeenEntryIdsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object, _activeRosterBranches.Object, _seenChangelog.Object);
     }
 
     // ── Guard clause ─────────────────────────────────────────────────────────
@@ -74,6 +78,30 @@ public class GetMeQueryHandlerTests
         result.Value!.DiscordId.Should().Be(DiscordId);
         result.Value.Name.Should().Be("Bhahlou");
         result.Value.AvatarHash.Should().Be("abc123");
+    }
+
+    [Fact]
+    public async Task HandleAsync_UserHasSeenChangelogEntries_MapsThemIntoResponse()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([]));
+        _seenChangelog.Setup(r => r.GetSeenEntryIdsAsync(DiscordId, default))
+            .ReturnsAsync(["2026-08-02-raid-notifications"]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.SeenChangelogEntryIds.Should().ContainSingle().Which.Should().Be("2026-08-02-raid-notifications");
+    }
+
+    [Fact]
+    public async Task HandleAsync_UserHasNoSeenChangelogEntries_ReturnsEmptyList()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([]));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.SeenChangelogEntryIds.Should().BeEmpty();
     }
 
     // ── Guild filtering ───────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ using RaidOps.Application.Contracts.Guilds.Roster.Queries;
 using RaidOps.Application.Contracts.Guilds.Roster.Responses;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Enums;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Guilds.Roster.QueryHandlers;
@@ -17,7 +18,8 @@ public class GetGuildRosterQueryHandler(
     IGuildBranchesRepository guildBranchesRepository,
     IGuildAccessService guildAccessService,
     IGuildMembershipRepository membershipRepository,
-    IUsersRepository usersRepository) : IQueryHandlerAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>
+    IUsersRepository usersRepository,
+    IDiscordBotService discordBotService) : IQueryHandlerAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>
 {
     /// <inheritdoc/>
     public async Task<Result<List<GuildRosterMemberResponse>>> HandleAsync(GetGuildRosterQuery query, CancellationToken cancellationToken)
@@ -49,7 +51,7 @@ public class GetGuildRosterQueryHandler(
             var canExclude = isOfficerOrAbove
                 && (isOwnRow || await guildAccessService.OutranksAsync(query.GuildId, query.GuildBranchId, query.RequesterDiscordId, membership.Character.UserDiscordId, cancellationToken));
 
-            roster.Add(GuildRosterMapper.ToDto(membership, playersById, canExclude));
+            roster.Add(GuildRosterMapper.ToDto(membership, playersById, canExclude, query.GuildId, discordBotService, cancellationToken));
         }
 
         var sortedRoster = roster

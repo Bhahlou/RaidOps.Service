@@ -13,4 +13,6 @@ internal class NoOpEmojiService : IEmojiService
     public Task SyncAsync(IEnumerable<(string Name, string SourceUrl)> entries, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public string? GetMarkdown(string name) => null;
+
+    public ulong? GetId(string name) => null;
 }

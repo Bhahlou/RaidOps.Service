@@ -56,4 +56,10 @@ public interface IGuildBranchesRepository
     /// </summary>
     /// <returns><c>true</c> if the branch existed and was updated; <c>false</c> if not found.</returns>
     Task<bool> UpdateRegionAsync(int guildBranchId, string region, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the default signup mode for new raid events created on the given guild branch.
+    /// </summary>
+    /// <returns><c>true</c> if the branch existed and was updated; <c>false</c> if not found.</returns>
+    Task<bool> UpdateSignupModeAsync(int guildBranchId, SignupMode signupMode, CancellationToken cancellationToken = default);
 }

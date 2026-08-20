@@ -33,7 +33,15 @@ internal static class ApplicationRegistry
         services.AddScoped<IRaidSlotEligibilityValidator, RaidSlotEligibilityValidator>();
         services.AddScoped<IRaidGridAndZoneValidator, RaidGridAndZoneValidator>();
         services.AddScoped<IRaidNotificationContentBuilder, RaidNotificationContentBuilder>();
+        services.AddScoped<IRaidCompositionAnnouncementService, RaidCompositionAnnouncementService>();
         services.AddScoped<IRaidCompositionNotifier, RaidCompositionNotifier>();
+        services.AddScoped<IRaidSignupAnnouncementService, RaidSignupAnnouncementService>();
+        services.AddScoped<IRaidEventDeletionNotifier, RaidEventDeletionNotifier>();
+        services.AddScoped<IRaidEventUpdateNotifier, RaidEventUpdateNotifier>();
+        services.AddScoped<IRaidSignupResponseBuilder, RaidSignupResponseBuilder>();
+        services.AddScoped<IRaidSlotUnassignmentService, RaidSlotUnassignmentService>();
+        services.AddScoped<IRaidSignupChangeNotifier, RaidSignupChangeNotifier>();
+        services.AddScoped<IRaidBoardEnrichmentDataLoader, RaidBoardEnrichmentDataLoader>();
         return services;
     }
 }
