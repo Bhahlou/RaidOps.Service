@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.7.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.6.0...v1.7.0) (2026-08-20)
+
+
+### 🚀 Features
+
+* Add per-user changelog seen-state tracking ([#72](https://github.com/Bhahlou/RaidOps.Service/issues/72)) ([b42686b](https://github.com/Bhahlou/RaidOps.Service/commit/b42686be26c24f663b4b9e17c78872772cc2f8f0))
+* Add raid composition announcements, grouping ping, and default raid signup mode setting ([#76](https://github.com/Bhahlou/RaidOps.Service/issues/76)) ([3090d5c](https://github.com/Bhahlou/RaidOps.Service/commit/3090d5c718c1b1b7f8e90fa8155636fa879ca4c4))
+* Expose per-guild Discord nickname/avatar on the roster and audit log ([#74](https://github.com/Bhahlou/RaidOps.Service/issues/74)) ([7964d2a](https://github.com/Bhahlou/RaidOps.Service/commit/7964d2ad0cd5848b86c56480baf2aa8a715552b0))
+* push live Discord role, guild join, and guild leave notifications via SignalR ([#73](https://github.com/Bhahlou/RaidOps.Service/issues/73)) ([6ae54e7](https://github.com/Bhahlou/RaidOps.Service/commit/6ae54e7120807e1a13b3dbc0809f64f7f69868dd))
+
+
+### 🐛 Bug Fixes
+
+* Build a real diff for the notification-settings audit log instead of a bare event count ([#75](https://github.com/Bhahlou/RaidOps.Service/issues/75)) ([120630c](https://github.com/Bhahlou/RaidOps.Service/commit/120630cf186562cf7ddae25c4ca0b18187bb3362))
+* Fix acceptance deploy from silently duplicating/resurrecting content ([#70](https://github.com/Bhahlou/RaidOps.Service/issues/70)) ([dd8f0c5](https://github.com/Bhahlou/RaidOps.Service/commit/dd8f0c57a241ce4b46cc4562db4346a72eea7bab))
+* Stop RemoveNetcordServices from breaking every integration test,close remaining coverage gaps, and add raid signup mode with Discord channel picker ([#77](https://github.com/Bhahlou/RaidOps.Service/issues/77)) ([0d23ff5](https://github.com/Bhahlou/RaidOps.Service/commit/0d23ff52a3f7b27fab8d9f384fcef2aa93380cb9))
+
 ## [1.6.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.5.1...v1.6.0) (2026-08-03)
 
 
