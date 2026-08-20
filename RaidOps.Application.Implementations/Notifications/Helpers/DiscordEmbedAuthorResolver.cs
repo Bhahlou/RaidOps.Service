@@ -1,3 +1,4 @@
+using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 
 namespace RaidOps.Application.Implementations.Notifications.Helpers;
@@ -15,19 +16,12 @@ internal static class DiscordEmbedAuthorResolver
     /// </summary>
     public static DiscordEmbedAuthor? Resolve(IDiscordBotService discordBotService, string guildId, string requesterDiscordId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = discordBotService.Guilds.GetUser(guildId, requesterDiscordId, cancellationToken);
-            if (member is null)
-                return null;
-
-            var name = member.Nickname ?? member.GlobalName ?? member.Username;
-            var iconUrl = (member.HasGuildAvatar ? member.GetGuildAvatarUrl() : member.GetAvatarUrl())?.ToString();
-            return new DiscordEmbedAuthor(name, iconUrl);
-        }
-        catch (InvalidOperationException)
-        {
+        var member = GuildMemberIdentityResolver.TryGetMember(discordBotService, guildId, requesterDiscordId, cancellationToken);
+        if (member is null)
             return null;
-        }
+
+        var name = member.Nickname ?? member.GlobalName ?? member.Username;
+        var iconUrl = (member.HasGuildAvatar ? member.GetGuildAvatarUrl() : member.GetAvatarUrl())?.ToString();
+        return new DiscordEmbedAuthor(name, iconUrl);
     }
 }

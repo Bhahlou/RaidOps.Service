@@ -5,6 +5,8 @@ using RaidOps.Application.Contracts.Guilds.Settings.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Guilds.Settings.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Guilds.Settings.CommandHandlers;
@@ -13,6 +15,8 @@ public class ResetGuildNotificationSettingsCommandHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IGuildNotificationSettingsRepository> _notificationSettings = new();
+    private readonly Mock<IGuildService> _guildService = new();
+    private readonly Mock<IDiscordBotService> _discordBotService = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
     private readonly ResetGuildNotificationSettingsCommandHandler _sut;
 
@@ -22,7 +26,9 @@ public class ResetGuildNotificationSettingsCommandHandlerTests
 
     public ResetGuildNotificationSettingsCommandHandlerTests()
     {
-        _sut = new ResetGuildNotificationSettingsCommandHandler(_access.Object, _notificationSettings.Object, _auditLog.Object);
+        _discordBotService.Setup(d => d.Guilds).Returns(_guildService.Object);
+        _sut = new ResetGuildNotificationSettingsCommandHandler(
+            _access.Object, _notificationSettings.Object, _discordBotService.Object, _auditLog.Object);
     }
 
     private static ResetGuildNotificationSettingsCommand MakeCommand() => new()
@@ -46,9 +52,32 @@ public class ResetGuildNotificationSettingsCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_Success_DeletesBranchOverrideAndLogsAudit()
+    public async Task HandleAsync_NoOverrideExisted_DeletesButDoesNotLogAudit()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _notificationSettings.Verify(r => r.DeleteAsync(GuildId, GuildBranchId, GuildNotificationEventType.AbsenceAdded, default), Times.Once);
+        _auditLog.Verify(a => a.LogAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GuildAuditAction>(),
+            It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OverrideExisted_DeletesAndLogsOldOverrideAndNewEffectiveDisabled()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        [
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "111" },
+        ]);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
+        [
+            new DiscordChannelInfo(111, "branch-log", [], null),
+        ]);
 
         var result = await _sut.HandleAsync(MakeCommand());
 
@@ -56,7 +85,138 @@ public class ResetGuildNotificationSettingsCommandHandlerTests
         _notificationSettings.Verify(r => r.DeleteAsync(GuildId, GuildBranchId, GuildNotificationEventType.AbsenceAdded, default), Times.Once);
         _auditLog.Verify(a => a.LogAsync(
             GuildId, RequesterId, GuildAuditAction.NotificationSettingsReset,
-            It.Is<Dictionary<string, string>>(v => v["guildBranchId"] == GuildBranchId.ToString() && v["eventType"] == "AbsenceAdded"),
+            It.Is<Dictionary<string, string>>(v =>
+                v["guildBranchId"] == GuildBranchId.ToString() &&
+                v["eventType"] == "AbsenceAdded" &&
+                v["changedEvents"] == "AbsenceAdded" &&
+                v["oldAbsenceAddedEnabled"] == "true" &&
+                v["oldAbsenceAddedChannelName"] == "branch-log" &&
+                v["newAbsenceAddedEnabled"] == "false" &&
+                !v.ContainsKey("newAbsenceAddedChannelName")),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OverrideExisted_FallsBackToGuildWideChannel()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        [
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "111" },
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = null, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "222" },
+        ]);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
+        [
+            new DiscordChannelInfo(111, "branch-log", [], null),
+            new DiscordChannelInfo(222, "guild-log", [], null),
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.NotificationSettingsReset,
+            It.Is<Dictionary<string, string>>(v =>
+                v["oldAbsenceAddedChannelName"] == "branch-log" &&
+                v["newAbsenceAddedEnabled"] == "true" &&
+                v["newAbsenceAddedChannelName"] == "guild-log"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OverrideItselfWasDisabled_LogsOldEnabledFalseAndNoOldChannelName()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        [
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = "111" },
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = null, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "222" },
+        ]);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
+        [
+            new DiscordChannelInfo(222, "guild-log", [], null),
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.NotificationSettingsReset,
+            It.Is<Dictionary<string, string>>(v =>
+                v["oldAbsenceAddedEnabled"] == "false" &&
+                !v.ContainsKey("oldAbsenceAddedChannelName") &&
+                v["newAbsenceAddedEnabled"] == "true" &&
+                v["newAbsenceAddedChannelName"] == "guild-log"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_GuildWideRowExistsButDisabled_LogsNewEnabledFalse()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        [
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "111" },
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = null, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = false, ChannelId = null },
+        ]);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
+        [
+            new DiscordChannelInfo(111, "branch-log", [], null),
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.NotificationSettingsReset,
+            It.Is<Dictionary<string, string>>(v =>
+                v["newAbsenceAddedEnabled"] == "false" &&
+                !v.ContainsKey("newAbsenceAddedChannelName")),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RowsFromOtherBranchesOrEventTypes_AreIgnoredWhenFindingTheOverride()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        [
+            // Same branch, different event type — must not be picked up as the override.
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.RaidPublished, Enabled = true, ChannelId = "333" },
+            // Different branch, same event type — must not be picked up either.
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId + 1, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "444" },
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "111" },
+        ]);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Returns(
+        [
+            new DiscordChannelInfo(111, "branch-log", [], null),
+        ]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.NotificationSettingsReset,
+            It.Is<Dictionary<string, string>>(v => v["oldAbsenceAddedChannelName"] == "branch-log"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BotNotInGuildCache_StillSucceedsAndFallsBackToRawChannelId()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _notificationSettings.Setup(r => r.GetAllForGuildAsync(GuildId, default)).ReturnsAsync(
+        [
+            new GuildNotificationSetting { GuildId = GuildId, GuildBranchId = GuildBranchId, EventType = GuildNotificationEventType.AbsenceAdded, Enabled = true, ChannelId = "111" },
+        ]);
+        _guildService.Setup(s => s.GetChannels(GuildId, default)).Throws<InvalidOperationException>();
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _auditLog.Verify(a => a.LogAsync(
+            GuildId, RequesterId, GuildAuditAction.NotificationSettingsReset,
+            It.Is<Dictionary<string, string>>(v => v["oldAbsenceAddedChannelName"] == "111"),
             default), Times.Once);
     }
 }

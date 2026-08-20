@@ -26,6 +26,7 @@ internal static class PersistenceRegistry
         services.AddScoped<IGuildBranchesRepository, GuildBranchesRepository>();
         services.AddScoped<IGuildAuditLogRepository, GuildAuditLogRepository>();
         services.AddScoped<INotificationDismissalRepository, NotificationDismissalRepository>();
+        services.AddScoped<ISeenChangelogEntryRepository, SeenChangelogEntryRepository>();
         services.AddScoped<IAvailabilityRepository, AvailabilityRepository>();
         services.AddScoped<IGuildNotificationSettingsRepository, GuildNotificationSettingsRepository>();
         services.AddScoped<IRaidZoneRepository, RaidZoneRepository>();
@@ -33,6 +34,7 @@ internal static class PersistenceRegistry
         services.AddScoped<IRaidSeriesRepository, RaidSeriesRepository>();
         services.AddScoped<IRaidEventRepository, RaidEventRepository>();
         services.AddScoped<IRaidCompositionRepository, RaidCompositionRepository>();
+        services.AddScoped<IRaidSignupRepository, RaidSignupRepository>();
 
         return services;
     }

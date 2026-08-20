@@ -11,15 +11,19 @@ namespace RaidOps.Application.Contracts.Services;
 /// </summary>
 public interface IRaidCompositionNotifier
 {
-    /// <summary>A character was assigned to a slot.</summary>
-    Task NotifySlotAssignedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, SlotCoordinate slot, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// A character was assigned to a slot. <paramref name="playerDiscordId"/> is the character's
+    /// owner — only needed to DM them via the composition-announcement family, unrelated to
+    /// <paramref name="requesterDiscordId"/> (the officer who made the assignment).
+    /// </summary>
+    Task NotifySlotAssignedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, string playerDiscordId, SlotCoordinate slot, CancellationToken cancellationToken = default);
 
-    /// <summary>A character was unassigned from a slot.</summary>
-    Task NotifySlotUnassignedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, SlotCoordinate slot, CancellationToken cancellationToken = default);
+    /// <summary>A character was unassigned from a slot. <paramref name="playerDiscordId"/> is the character's (now former) owner.</summary>
+    Task NotifySlotUnassignedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, string playerDiscordId, SlotCoordinate slot, CancellationToken cancellationToken = default);
 
     /// <summary>Two characters' slots were swapped.</summary>
     Task NotifySlotsSwappedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef characterA, SlotCoordinate slotA, RaidCharacterRef characterB, SlotCoordinate slotB, CancellationToken cancellationToken = default);
 
-    /// <summary>A slot assignment's spec was changed.</summary>
-    Task NotifySlotSpecChangedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, string oldSpecName, string newSpecName, CancellationToken cancellationToken = default);
+    /// <summary>A slot assignment's spec was changed. <paramref name="playerDiscordId"/> is the character's owner.</summary>
+    Task NotifySlotSpecChangedAsync(RaidEvent raidEvent, string requesterDiscordId, RaidCharacterRef character, string playerDiscordId, string oldSpecName, string newSpecName, CancellationToken cancellationToken = default);
 }

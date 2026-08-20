@@ -32,7 +32,7 @@ public interface IRaidCompositionRepository
     /// </summary>
     Task<bool> UpdateAssignmentSpecAsync(int raidEventId, int groupNumber, int slotNumber, int specId, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns every assignment for the given event, including the assigned character.</summary>
+    /// <summary>Returns every assignment for the given event, including the assigned character (with its class) and spec.</summary>
     Task<List<RaidSlotAssignment>> GetAssignmentsForEventAsync(int raidEventId, CancellationToken cancellationToken = default);
 
     /// <summary>

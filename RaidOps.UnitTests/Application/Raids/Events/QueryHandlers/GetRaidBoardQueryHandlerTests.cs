@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
@@ -20,10 +19,8 @@ public class GetRaidBoardQueryHandlerTests
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<IGuildMembershipRepository> _guildMembershipRepository = new();
-    private readonly Mock<IRaidAvailabilityService> _raidAvailabilityService = new();
+    private readonly Mock<IRaidBoardEnrichmentDataLoader> _enrichmentDataLoader = new();
     private readonly Mock<IRaidAvailabilityLookup> _availabilityLookup = new();
-    private readonly Mock<IUsersRepository> _usersRepository = new();
-    private readonly Mock<ICharacterRepository> _characterRepository = new();
     private readonly GetRaidBoardQueryHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -36,22 +33,24 @@ public class GetRaidBoardQueryHandlerTests
 
     public GetRaidBoardQueryHandlerTests()
     {
-        _sut = new GetRaidBoardQueryHandler(
-            _access.Object, _guildsRepository.Object, _raidEventRepository.Object, _guildMembershipRepository.Object,
-            _raidAvailabilityService.Object, _usersRepository.Object, _characterRepository.Object);
+        _sut = new GetRaidBoardQueryHandler(_access.Object, _guildsRepository.Object, _raidEventRepository.Object, _guildMembershipRepository.Object, _enrichmentDataLoader.Object);
 
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
         _guildsRepository.Setup(r => r.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Timezone = null });
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([]);
-        _usersRepository.Setup(r => r.FindAsync(It.IsAny<Expression<Func<User, bool>>>(), default)).ReturnsAsync([]);
-        _characterRepository.Setup(r => r.GetRaidSpecsForCharactersAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
 
-        _raidAvailabilityService.Setup(s => s.LoadRosterAvailabilityAsync(
-                It.IsAny<IEnumerable<string>>(), GuildId, GuildBranchId, It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default))
-            .ReturnsAsync(_availabilityLookup.Object);
         _availabilityLookup.Setup(l => l.ResolveStatus(It.IsAny<string>(), It.IsAny<DateOnly>())).Returns(DayAvailabilityStatus.Available);
         _availabilityLookup.Setup(l => l.IsUnavailableAt(It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<TimeOnly>())).Returns(false);
+        SetEnrichment();
     }
+
+    /// <summary>(Re)stubs the loader's response — call again with overrides for tests that need specific enrichment data.</summary>
+    private void SetEnrichment(
+        Dictionary<string, User>? playersById = null,
+        Dictionary<int, List<CharacterRaidSpec>>? raidSpecsByCharacter = null,
+        Dictionary<int, Dictionary<string, RaidSignup>>? signupsByEvent = null) =>
+        _enrichmentDataLoader.Setup(l => l.LoadAsync(It.IsAny<List<RaidEvent>>(), It.IsAny<List<string>>(), GuildId, GuildBranchId, It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), default))
+            .ReturnsAsync(new RaidBoardEnrichmentData(playersById ?? [], _availabilityLookup.Object, signupsByEvent ?? [], raidSpecsByCharacter ?? []));
 
     private static GetRaidBoardQuery MakeQuery() => new()
     {
@@ -75,7 +74,7 @@ public class GetRaidBoardQueryHandlerTests
         Class = Warrior,
     };
 
-    private static RaidEvent MakeEvent(RaidPublicationStatus publicationStatus, List<RaidSlotAssignment>? assignments = null, List<RaidEventZone>? targetZones = null) => new()
+    private static RaidEvent MakeEvent(RaidPublicationStatus publicationStatus, List<RaidSlotAssignment>? assignments = null, List<RaidEventZone>? targetZones = null, SignupMode signupMode = SignupMode.DefaultPresent) => new()
     {
         Id = 100,
         GuildBranchId = GuildBranchId,
@@ -84,7 +83,7 @@ public class GetRaidBoardQueryHandlerTests
         StartsAtUtc = EventStartsAtUtc,
         GroupCount = 2,
         SlotsPerGroup = 5,
-        SignupMode = SignupMode.DefaultPresent,
+        SignupMode = signupMode,
         Status = RaidEventStatus.Scheduled,
         PublicationStatus = publicationStatus,
         TargetZones = targetZones ?? [new RaidEventZone { RaidZoneId = 7, RaidZone = new RaidZone { Id = 7, Name = "Molten Core", ShortCode = "MC" } }],
@@ -177,17 +176,37 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_MapsDedicatedAnnouncementChannelFields()
+    {
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published);
+        raidEvent.DedicatedAnnouncementChannelId = "999";
+        raidEvent.DedicatedAnnouncementChannelIsBotOwned = true;
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        var ev = result.Value!.Events.Single();
+        ev.DedicatedAnnouncementChannelId.Should().Be("999");
+        ev.DedicatedAnnouncementChannelIsBotOwned.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task HandleAsync_MapsAssignmentCharacterAndSpecFields()
     {
         var character = MakeAssignedCharacter();
         _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
             .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)])]);
-        _characterRepository.Setup(r => r.GetRaidSpecsForCharactersAsync(It.IsAny<IEnumerable<int>>(), default))
-            .ReturnsAsync([
-                new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, IsMain = true, Spec = ArmsSpec },
-                new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 2, IsMain = false, Spec = new Spec { Id = 2, Name = "Fury" } },
-            ]);
-        _usersRepository.Setup(r => r.FindAsync(It.IsAny<Expression<Func<User, bool>>>(), default)).ReturnsAsync([new User { DiscordId = AssignedPlayerId, Name = "PlayerOne" }]);
+        SetEnrichment(
+            playersById: new Dictionary<string, User> { [AssignedPlayerId] = new() { DiscordId = AssignedPlayerId, Name = "PlayerOne" } },
+            raidSpecsByCharacter: new Dictionary<int, List<CharacterRaidSpec>>
+            {
+                [CharacterId] =
+                [
+                    new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 1, IsMain = true, Spec = ArmsSpec },
+                    new CharacterRaidSpec { CharacterId = CharacterId, SpecId = 2, IsMain = false, Spec = new Spec { Id = 2, Name = "Fury" } },
+                ],
+            });
 
         var result = await _sut.HandleAsync(MakeQuery(), default);
 
@@ -215,6 +234,38 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_AssignedPlayerHasRespondedToTheSignupCall_MapsAssignmentSignupStatus()
+    {
+        var character = MakeAssignedCharacter();
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)], signupMode: SignupMode.Signup);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+        SetEnrichment(signupsByEvent: new Dictionary<int, Dictionary<string, RaidSignup>>
+        {
+            [raidEvent.Id] = new()
+            {
+                [AssignedPlayerId] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = AssignedPlayerId, Status = SignupStatus.Accepted, CharacterId = CharacterId },
+            },
+        });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.Value!.Events.Single().Assignments.Single().SignupStatus.Should().Be(SignupStatus.Accepted);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AssignedPlayerHasNotRespondedToTheSignupCall_AssignmentSignupStatusIsNull()
+    {
+        var character = MakeAssignedCharacter();
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([MakeEvent(RaidPublicationStatus.Published, assignments: [MakeAssignment(character)], signupMode: SignupMode.Signup)]);
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.Value!.Events.Single().Assignments.Single().SignupStatus.Should().BeNull();
+    }
+
+    [Fact]
     public async Task HandleAsync_AssignmentAvailabilityStatus_ReflectsLookupResolvedStatus()
     {
         var character = MakeAssignedCharacter();
@@ -228,7 +279,7 @@ public class GetRaidBoardQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_RosterPlayerLookupReportsUnavailable_AppearsInAbsentPlayerDiscordIds()
+    public async Task HandleAsync_RosterPlayerLookupReportsUnavailable_AppearsInIneligiblePlayerDiscordIds()
     {
         var character = new Character { Id = 99, UserDiscordId = "player-absent", Class = Warrior };
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
@@ -239,11 +290,11 @@ public class GetRaidBoardQueryHandlerTests
 
         var result = await _sut.HandleAsync(MakeQuery(), default);
 
-        result.Value!.Events.Single().AbsentPlayerDiscordIds.Should().Contain("player-absent");
+        result.Value!.Events.Single().IneligiblePlayerDiscordIds.Should().Contain("player-absent");
     }
 
     [Fact]
-    public async Task HandleAsync_RosterPlayerLookupReportsAvailable_DoesNotAppearInAbsentPlayerDiscordIds()
+    public async Task HandleAsync_RosterPlayerLookupReportsAvailable_DoesNotAppearInIneligiblePlayerDiscordIds()
     {
         var character = new Character { Id = 99, UserDiscordId = "player-available", Class = Warrior };
         _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
@@ -253,11 +304,11 @@ public class GetRaidBoardQueryHandlerTests
 
         var result = await _sut.HandleAsync(MakeQuery(), default);
 
-        result.Value!.Events.Single().AbsentPlayerDiscordIds.Should().NotContain("player-available");
+        result.Value!.Events.Single().IneligiblePlayerDiscordIds.Should().NotContain("player-available");
     }
 
     [Fact]
-    public async Task HandleAsync_LoadsRosterAvailabilityOnceForWholeRosterAndRange()
+    public async Task HandleAsync_PassesWholeRosterAndRangeToEnrichmentLoader()
     {
         var characterA = new Character { Id = 98, UserDiscordId = "player-a", Class = Warrior };
         var characterB = new Character { Id = 99, UserDiscordId = "player-b", Class = Warrior };
@@ -272,8 +323,65 @@ public class GetRaidBoardQueryHandlerTests
 
         await _sut.HandleAsync(query, default);
 
-        _raidAvailabilityService.Verify(s => s.LoadRosterAvailabilityAsync(
-            It.Is<IEnumerable<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")),
+        _enrichmentDataLoader.Verify(l => l.LoadAsync(
+            It.Is<List<RaidEvent>>(events => events.Count == 2),
+            It.Is<List<string>>(ids => ids.Contains("player-a") && ids.Contains("player-b")),
             GuildId, GuildBranchId, query.RangeStart, query.RangeEnd, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEvent_IneligiblePlayersAreThoseWithoutAnAcceptedSignup()
+    {
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published, signupMode: SignupMode.Signup);
+        var characterA = new Character { Id = 98, UserDiscordId = "player-a", Class = Warrior };
+        var characterB = new Character { Id = 99, UserDiscordId = "player-b", Class = Warrior };
+        var characterC = new Character { Id = 97, UserDiscordId = "player-c", Class = Warrior };
+        _guildMembershipRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default))
+            .ReturnsAsync([
+                new GuildMembership { CharacterId = 98, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterA },
+                new GuildMembership { CharacterId = 99, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterB },
+                new GuildMembership { CharacterId = 97, GuildId = GuildId, GuildBranchId = GuildBranchId, Character = characterC },
+            ]);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+        SetEnrichment(signupsByEvent: new Dictionary<int, Dictionary<string, RaidSignup>>
+        {
+            [raidEvent.Id] = new()
+            {
+                ["player-a"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-a", Status = SignupStatus.Accepted, CharacterId = 98 },
+                ["player-b"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-b", Status = SignupStatus.Declined },
+                // player-c has no entry at all — hasn't responded to the signup call yet.
+            },
+        });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        var ev = result.Value!.Events.Single();
+        ev.IneligiblePlayerDiscordIds.Should().Contain("player-b");
+        ev.IneligiblePlayerDiscordIds.Should().Contain("player-c");
+        ev.IneligiblePlayerDiscordIds.Should().NotContain("player-a");
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeEvent_MapsAcceptedCharacterIdsByPlayerDiscordId()
+    {
+        var raidEvent = MakeEvent(RaidPublicationStatus.Published, signupMode: SignupMode.Signup);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default))
+            .ReturnsAsync([raidEvent]);
+        SetEnrichment(signupsByEvent: new Dictionary<int, Dictionary<string, RaidSignup>>
+        {
+            [raidEvent.Id] = new()
+            {
+                ["player-a"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-a", Status = SignupStatus.Accepted, CharacterId = 98 },
+                ["player-b"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-b", Status = SignupStatus.Declined, CharacterId = null },
+                ["player-c"] = new RaidSignup { RaidEventId = raidEvent.Id, UserDiscordId = "player-c", Status = SignupStatus.Tentative, CharacterId = null },
+            },
+        });
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        var ev = result.Value!.Events.Single();
+        ev.AcceptedCharacterIdsByPlayerDiscordId.Should().ContainSingle();
+        ev.AcceptedCharacterIdsByPlayerDiscordId["player-a"].Should().Be(98);
     }
 }

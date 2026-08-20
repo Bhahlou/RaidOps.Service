@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
@@ -7,6 +8,7 @@ using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Events.CommandHandlers;
@@ -17,6 +19,10 @@ public class MaterializeRaidSeriesOccurrencesCommandHandlerTests
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IRaidSeriesRepository> _raidSeriesRepository = new();
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
+    private readonly Mock<IRaidSignupAnnouncementService> _raidSignupAnnouncementService = new();
+    private readonly Mock<IDiscordBotService> _discordBotService = new();
+    private readonly Mock<IGuildService> _guildService = new();
+    private readonly Mock<ILogger<MaterializeRaidSeriesOccurrencesCommandHandler>> _logger = new();
     private readonly MaterializeRaidSeriesOccurrencesCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -25,7 +31,10 @@ public class MaterializeRaidSeriesOccurrencesCommandHandlerTests
 
     public MaterializeRaidSeriesOccurrencesCommandHandlerTests()
     {
-        _sut = new MaterializeRaidSeriesOccurrencesCommandHandler(_access.Object, _guildsRepository.Object, _raidSeriesRepository.Object, _raidEventRepository.Object);
+        _discordBotService.Setup(d => d.Guilds).Returns(_guildService.Object);
+        _sut = new MaterializeRaidSeriesOccurrencesCommandHandler(
+            _access.Object, _guildsRepository.Object, _raidSeriesRepository.Object, _raidEventRepository.Object, _raidSignupAnnouncementService.Object,
+            _discordBotService.Object, _logger.Object);
         _guildsRepository.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Timezone = null });
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
         _raidEventRepository.Setup(r => r.ExistsForSeriesAndDateAsync(It.IsAny<int>(), It.IsAny<DateTime>(), default)).ReturnsAsync(false);
@@ -222,5 +231,101 @@ public class MaterializeRaidSeriesOccurrencesCommandHandlerTests
         result.Value!.Body.Should().BeEquivalentTo(new { materializedCount = 2 });
         _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e => e.RaidSeriesId == 1), default), Times.Once);
         _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e => e.RaidSeriesId == 2), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignupModeSeries_PublishesTheSignupCallForTheMaterializedOccurrence()
+    {
+        var series = MakeWeeklySeries(new DateTime(2026, 1, 7));
+        series.SignupMode = SignupMode.Signup;
+        _raidSeriesRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([series]);
+
+        var result = await _sut.HandleAsync(MakeCommand(new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 11)));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.PublishOrUpdateSignupCallAsync(It.IsAny<RaidEvent>(), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DefaultPresentSeries_NeverPublishesASignupCall()
+    {
+        var series = MakeWeeklySeries(new DateTime(2026, 1, 7));
+        _raidSeriesRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([series]);
+
+        var result = await _sut.HandleAsync(MakeCommand(new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 11)));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSignupAnnouncementService.Verify(s => s.PublishOrUpdateSignupCallAsync(It.IsAny<RaidEvent>(), default), Times.Never);
+    }
+
+    // ── Per-occurrence dedicated channel ─────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_SeriesWithoutCategory_UsesSeriesSharedChannel()
+    {
+        var series = MakeWeeklySeries(new DateTime(2026, 1, 7));
+        series.DedicatedAnnouncementChannelId = "shared-channel";
+        _raidSeriesRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([series]);
+
+        var result = await _sut.HandleAsync(MakeCommand(new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 11)));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e =>
+            e.DedicatedAnnouncementChannelId == "shared-channel" && !e.DedicatedAnnouncementChannelIsBotOwned),
+            default), Times.Once);
+        _guildService.Verify(g => g.CreateTextChannelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SeriesWithCategory_CreatesAFreshChannelForTheOccurrence()
+    {
+        var series = MakeWeeklySeries(new DateTime(2026, 1, 7));
+        series.Name = "Split 1";
+        series.DedicatedAnnouncementChannelCategoryId = "cat-1";
+        _raidSeriesRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([series]);
+        _guildService.Setup(g => g.CreateTextChannelAsync(GuildId, It.IsAny<string>(), "cat-1", default))
+            .ReturnsAsync(new DiscordChannelInfo(555, "split-1-wed-7-jan", []));
+
+        var result = await _sut.HandleAsync(MakeCommand(new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 11)));
+
+        result.IsSuccess.Should().BeTrue();
+        _guildService.Verify(g => g.CreateTextChannelAsync(GuildId, It.IsAny<string>(), "cat-1", default), Times.Once);
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e =>
+            e.DedicatedAnnouncementChannelId == "555" && e.DedicatedAnnouncementChannelIsBotOwned),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelCreationFails_StillMaterializesWithNoChannel()
+    {
+        var series = MakeWeeklySeries(new DateTime(2026, 1, 7));
+        series.DedicatedAnnouncementChannelCategoryId = "cat-1";
+        _raidSeriesRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([series]);
+        _guildService.Setup(g => g.CreateTextChannelAsync(GuildId, It.IsAny<string>(), "cat-1", default))
+            .ThrowsAsync(new InvalidOperationException("missing permission"));
+
+        var result = await _sut.HandleAsync(MakeCommand(new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 11)));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Body.Should().BeEquivalentTo(new { materializedCount = 1 });
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e =>
+            e.DedicatedAnnouncementChannelId == null && !e.DedicatedAnnouncementChannelIsBotOwned),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SeriesWithCategoryOverMultipleWeeks_CreatesOneChannelPerOccurrence()
+    {
+        var series = MakeWeeklySeries(new DateTime(2026, 1, 7));
+        series.DedicatedAnnouncementChannelCategoryId = "cat-1";
+        _raidSeriesRepository.Setup(r => r.GetByGuildBranchIdAsync(GuildBranchId, default)).ReturnsAsync([series]);
+        _guildService.Setup(g => g.CreateTextChannelAsync(GuildId, It.IsAny<string>(), "cat-1", default))
+            .ReturnsAsync(new DiscordChannelInfo(555, "chan", []));
+
+        // Jan 5 - Jan 25 spans three Wednesdays: 7, 14, 21 — each occurrence should get its own create call.
+        var result = await _sut.HandleAsync(MakeCommand(new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 25)));
+
+        result.IsSuccess.Should().BeTrue();
+        _guildService.Verify(g => g.CreateTextChannelAsync(GuildId, It.IsAny<string>(), "cat-1", default), Times.Exactly(3));
     }
 }

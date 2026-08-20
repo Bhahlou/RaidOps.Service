@@ -16,9 +16,7 @@ namespace RaidOps.Application.Implementations.Raids.Assignments.CommandHandlers;
 public class UnassignSlotCommandHandler(
     IGuildAccessService guildAccessService,
     IRaidEventRepository raidEventRepository,
-    ICharacterRepository characterRepository,
-    IRaidCompositionRepository raidCompositionRepository,
-    IRaidCompositionNotifier raidCompositionNotifier) : ICommandHandlerAsync<UnassignSlotCommand>
+    IRaidSlotUnassignmentService raidSlotUnassignmentService) : ICommandHandlerAsync<UnassignSlotCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UnassignSlotCommand command, CancellationToken cancellationToken = default)
@@ -31,25 +29,9 @@ public class UnassignSlotCommandHandler(
         if (raidEvent == null)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
-        var occupant = raidEvent.Assignments.FirstOrDefault(a => a.GroupNumber == command.GroupNumber && a.SlotNumber == command.SlotNumber);
-
-        var unassigned = await raidCompositionRepository.UnassignAsync(command.EventId, command.GroupNumber, command.SlotNumber, cancellationToken);
+        var unassigned = await raidSlotUnassignmentService.UnassignAsync(raidEvent, command.GroupNumber, command.SlotNumber, command.RequesterDiscordId, cancellationToken);
         if (!unassigned)
             return Result<CommandResponse>.Fail(ResponseDetail.NotFound, "This slot was already empty.");
-
-        if (raidEvent.PublicationStatus == RaidPublicationStatus.Published && occupant != null)
-        {
-            var character = await characterRepository.GetByIdAsync(occupant.CharacterId, cancellationToken);
-            var characterName = character?.Name ?? occupant.CharacterId.ToString();
-            var raidSpecs = await characterRepository.GetRaidSpecsAsync(occupant.CharacterId, cancellationToken);
-            var specName = raidSpecs.FirstOrDefault(s => s.SpecId == occupant.SpecId)?.Spec.Name;
-
-            await raidCompositionNotifier.NotifySlotUnassignedAsync(
-                raidEvent, command.RequesterDiscordId,
-                new RaidCharacterRef(characterName, character?.ClassId, specName),
-                new SlotCoordinate(command.GroupNumber, command.SlotNumber),
-                cancellationToken);
-        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Slot cleared successfully."));
     }

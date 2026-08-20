@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -15,7 +16,12 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
     : IntegrationTestBase(factory)
 {
     private const string Url = "/api/v1/user/me";
+    private const string ChangelogSeenUrl = "/api/v1/user/changelog-seen";
     private const string DiscordId = "200000000000000001";
+
+    private static readonly string[] SingleEntryId = ["e1"];
+    private static readonly string[] TwoEntryIds = ["e1", "e2"];
+    private static readonly string[] OverlappingEntryIds = ["e2", "e3"];
 
     // The API serializes enums as strings (see Program.cs's JsonStringEnumConverter registration)
     // but HttpContent.ReadFromJsonAsync defaults to numeric enum parsing unless told otherwise.
@@ -249,5 +255,121 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         body!.Notifications.Should().BeEmpty();
+    }
+
+    // ── Seen changelog entries ────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetMe_UserHasSeenChangelogEntries_ReturnsThemInResponse()
+    {
+        const string id = "200000000000000009";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.SeenChangelogEntries.Add(new SeenChangelogEntry { UserDiscordId = id, EntryId = "2026-08-02-raid-notifications", SeenAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync(Url);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>();
+        body!.SeenChangelogEntryIds.Should().ContainSingle().Which.Should().Be("2026-08-02-raid-notifications");
+    }
+
+    [Fact]
+    public async Task GetMe_UserHasNoSeenChangelogEntries_ReturnsEmptyList()
+    {
+        const string id = "200000000000000013";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync(Url);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>();
+        body!.SeenChangelogEntryIds.Should().BeEmpty();
+    }
+
+    // ── MarkChangelogSeen ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task MarkChangelogSeen_WithoutToken_Returns401()
+    {
+        var body = JsonContent.Create(new { entryIds = SingleEntryId });
+
+        var response = await Client.PostAsync(ChangelogSeenUrl, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+        var body = JsonContent.Create(new { entryIds = SingleEntryId });
+
+        var response = await client.PostAsync(ChangelogSeenUrl, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_Success_Returns200AndPersistsEntries()
+    {
+        const string id = "200000000000000010";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { entryIds = TwoEntryIds });
+
+        var response = await client.PostAsync(ChangelogSeenUrl, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db2) = CreateDbScope();
+        using (scope)
+        {
+            var seenIds = await db2.SeenChangelogEntries.Where(s => s.UserDiscordId == id).Select(s => s.EntryId).ToListAsync();
+            seenIds.Should().BeEquivalentTo(TwoEntryIds);
+        }
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_OverlappingEntries_DoesNotDuplicateAlreadySeenEntries()
+    {
+        const string id = "200000000000000011";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var first = await client.PostAsync(ChangelogSeenUrl, JsonContent.Create(new { entryIds = TwoEntryIds }));
+        var second = await client.PostAsync(ChangelogSeenUrl, JsonContent.Create(new { entryIds = OverlappingEntryIds }));
+
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var seenIds = await db.SeenChangelogEntries.Where(s => s.UserDiscordId == id).Select(s => s.EntryId).ToListAsync();
+            seenIds.Should().BeEquivalentTo(["e1", "e2", "e3"]);
+        }
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_EmptyEntryIds_Returns200AndPersistsNothing()
+    {
+        const string id = "200000000000000012";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = JsonContent.Create(new { entryIds = Array.Empty<string>() });
+
+        var response = await client.PostAsync(ChangelogSeenUrl, body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db2) = CreateDbScope();
+        using (scope)
+        {
+            var count = await db2.SeenChangelogEntries.CountAsync(s => s.UserDiscordId == id);
+            count.Should().Be(0);
+        }
     }
 }

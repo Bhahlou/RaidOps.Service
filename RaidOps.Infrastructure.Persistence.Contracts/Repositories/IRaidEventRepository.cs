@@ -35,10 +35,41 @@ public interface IRaidEventRepository
     Task<bool> DeleteAsync(int id, int guildBranchId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Persists the Discord channel/message ID of the standing "current composition" announcement
+    /// for the given event — set on first post, or refreshed if the message had to be re-posted.
+    /// </summary>
+    Task UpdateCompositionAnnouncementReferenceAsync(int id, int guildBranchId, string channelId, string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the Discord channel/message ID of the standing signup-call embed for the given
+    /// event — set on first post, or refreshed if the message had to be re-posted.
+    /// </summary>
+    Task UpdateSignupCallAnnouncementReferenceAsync(int id, int guildBranchId, string channelId, string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears both standing-embed reference pairs (composition and signup-call channel/message IDs)
+    /// back to <c>null</c> — used when an event's dedicated channel changes, so the next post of
+    /// either embed goes out fresh in the new channel instead of trying to edit a message that's
+    /// still sitting in the old one.
+    /// </summary>
+    Task ClearAnnouncementReferencesAsync(int id, int guildBranchId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bulk deletes every occurrence of <paramref name="raidSeriesId"/> that's still a draft with no
     /// slot assignments — used when deactivating a series to clear the empty occurrences it already
     /// produced. Published events and events with roster history are never touched. Returns the
-    /// number of events deleted.
+    /// number of events deleted, and the Discord snowflake IDs of every bot-owned dedicated channel
+    /// those deleted occurrences had — the caller (a bulk delete bypasses
+    /// <see cref="DeleteAsync"/>'s per-event cleanup) is responsible for actually deleting those
+    /// channels from Discord.
     /// </summary>
-    Task<int> DeleteEmptyDraftOccurrencesForSeriesAsync(int raidSeriesId, int guildBranchId, CancellationToken cancellationToken = default);
+    Task<(int DeletedCount, List<string> BotOwnedChannelIds)> DeleteEmptyDraftOccurrencesForSeriesAsync(int raidSeriesId, int guildBranchId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the guild's published events starting at or after <paramref name="fromUtc"/>, across
+    /// every branch, earliest first — backs the Discord bot's <c>/raid invite</c> subcommand
+    /// autocomplete, which has no branch context to scope by. Includes each event's branch (for its
+    /// display name).
+    /// </summary>
+    Task<List<RaidEvent>> GetUpcomingPublishedForGuildAsync(string guildId, DateTime fromUtc, int limit, CancellationToken cancellationToken = default);
 }

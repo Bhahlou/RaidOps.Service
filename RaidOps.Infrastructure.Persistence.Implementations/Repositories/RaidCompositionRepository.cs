@@ -90,6 +90,7 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
         => await context.RaidSlotAssignments
             .Where(a => a.RaidEventId == raidEventId)
             .Include(a => a.Character).ThenInclude(c => c.Class)
+            .Include(a => a.Spec)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

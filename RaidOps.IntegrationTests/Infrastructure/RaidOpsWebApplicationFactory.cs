@@ -5,8 +5,11 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NetCord.Gateway;
+using NetCord.Rest;
 using RaidOps.API;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
@@ -108,15 +111,28 @@ public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPo
 
     private static void RemoveNetcordServices(IServiceCollection services)
     {
-        // NetCord.Gateway requires a real Discord WebSocket connection — remove it and replace
-        // IDiscordBotService with a configurable stub so tests can inject expected Discord data.
-        var toRemove = services
-            .Where(d =>
-                (d.ImplementationType?.Assembly.GetName().Name?.StartsWith("NetCord") ?? false) ||
-                (d.ServiceType.Assembly.GetName().Name?.StartsWith("NetCord") ?? false))
+        // NetCord.Gateway requires a real Discord WebSocket connection, and its own/the
+        // application-command hosted services would try to open that socket / sync commands with
+        // Discord's REST API on startup — remove just those, plus the client singletons they'd
+        // use, and replace IDiscordBotService with a configurable stub so tests can inject
+        // expected Discord data.
+        //
+        // Deliberately NOT a blanket "every service from a NetCord*-prefixed assembly" removal:
+        // that used to also strip NetCord.Services.ApplicationCommands.ApplicationCommandServiceManager
+        // (a harmless in-memory module registry, never touches the network) that Program.cs's
+        // app.AddApplicationCommandModule<RaidCommandModule>() needs to register itself into —
+        // with it gone, that call throws during host startup, WebApplicationFactory silently loses
+        // the host, and every integration test fails with "The server has not been started",
+        // regardless of what it's actually testing.
+        var hostedServicesToRemove = services
+            .Where(d => d.ServiceType == typeof(IHostedService) &&
+                        (d.ImplementationType?.Assembly.GetName().Name?.StartsWith("NetCord") ?? false))
             .ToList();
-        foreach (var descriptor in toRemove)
+        foreach (var descriptor in hostedServicesToRemove)
             services.Remove(descriptor);
+
+        services.RemoveAll<GatewayClient>();
+        services.RemoveAll<RestClient>();
 
         var botDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IDiscordBotService));
         if (botDescriptor is not null)

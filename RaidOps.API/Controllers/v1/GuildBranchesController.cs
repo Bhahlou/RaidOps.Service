@@ -120,4 +120,26 @@ public class GuildBranchesController(
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
         return ToActionResult(result);
     }
+
+    /// <summary>
+    /// Persists the default signup mode for new raid events created on one guild branch.
+    /// </summary>
+    [HttpPatch("{guildId}/branches/{guildBranchId:int}/signup-mode")]
+    public async Task<IActionResult> UpdateSignupMode(
+        string guildId,
+        int guildBranchId,
+        [FromBody] UpdateGuildBranchSignupModeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
 }

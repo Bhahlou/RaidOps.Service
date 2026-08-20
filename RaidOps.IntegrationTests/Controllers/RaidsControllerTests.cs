@@ -151,6 +151,48 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task GetEventSummary_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetAssignedCharacters_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/assigned-characters");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AnnounceGrouping_WithoutToken_Returns401()
+    {
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/announce-grouping", new { });
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task CreateAnnouncementChannel_WithoutToken_Returns401()
+    {
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/announcement-channel", new { name = "raid-announcements" });
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SetMySignup_WithoutToken_Returns401()
+    {
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/signup", new { status = SignupStatus.Declined });
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetSignups_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/signups");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetZonesForBranch_TokenWithoutSubClaim_Returns401()
     {
         var client = CreateClientWithoutSubClaim();
@@ -358,6 +400,66 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateClientWithoutSubClaim();
 
         var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/unassigned-members?rangeStart=2026-01-01&rangeEnd=2026-01-07");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetEventSummary_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetAssignedCharacters_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/assigned-characters");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AnnounceGrouping_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/announce-grouping", new { });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task CreateAnnouncementChannel_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/announcement-channel", new { name = "raid-announcements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SetMySignup_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/signup", new { status = SignupStatus.Declined });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetSignups_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/1/signups");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -1097,11 +1199,267 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         members.Should().NotContain(m => m.GetProperty("characterId").GetInt32() == assignedCharacterId);
     }
 
+    // ── Event summary ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetEventSummary_Success_ReturnsIdAndName()
+    {
+        const string id = "610000000000000060";
+        const string guildId = "630000000000000060";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("id").GetInt32().Should().Be(eventId);
+        json.GetProperty("name").GetString().Should().Be("One-shot event");
+    }
+
+    [Fact]
+    public async Task GetEventSummary_EventNotFound_Returns400()
+    {
+        const string id = "610000000000000061";
+        const string guildId = "630000000000000061";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/999999");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("RaidEventNotFound");
+    }
+
+    // ── Assigned characters ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAssignedCharacters_WhenNotOfficer_Returns400()
+    {
+        const string id = "610000000000000062";
+        const string guildId = "630000000000000062";
+        var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/999999/assigned-characters");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("Forbidden");
+    }
+
+    [Fact]
+    public async Task GetAssignedCharacters_Success_ReturnsAssignedCharacter()
+    {
+        const string id = "610000000000000063";
+        const string guildId = "630000000000000063";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var characterId = await SeedCharacterOnRoster(id, guildId, branchId, bnetCharacterId: 610063001, name: "Assigned");
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId);
+        await AssignSlotAsync(client, guildId, branchId, eventId, characterId, groupNumber: 1, slotNumber: 1);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/assigned-characters");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var characters = json.EnumerateArray().ToList();
+        characters.Should().ContainSingle(c => c.GetProperty("characterId").GetInt32() == characterId && c.GetProperty("name").GetString() == "Assigned");
+    }
+
+    // ── Announce grouping ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnnounceGrouping_WhenNotOfficer_Returns400()
+    {
+        const string id = "610000000000000064";
+        const string guildId = "630000000000000064";
+        var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/999999/announce-grouping", new { });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("Forbidden");
+    }
+
+    [Fact]
+    public async Task AnnounceGrouping_PublishedEventWithNoAssignments_ReturnsNoAssignmentsToNotify()
+    {
+        const string id = "610000000000000065";
+        const string guildId = "630000000000000065";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId);
+        await client.PostAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/publish", null);
+        await SeedAsync(db =>
+        {
+            db.GuildNotificationSettings.Add(new GuildNotificationSetting
+            {
+                GuildId = guildId,
+                EventType = GuildNotificationEventType.RaidCompositionAnnouncementPosted,
+                GuildBranchId = branchId,
+                Enabled = true,
+                ChannelId = "123",
+            });
+            return Task.CompletedTask;
+        });
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/announce-grouping", new { });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("NoAssignmentsToNotify");
+    }
+
+    // ── Announcement channel ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAnnouncementChannel_NotOfficer_Returns400()
+    {
+        const string id = "610000000000000150";
+        const string guildId = "630000000000000150";
+        var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/announcement-channel", new { name = "raid-announcements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("Forbidden");
+    }
+
+    [Fact]
+    public async Task CreateAnnouncementChannel_Officer_Returns200WithCreatedChannel()
+    {
+        const string id = "610000000000000151";
+        const string guildId = "630000000000000151";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/announcement-channel", new { name = "raid-announcements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("body").GetProperty("name").GetString().Should().Be("raid-announcements");
+    }
+
+    // ── Signup mode ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SetMySignup_NotOnRoster_Returns400()
+    {
+        const string id = "610000000000000152";
+        const string guildId = "630000000000000152";
+        var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false, rosterMode: RosterMode.DiscordRoleOnly, rosterRoleIds: ["role-1"]);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/999999/signup",
+            new { status = SignupStatus.Declined });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("Forbidden");
+    }
+
+    [Fact]
+    public async Task SetMySignup_EventNotInSignupMode_Returns400()
+    {
+        const string id = "610000000000000153";
+        const string guildId = "630000000000000153";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/signup",
+            new { status = SignupStatus.Declined });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("RaidEventNotInSignupMode");
+    }
+
+    [Fact]
+    public async Task SetMySignup_AcceptedWithCharacterAndSpec_PersistsTheResponse()
+    {
+        const string id = "610000000000000154";
+        const string guildId = "630000000000000154";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var characterId = await SeedCharacterOnRoster(id, guildId, branchId, bnetCharacterId: 610154001, mainSpecId: 62);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId, signupModeOverride: SignupMode.Signup);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/signup",
+            new { status = SignupStatus.Accepted, characterId, specId = 62 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var signup = await db.RaidSignups.SingleAsync(s => s.RaidEventId == eventId && s.UserDiscordId == id);
+            signup.Status.Should().Be(SignupStatus.Accepted);
+            signup.CharacterId.Should().Be(characterId);
+            signup.SpecId.Should().Be(62);
+        }
+    }
+
+    [Fact]
+    public async Task SetMySignup_Declined_PersistsWithNoCharacterOrSpec()
+    {
+        const string id = "610000000000000155";
+        const string guildId = "630000000000000155";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        await SeedCharacterOnRoster(id, guildId, branchId, bnetCharacterId: 610155001);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId, signupModeOverride: SignupMode.Signup);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/signup",
+            new { status = SignupStatus.Declined });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var signup = await db.RaidSignups.SingleAsync(s => s.RaidEventId == eventId && s.UserDiscordId == id);
+            signup.Status.Should().Be(SignupStatus.Declined);
+            signup.CharacterId.Should().BeNull();
+            signup.SpecId.Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public async Task GetSignups_ReturnsRosterMembersWithTheirCurrentResponse()
+    {
+        const string id = "610000000000000156";
+        const string guildId = "630000000000000156";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var characterId = await SeedCharacterOnRoster(id, guildId, branchId, bnetCharacterId: 610156001, mainSpecId: 62);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId, signupModeOverride: SignupMode.Signup);
+        await client.PostAsJsonAsync(
+            $"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/signup",
+            new { status = SignupStatus.Accepted, characterId, specId = 62 });
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}/signups");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var signups = json.EnumerateArray().ToList();
+        signups.Should().ContainSingle(s => s.GetProperty("userDiscordId").GetString() == id && s.GetProperty("characterId").GetInt32() == characterId);
+    }
+
     // ── Seeding helpers ──────────────────────────────────────────────────────
 
-    private async Task<int> SeedGuildAndBranch(string discordId, string guildId, bool isAdmin = true, string? region = null)
+    private async Task<int> SeedGuildAndBranch(string discordId, string guildId, bool isAdmin = true, string? region = null, RosterMode? rosterMode = null, List<string>? rosterRoleIds = null)
     {
-        var branch = TestDataBuilder.CreateGuildBranch(guildId, branchId: RaidBranchId);
+        var branch = TestDataBuilder.CreateGuildBranch(guildId, branchId: RaidBranchId, rosterMode: rosterMode ?? RosterMode.Open, rosterRoleIds: rosterRoleIds);
         if (region != null)
             branch.Region = region;
 
@@ -1153,7 +1511,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         return json.GetProperty("body").GetProperty("id").GetInt32();
     }
 
-    private static async Task<int> CreateAdhocEventAsync(HttpClient client, string guildId, int guildBranchId, DateTime? startsAtUtc = null, int[]? zoneIds = null)
+    private static async Task<int> CreateAdhocEventAsync(HttpClient client, string guildId, int guildBranchId, DateTime? startsAtUtc = null, int[]? zoneIds = null, SignupMode? signupModeOverride = null)
     {
         var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events", new
         {
@@ -1162,6 +1520,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             groupCount = 2,
             slotsPerGroup = 5,
             raidZoneIds = zoneIds ?? DefaultZoneIds,
+            signupModeOverride,
         });
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         return json.GetProperty("body").GetProperty("id").GetInt32();

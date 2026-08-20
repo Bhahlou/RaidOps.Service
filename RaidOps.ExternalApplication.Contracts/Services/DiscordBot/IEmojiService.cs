@@ -23,4 +23,11 @@ public interface IEmojiService
     /// entry has this name) — callers should fall back to plain text rather than fail.
     /// </summary>
     string? GetMarkdown(string name);
+
+    /// <summary>
+    /// Raw application-emoji snowflake ID for the named emoji, or <c>null</c> under the same
+    /// not-synced-yet condition as <see cref="GetMarkdown"/> — needed wherever an API surface wants
+    /// the emoji by ID rather than markdown text (e.g. a select-menu option's icon).
+    /// </summary>
+    ulong? GetId(string name);
 }
