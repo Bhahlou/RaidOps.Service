@@ -42,10 +42,16 @@ public class TriggerRaidGroupingCommandHandler(
         if (raidEvent.PublicationStatus != RaidPublicationStatus.Published)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotPublished, "Only a published raid event can trigger a grouping ping.");
 
-        var setting = await notificationSettingsRepository.GetAsync(
-            command.GuildId, GuildNotificationEventType.RaidCompositionAnnouncementPosted, command.GuildBranchId, cancellationToken);
-        if (setting is not { Enabled: true, ChannelId: not null })
-            return Result<CommandResponse>.Fail(ResponseDetail.NoAnnouncementChannelConfigured, "No composition announcement channel is configured for this branch.");
+        string? resolvedChannelId = raidEvent.DedicatedAnnouncementChannelId;
+        if (resolvedChannelId is null)
+        {
+            var setting = await notificationSettingsRepository.GetAsync(
+                command.GuildId, GuildNotificationEventType.RaidCompositionAnnouncementPosted, command.GuildBranchId, cancellationToken);
+            if (setting is not { Enabled: true, ChannelId: not null })
+                return Result<CommandResponse>.Fail(ResponseDetail.NoAnnouncementChannelConfigured, "No composition announcement channel is configured for this branch.");
+
+            resolvedChannelId = setting.ChannelId;
+        }
 
         var assignments = await raidCompositionRepository.GetAssignmentsForEventAsync(command.EventId, cancellationToken);
         if (assignments.Count == 0)
@@ -72,7 +78,7 @@ public class TriggerRaidGroupingCommandHandler(
         var message = RaidNotificationText.GetGroupingPingMessage(mentions, raidEvent.Name, groupingCharacterName, language);
         var embed = await contentBuilder.BuildCompositionAnnouncementAsync(command.GuildId, raidEvent, assignments, cancellationToken);
 
-        await discordBotService.Messages.SendMessageWithEmbedAsync(ulong.Parse(setting.ChannelId), message, embed, cancellationToken);
+        await discordBotService.Messages.SendMessageWithEmbedAsync(ulong.Parse(resolvedChannelId), message, embed, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Grouping ping sent."));
     }

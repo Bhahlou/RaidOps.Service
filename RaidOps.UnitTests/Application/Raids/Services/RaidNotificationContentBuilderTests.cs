@@ -1,9 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Moq;
+using RaidOps.Application.Contracts.Raids.Signups.Responses;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Application.Implementations.Raids.Services;
+using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
@@ -17,6 +19,8 @@ namespace RaidOps.UnitTests.Application.Raids.Services;
 public class RaidNotificationContentBuilderTests
 {
     private readonly Mock<IGuildsRepository> _guilds = new();
+    private readonly Mock<IGuildBranchesRepository> _guildBranchesRepository = new();
+    private readonly Mock<IBranchRepository> _branchRepository = new();
     private readonly Mock<IGuildService> _guildService = new();
     private readonly Mock<IEmojiService> _emojiService = new();
     private readonly Mock<IDiscordBotService> _discordBotService = new();
@@ -32,7 +36,7 @@ public class RaidNotificationContentBuilderTests
     {
         _discordBotService.Setup(d => d.Guilds).Returns(_guildService.Object);
         _discordBotService.Setup(d => d.Emojis).Returns(_emojiService.Object);
-        _sut = new RaidNotificationContentBuilder(_guilds.Object, _discordBotService.Object, _configuration.Object);
+        _sut = new RaidNotificationContentBuilder(_guilds.Object, _guildBranchesRepository.Object, _branchRepository.Object, _discordBotService.Object, _configuration.Object);
 
         _guilds.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync(new Guild { Id = GuildId, Name = "G", Language = "en", Timezone = "Europe/Paris" });
         _guildService.Setup(s => s.GetUser(GuildId, RequesterId, default)).Returns((NetCord.GuildUser?)null);
@@ -310,7 +314,7 @@ public class RaidNotificationContentBuilderTests
     public async Task BuildCompositionAnnouncementAsync_FrontendUrlConfigured_UrlDeepLinksToEvent()
     {
         _configuration.Setup(c => c["FrontendUrl"]).Returns("https://app");
-        var sut = new RaidNotificationContentBuilder(_guilds.Object, _discordBotService.Object, _configuration.Object);
+        var sut = new RaidNotificationContentBuilder(_guilds.Object, _guildBranchesRepository.Object, _branchRepository.Object, _discordBotService.Object, _configuration.Object);
         var raidEvent = MakeCompositionEvent(groupCount: 1, slotsPerGroup: 1);
 
         var embed = await sut.BuildCompositionAnnouncementAsync(GuildId, raidEvent, []);
@@ -326,6 +330,269 @@ public class RaidNotificationContentBuilderTests
         var embed = await _sut.BuildCompositionAnnouncementAsync(GuildId, raidEvent, []);
 
         embed.Url.Should().BeNull();
+    }
+
+    // ── BuildSignupCallAsync ──────────────────────────────────────────────────
+
+    private static RaidSignupResponse MakeSignup(string userId, SignupStatus? status, string? characterName = null, int? classId = null, string? specName = null, string? playerName = null) => new()
+    {
+        UserDiscordId = userId,
+        PlayerName = playerName,
+        Status = status,
+        CharacterName = characterName,
+        ClassId = classId,
+        SpecName = specName,
+    };
+
+    [Fact]
+    public async Task BuildSignupCallAsync_CountsEachStatusInDescription()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[]
+        {
+            MakeSignup("1", SignupStatus.Accepted, "Arthas", 1, "Arms"),
+            MakeSignup("2", SignupStatus.Accepted, "Jaina", 8, "Frost"),
+            MakeSignup("3", SignupStatus.Tentative, "Sylvanas", 3, "Marksmanship"),
+            MakeSignup("4", SignupStatus.Declined),
+        };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Description.Should().Contain("✅ 2 · ❓ 1 · ❌ 1");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_AcceptedSignupsAppearUnderTheirClassFieldSortedByName()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[]
+        {
+            MakeSignup("1", SignupStatus.Accepted, "zaela", 1, "Arms"),
+            MakeSignup("2", SignupStatus.Accepted, "Anduin", 1, "Fury"),
+        };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        var warriorField = embed.Fields!.Single(f => f.Name.Contains("Warrior"));
+        warriorField.Value.Should().Be("Anduin\nzaela");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_AcceptedCharacterWithNoResolvedSpecIcon_ShowsPlainName()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("1", SignupStatus.Accepted, "Arthas", 6, "Blood") };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        var dkField = embed.Fields!.Single(f => f.Name.Contains("Death Knight"));
+        dkField.Value.Should().Be("Arthas");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_AcceptedCharacterWithResolvedSpecIcon_PrefixesTheIcon()
+    {
+        _emojiService.Setup(e => e.GetMarkdown("spec_deathknight_blood")).Returns("<:spec_deathknight_blood:2>");
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("1", SignupStatus.Accepted, "Arthas", 6, "Blood") };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        var dkField = embed.Fields!.Single(f => f.Name.Contains("Death Knight"));
+        dkField.Value.Should().Be("<:spec_deathknight_blood:2> Arthas");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_AcceptedWithNoCharacterResolved_FallsBackToPlayerNameThenDiscordId()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("1", SignupStatus.Accepted, characterName: null, classId: 1, playerName: "Bhahlou") };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        var warriorField = embed.Fields!.Single(f => f.Name.Contains("Warrior"));
+        warriorField.Value.Should().Be("Bhahlou");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_AcceptedWithNoCharacterOrPlayerName_FallsBackToDiscordId()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("99", SignupStatus.Accepted, characterName: null, classId: 1, playerName: null) };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        var warriorField = embed.Fields!.Single(f => f.Name.Contains("Warrior"));
+        warriorField.Value.Should().Be("99");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_TentativeWithNoCharacterName_FallsBackToPlayerName()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("1", SignupStatus.Tentative, characterName: null, playerName: "Bhahlou") };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Tentative (1)") && f.Value == "Bhahlou");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_TentativeWithNoCharacterOrPlayerName_FallsBackToDiscordId()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("99", SignupStatus.Tentative, characterName: null, playerName: null) };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Tentative (1)") && f.Value == "99");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_ClassWithNoAcceptedSignups_FieldValueIsDash()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        var warriorField = embed.Fields!.First(f => f.Name.Contains("Warrior"));
+        warriorField.Value.Should().Be("-");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_ClassEmojiResolved_PrefixesFieldTitle()
+    {
+        _emojiService.Setup(e => e.GetMarkdown("class_warrior")).Returns("<:class_warrior:1>");
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Fields!.Should().Contain(f => f.Name == "<:class_warrior:1> Warrior");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_GuildBranchOnClassicExpansion_OmitsLaterClasses()
+    {
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(10, default)).ReturnsAsync(new GuildBranch { Id = 10, GuildId = GuildId, BranchId = 1 });
+        _branchRepository.Setup(r => r.GetByIdAsync(1, default)).ReturnsAsync(new Branch { Id = 1, CurrentExpansionId = 1 });
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Fields!.Should().NotContain(f => f.Name.Contains("Death Knight"));
+        embed.Fields!.Should().NotContain(f => f.Name.Contains("Monk"));
+        embed.Fields!.Should().Contain(f => f.Name.Contains("Warrior"));
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_GuildBranchNotFound_ShowsEveryClass()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Fields!.Should().Contain(f => f.Name.Contains("Evoker"));
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_GuildBranchFoundButBranchNotFound_ShowsEveryClass()
+    {
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(10, default)).ReturnsAsync(new GuildBranch { Id = 10, GuildId = GuildId, BranchId = 1 });
+        _branchRepository.Setup(r => r.GetByIdAsync(1, default)).ReturnsAsync((Branch?)null);
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Fields!.Should().Contain(f => f.Name.Contains("Evoker"));
+    }
+
+    [Fact]
+    public void ClassEmoji_UnknownClassId_ReturnsEmptyString()
+    {
+        var result = _sut.ClassEmoji(999);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_TentativeAndDeclinedNamesListedInDedicatedFields()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[]
+        {
+            MakeSignup("1", SignupStatus.Tentative, "Sylvanas", 3, "Marksmanship"),
+            MakeSignup("2", SignupStatus.Declined, playerName: "Bhahlou"),
+        };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Tentative (1)") && f.Value == "Sylvanas");
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Declined (1)") && f.Value == "Bhahlou");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_DeclinedWithNoPlayerName_FallsBackToDiscordId()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[] { MakeSignup("99", SignupStatus.Declined) };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Declined (1)") && f.Value == "99");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_MultipleDeclined_SortedCaseInsensitivelyByName()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+        var signups = new[]
+        {
+            MakeSignup("1", SignupStatus.Declined, playerName: "zaela"),
+            MakeSignup("2", SignupStatus.Declined, playerName: "Anduin"),
+        };
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, signups);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Declined (2)") && f.Value == "Anduin\nzaela");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_NoTentativeOrDeclined_FieldsShowDash()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Tentative (0)") && f.Value == "-");
+        embed.Fields!.Should().Contain(f => f.Name.StartsWith("Declined (0)") && f.Value == "-");
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_ReturnsThreeButtonsEncodingBranchEventAndStatus()
+    {
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await _sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Buttons.Should().HaveCount(3);
+        embed.Buttons!.Should().Contain(b => b.Label == "Accepted" && b.CustomId == "raidsignup:10:5:accepted" && b.Style == DiscordEmbedButtonStyle.Success);
+        embed.Buttons!.Should().Contain(b => b.Label == "Tentative" && b.CustomId == "raidsignup:10:5:tentative" && b.Style == DiscordEmbedButtonStyle.Secondary);
+        embed.Buttons!.Should().Contain(b => b.Label == "Declined" && b.CustomId == "raidsignup:10:5:declined" && b.Style == DiscordEmbedButtonStyle.Danger);
+    }
+
+    [Fact]
+    public async Task BuildSignupCallAsync_ReturnsTitleColorAndUrl()
+    {
+        _configuration.Setup(c => c["FrontendUrl"]).Returns("https://app");
+        var sut = new RaidNotificationContentBuilder(_guilds.Object, _guildBranchesRepository.Object, _branchRepository.Object, _discordBotService.Object, _configuration.Object);
+        var raidEvent = MakeCompositionEvent(1, 1);
+
+        var embed = await sut.BuildSignupCallAsync(GuildId, 10, raidEvent, []);
+
+        embed.Title.Should().Be("Split 1");
+        embed.ColorHex.Should().Be(0x5865F2);
+        embed.Url.Should().Be($"https://app/guilds/{GuildId}/10/raids/5");
+        embed.Author.Should().BeNull();
     }
 
     // ── BuildPlayerAddedDmAsync ───────────────────────────────────────────────
@@ -404,7 +671,7 @@ public class RaidNotificationContentBuilderTests
     public void BuildRaidEventUrl_FrontendUrlConfigured_ReturnsDeepLink()
     {
         _configuration.Setup(c => c["FrontendUrl"]).Returns("https://app");
-        var sut = new RaidNotificationContentBuilder(_guilds.Object, _discordBotService.Object, _configuration.Object);
+        var sut = new RaidNotificationContentBuilder(_guilds.Object, _guildBranchesRepository.Object, _branchRepository.Object, _discordBotService.Object, _configuration.Object);
         var raidEvent = MakeCompositionEvent(groupCount: 1, slotsPerGroup: 1);
 
         var url = sut.BuildRaidEventUrl(raidEvent);

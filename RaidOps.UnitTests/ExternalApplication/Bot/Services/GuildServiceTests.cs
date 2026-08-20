@@ -1,7 +1,9 @@
 using FluentAssertions;
+using Moq;
 using NetCord;
 using NetCord.Gateway;
 using NetCord.JsonModels;
+using NetCord.Rest;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.ExternalApplication.Implementations.Bot.Services;
 using RaidOps.UnitTests.ExternalApplication.Bot;
@@ -387,6 +389,326 @@ public class GuildServiceTests
 
         var found = result.Should().ContainSingle(c => c.ChannelId == ChannelId1).Subject;
         found.MissingPermissions.Should().BeEquivalentTo([DiscordChannelPermissionFlag.EmbedLinks]);
+    }
+
+    // ── GetCategories ─────────────────────────────────────────────────────────
+
+    private const ulong CategoryId2 = 401UL;
+
+    [Fact]
+    public void GetCategories_GuildNotInCache_ThrowsInvalidOperationException()
+    {
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(NetCordTestHelpers.EmptyCache().Object));
+
+        var act = () => sut.GetCategories(GuildId.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{GuildId}*");
+    }
+
+    [Fact]
+    public void GetCategories_BotUserNotYetCached_ThrowsInvalidOperationException()
+    {
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId, new Dictionary<ulong, GuildUser>());
+        var cache = NetCordTestHelpers.CacheWith((GuildId, guild)); // no .User stubbed
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var act = () => sut.GetCategories(GuildId.ToString());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Bot user*");
+    }
+
+    [Fact]
+    public void GetCategories_BotUserNotInGuildMemberCache_CanCreateChannelFalseEverywhere()
+    {
+        // Bot user is cached at the Gateway level, but its own GuildUser member entry hasn't synced
+        // into this guild yet — exercises both the per-category `botMember is not null ? ... : default`
+        // fallback and GetBasePermissions' own `botMember is null` early return.
+        var category = NetCordTestHelpers.MakeCategoryChannel(CategoryId, "Raids", GuildId);
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), // no entry for BotUserId
+            roles: [EveryoneRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = category });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.CanCreateRootChannel.Should().BeFalse();
+        result.Categories.Should().ContainSingle(c => c.CategoryId == CategoryId && !c.CanCreateChannel);
+    }
+
+    [Fact]
+    public void GetCategories_BotHasAdministratorRoleOnCategory_CanCreateChannelTrue()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.Administrator, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+        var category = NetCordTestHelpers.MakeCategoryChannel(CategoryId, "Raids", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = category });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.Categories.Should().ContainSingle(c => c.CategoryId == CategoryId && c.CanCreateChannel);
+    }
+
+    [Fact]
+    public void GetCategories_ReturnsOnlyCategoryChannelsOrderedByPosition()
+    {
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, []);
+        var categoryA = NetCordTestHelpers.MakeCategoryChannel(CategoryId, "Officers", GuildId);
+        var categoryB = NetCordTestHelpers.MakeCategoryChannel(CategoryId2, "Raids", GuildId);
+        var textChannel = NetCordTestHelpers.MakeTextChannel(ChannelId1, "general", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = categoryA, [CategoryId2] = categoryB, [ChannelId1] = textChannel });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.Categories.Should().HaveCount(2).And.OnlyContain(c => c.Name == "Officers" || c.Name == "Raids");
+    }
+
+    [Fact]
+    public void GetCategories_BotHasManageChannelsOnCategory_CanCreateChannelTrue()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.ManageChannels, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+        var category = NetCordTestHelpers.MakeCategoryChannel(CategoryId, "Raids", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = category });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.Categories.Should().ContainSingle(c => c.CategoryId == CategoryId && c.CanCreateChannel);
+    }
+
+    [Fact]
+    public void GetCategories_BotLacksManageChannelsOnCategory_CanCreateChannelFalse()
+    {
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, []);
+        var category = NetCordTestHelpers.MakeCategoryChannel(CategoryId, "Raids", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = category });
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.Categories.Should().ContainSingle(c => c.CategoryId == CategoryId && !c.CanCreateChannel);
+    }
+
+    [Fact]
+    public void GetCategories_BotHasGuildWideManageChannels_CanCreateRootChannelTrue()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.ManageChannels, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role]);
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.CanCreateRootChannel.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetCategories_BotHasAdministrator_CanCreateRootChannelTrue()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.Administrator, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role]);
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object));
+
+        var result = sut.GetCategories(GuildId.ToString());
+
+        result.CanCreateRootChannel.Should().BeTrue();
+    }
+
+    // ── CreateTextChannelAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateTextChannelAsync_GuildNotInCache_ThrowsInvalidOperationException()
+    {
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(NetCordTestHelpers.EmptyCache().Object));
+
+        var act = () => sut.CreateTextChannelAsync(GuildId.ToString(), "kara-tue", null);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage($"*{GuildId}*");
+    }
+
+    [Fact]
+    public async Task CreateTextChannelAsync_BotUserNotYetCached_ThrowsInvalidOperationException()
+    {
+        // The REST call to actually create the channel happens before the bot-user cache check, so
+        // it must succeed for this scenario to reach (and exercise) that later check at all.
+        var guild = NetCordTestHelpers.MakeGuild(GuildId, OwnerId, new Dictionary<ulong, GuildUser>());
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .ReturnsAsync(() => NetCordTestHelpers.JsonResponse("""{"id":"555","type":0,"name":"kara-tue"}"""));
+        var cache = NetCordTestHelpers.CacheWith((GuildId, guild)); // no .User stubbed
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object, rest));
+
+        var act = () => sut.CreateTextChannelAsync(GuildId.ToString(), "kara-tue", null);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Bot user*");
+    }
+
+    [Fact]
+    public async Task CreateTextChannelAsync_BotUserNotInGuildMemberCache_ReturnsAllThreeMissingPermissions()
+    {
+        // Bot user is cached at the Gateway level, but its own GuildUser member entry hasn't synced
+        // into this guild yet — exercises GetBasePermissions' `botMember is null` fallback branch.
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser>(), // no entry for BotUserId
+            roles: [EveryoneRole]);
+
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .ReturnsAsync(() => NetCordTestHelpers.JsonResponse("""{"id":"555","type":0,"name":"kara-tue"}"""));
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object, rest));
+
+        var result = await sut.CreateTextChannelAsync(GuildId.ToString(), "kara-tue", null);
+
+        result.MissingPermissions.Should().BeEquivalentTo(
+        [
+            DiscordChannelPermissionFlag.ViewChannel,
+            DiscordChannelPermissionFlag.SendMessages,
+            DiscordChannelPermissionFlag.EmbedLinks,
+        ]);
+    }
+
+    [Fact]
+    public async Task CreateTextChannelAsync_Success_ReturnsChannelWithResolvedCategoryName()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.Administrator, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+        var category = NetCordTestHelpers.MakeCategoryChannel(CategoryId, "Raids", GuildId);
+
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role],
+            channels: new Dictionary<ulong, IGuildChannel> { [CategoryId] = category });
+
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .ReturnsAsync(() => NetCordTestHelpers.JsonResponse("""{"id":"555","type":0,"name":"kara-tue-18-aug"}"""));
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object, rest));
+
+        var result = await sut.CreateTextChannelAsync(GuildId.ToString(), "kara-tue-18-aug", CategoryId.ToString());
+
+        result.ChannelId.Should().Be(555UL);
+        result.Name.Should().Be("kara-tue-18-aug");
+        result.MissingPermissions.Should().BeEmpty();
+        result.CategoryName.Should().Be("Raids");
+    }
+
+    [Fact]
+    public async Task CreateTextChannelAsync_NoCategoryId_CategoryNameIsNull()
+    {
+        var role = NetCordTestHelpers.MakeJsonRole(AdminRoleId, Permissions.Administrator, managed: false);
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, [AdminRoleId]);
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole, role]);
+
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .ReturnsAsync(() => NetCordTestHelpers.JsonResponse("""{"id":"555","type":0,"name":"kara-tue-18-aug"}"""));
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object, rest));
+
+        var result = await sut.CreateTextChannelAsync(GuildId.ToString(), "kara-tue-18-aug", null);
+
+        result.CategoryName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateTextChannelAsync_BotHasNoRoles_ReturnsAllThreeMissingPermissions()
+    {
+        var botMember = NetCordTestHelpers.MakeGuildUser(BotUserId, GuildId, []);
+        var guild = NetCordTestHelpers.MakeGuild(
+            GuildId, OwnerId,
+            new Dictionary<ulong, GuildUser> { [BotUserId] = botMember },
+            roles: [EveryoneRole]);
+
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .ReturnsAsync(() => NetCordTestHelpers.JsonResponse("""{"id":"555","type":0,"name":"empty"}"""));
+
+        var cache = NetCordTestHelpers.CacheWith(NetCordTestHelpers.MakeCurrentUser(BotUserId), (GuildId, guild));
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object, rest));
+
+        var result = await sut.CreateTextChannelAsync(GuildId.ToString(), "empty", null);
+
+        result.MissingPermissions.Should().BeEquivalentTo(
+        [
+            DiscordChannelPermissionFlag.ViewChannel,
+            DiscordChannelPermissionFlag.SendMessages,
+            DiscordChannelPermissionFlag.EmbedLinks,
+        ]);
+    }
+
+    // ── DeleteChannelAsync ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteChannelAsync_SendsOneRequest()
+    {
+        var (rest, handler) = NetCordTestHelpers.MakeFakeRestClient();
+        handler.Setup(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default))
+            .ReturnsAsync(() => NetCordTestHelpers.JsonResponse("""{"id":"555","type":0}"""));
+
+        var cache = NetCordTestHelpers.EmptyCache();
+        var sut = new GuildService(NetCordTestHelpers.MakeGatewayClient(cache.Object, rest));
+
+        var act = () => sut.DeleteChannelAsync(ChannelId1.ToString());
+
+        await act.Should().NotThrowAsync();
+        handler.Verify(h => h.SendAsync(It.IsAny<HttpRequestMessage>(), default), Times.Once);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

@@ -132,6 +132,47 @@ public class RaidNotificationTextTests
         RaidNotificationText.GetCompositionAnnouncementDescription("starts", language).Should().Be(expected);
     }
 
+    // ── GetSignupCallDescription ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("en", "👤 Organized by <@1>")]
+    [InlineData("fr", "👤 Organisé par <@1>")]
+    [InlineData("de", "👤 Organisiert von <@1>")]
+    public void GetSignupCallDescription_LocalizesOrganizerLine(string language, string expectedOrganizerLine)
+    {
+        var startsAtUtc = new DateTime(2026, 2, 1, 20, 0, 0, DateTimeKind.Utc);
+        var unixSeconds = new DateTimeOffset(startsAtUtc).ToUnixTimeSeconds();
+
+        var description = RaidNotificationText.GetSignupCallDescription(startsAtUtc, "1", acceptedCount: 3, tentativeCount: 1, declinedCount: 2, language);
+
+        description.Should().Contain($"📅 <t:{unixSeconds}:F>");
+        description.Should().Contain(expectedOrganizerLine);
+        description.Should().Contain("✅ 3 · ❓ 1 · ❌ 2");
+    }
+
+    // ── GetSignupCallStatusLabel ──────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(SignupStatus.Accepted, "en", "Accepted")]
+    [InlineData(SignupStatus.Accepted, "fr", "Présent")]
+    [InlineData(SignupStatus.Accepted, "de", "Zugesagt")]
+    [InlineData(SignupStatus.Tentative, "en", "Tentative")]
+    [InlineData(SignupStatus.Tentative, "fr", "Peut-être")]
+    [InlineData(SignupStatus.Tentative, "de", "Vielleicht")]
+    [InlineData(SignupStatus.Declined, "en", "Declined")]
+    [InlineData(SignupStatus.Declined, "fr", "Absent")]
+    [InlineData(SignupStatus.Declined, "de", "Abgesagt")]
+    public void GetSignupCallStatusLabel_LocalizesEachStatus(SignupStatus status, string language, string expected)
+    {
+        RaidNotificationText.GetSignupCallStatusLabel(status, language).Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetSignupCallStatusLabel_UnknownStatus_FallsBackToStatusToString()
+    {
+        RaidNotificationText.GetSignupCallStatusLabel((SignupStatus)99, "en").Should().Be("99");
+    }
+
     // ── GetGroupLabel ─────────────────────────────────────────────────────────────
 
     [Theory]

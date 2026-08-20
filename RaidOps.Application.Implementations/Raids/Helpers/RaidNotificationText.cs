@@ -48,6 +48,10 @@ internal static class RaidNotificationText
         [(GuildNotificationEventType.RaidCompositionAnnouncementPosted, "en")] = ("Current composition", 0x5865F2),
         [(GuildNotificationEventType.RaidCompositionAnnouncementPosted, "fr")] = ("Composition actuelle", 0x5865F2),
         [(GuildNotificationEventType.RaidCompositionAnnouncementPosted, "de")] = ("Aktuelle Zusammensetzung", 0x5865F2),
+
+        [(GuildNotificationEventType.RaidSignupCallPosted, "en")] = ("Raid signup", 0x5865F2),
+        [(GuildNotificationEventType.RaidSignupCallPosted, "fr")] = ("Inscription au raid", 0x5865F2),
+        [(GuildNotificationEventType.RaidSignupCallPosted, "de")] = ("Raid-Anmeldung", 0x5865F2),
     };
 
     public static (string Title, int Color) GetTitleAndColor(GuildNotificationEventType eventType, string language)
@@ -127,6 +131,41 @@ internal static class RaidNotificationText
         "fr" => $"{startsAt} · mis à jour automatiquement.",
         "de" => $"{startsAt} · wird automatisch aktualisiert.",
         _ => $"{startsAt} · updated automatically.",
+    };
+
+    /// <summary>
+    /// Raid-Helper-style header: full weekday+date+time line (Discord's native <c>F</c> timestamp
+    /// format — each reader sees it in their own locale/timezone, no per-language formatting or
+    /// countdown needed), organizer line, blank line, then response counts.
+    /// </summary>
+    public static string GetSignupCallDescription(DateTime startsAtUtc, string createdByDiscordId, int acceptedCount, int tentativeCount, int declinedCount, string language)
+    {
+        var date = DiscordTimestamp(startsAtUtc, 'F');
+        var organizerLine = language switch
+        {
+            "fr" => $"👤 Organisé par <@{createdByDiscordId}>",
+            "de" => $"👤 Organisiert von <@{createdByDiscordId}>",
+            _ => $"👤 Organized by <@{createdByDiscordId}>",
+        };
+
+        // Discord trims trailing whitespace from an embed description, so a bare trailing "\n"
+        // is silently stripped and produces no visible gap before the fields below — anchor the
+        // blank line with a zero-width space instead (same trick as the field row separators).
+        return $"📅 {date}\n{organizerLine}\n\n✅ {acceptedCount} · ❓ {tentativeCount} · ❌ {declinedCount}'\n\u200B";
+    }
+
+    public static string GetSignupCallStatusLabel(SignupStatus status, string language) => (status, language) switch
+    {
+        (SignupStatus.Accepted, "fr") => "Présent",
+        (SignupStatus.Accepted, "de") => "Zugesagt",
+        (SignupStatus.Accepted, _) => "Accepted",
+        (SignupStatus.Tentative, "fr") => "Peut-être",
+        (SignupStatus.Tentative, "de") => "Vielleicht",
+        (SignupStatus.Tentative, _) => "Tentative",
+        (SignupStatus.Declined, "fr") => "Absent",
+        (SignupStatus.Declined, "de") => "Abgesagt",
+        (SignupStatus.Declined, _) => "Declined",
+        _ => status.ToString(),
     };
 
     public static string GetGroupLabel(int groupNumber, string language) => language switch

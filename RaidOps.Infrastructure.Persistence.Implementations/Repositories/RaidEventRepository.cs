@@ -61,6 +61,8 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
         existing.StartsAtUtc = raidEvent.StartsAtUtc;
         existing.GroupCount = raidEvent.GroupCount;
         existing.SlotsPerGroup = raidEvent.SlotsPerGroup;
+        existing.DedicatedAnnouncementChannelId = raidEvent.DedicatedAnnouncementChannelId;
+        existing.DedicatedAnnouncementChannelIsBotOwned = raidEvent.DedicatedAnnouncementChannelIsBotOwned;
         existing.UpdatedAt = raidEvent.UpdatedAt;
         await context.SaveChangesAsync(cancellationToken);
 
@@ -117,13 +119,44 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     }
 
     /// <inheritdoc/>
-    public async Task<int> DeleteEmptyDraftOccurrencesForSeriesAsync(int raidSeriesId, int guildBranchId, CancellationToken cancellationToken = default)
-        => await context.RaidEvents
+    public async Task UpdateSignupCallAnnouncementReferenceAsync(int id, int guildBranchId, string channelId, string messageId, CancellationToken cancellationToken = default)
+    {
+        await context.RaidEvents
+            .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
+            .ExecuteUpdateAsync(e => e
+                .SetProperty(x => x.SignupCallAnnouncementChannelId, channelId)
+                .SetProperty(x => x.SignupCallAnnouncementMessageId, messageId), cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task ClearAnnouncementReferencesAsync(int id, int guildBranchId, CancellationToken cancellationToken = default)
+    {
+        await context.RaidEvents
+            .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
+            .ExecuteUpdateAsync(e => e
+                .SetProperty(x => x.CompositionAnnouncementChannelId, (string?)null)
+                .SetProperty(x => x.CompositionAnnouncementMessageId, (string?)null)
+                .SetProperty(x => x.SignupCallAnnouncementChannelId, (string?)null)
+                .SetProperty(x => x.SignupCallAnnouncementMessageId, (string?)null), cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<(int DeletedCount, List<string> BotOwnedChannelIds)> DeleteEmptyDraftOccurrencesForSeriesAsync(int raidSeriesId, int guildBranchId, CancellationToken cancellationToken = default)
+    {
+        var matching = context.RaidEvents
             .Where(e => e.RaidSeriesId == raidSeriesId
                 && e.GuildBranchId == guildBranchId
                 && e.PublicationStatus == RaidPublicationStatus.Draft
-                && !e.Assignments.Any())
-            .ExecuteDeleteAsync(cancellationToken);
+                && !e.Assignments.Any());
+
+        var botOwnedChannelIds = await matching
+            .Where(e => e.DedicatedAnnouncementChannelIsBotOwned && e.DedicatedAnnouncementChannelId != null)
+            .Select(e => e.DedicatedAnnouncementChannelId!)
+            .ToListAsync(cancellationToken);
+
+        var deletedCount = await matching.ExecuteDeleteAsync(cancellationToken);
+        return (deletedCount, botOwnedChannelIds);
+    }
 
     /// <inheritdoc/>
     public async Task<List<RaidEvent>> GetUpcomingPublishedForGuildAsync(string guildId, DateTime fromUtc, int limit, CancellationToken cancellationToken = default)

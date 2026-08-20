@@ -74,4 +74,9 @@ public static class ResponseDetail
     public const string NoAssignmentsToNotify = nameof(NoAssignmentsToNotify);
     public const string RaidGroupingRequesterHasNoCharacter = nameof(RaidGroupingRequesterHasNoCharacter);
     public const string RaidGroupingCharacterNotFound = nameof(RaidGroupingCharacterNotFound);
+    public const string RaidEventNotInSignupMode = nameof(RaidEventNotInSignupMode);
+    public const string PlayerHasNotAcceptedSignup = nameof(PlayerHasNotAcceptedSignup);
+    public const string CharacterRequiredForSignup = nameof(CharacterRequiredForSignup);
+    public const string SpecRequiredForSignup = nameof(SpecRequiredForSignup);
+    public const string DiscordChannelCreationFailed = nameof(DiscordChannelCreationFailed);
 }

@@ -113,6 +113,24 @@ public class GuildSettingsController(
     }
 
     /// <summary>
+    /// Returns the guild's Discord channel categories — lets an officer pick where a bot-created
+    /// channel should be nested (e.g. a raid's dedicated announcement channel).
+    /// </summary>
+    [HttpGet("{guildId}/categories")]
+    public async Task<IActionResult> GetCategories(string guildId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildCategoriesQuery, GuildCategoriesResponse>(
+            new GetGuildCategoriesQuery { GuildId = guildId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>
     /// Persists the guild's Discord notification settings in bulk.
     /// </summary>
     [HttpPatch("{guildId}/notification-settings")]

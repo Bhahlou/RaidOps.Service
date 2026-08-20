@@ -248,4 +248,67 @@ public class GuildSettingsControllerTests(RaidOpsWebApplicationFactory factory)
             log.Should().BeNull();
         }
     }
+
+    // ── Categories ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCategories_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/123456789012345678/categories");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetCategories_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/123456789012345678/categories");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetCategories_WhenUserNotAdmin_Returns400()
+    {
+        const string id      = "510000000000000009";
+        const string guildId = "910000000000000009";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/categories");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("Forbidden");
+    }
+
+    [Fact]
+    public async Task GetCategories_WhenAdmin_Returns200WithCategories()
+    {
+        const string id      = "510000000000000010";
+        const string guildId = "910000000000000010";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/categories");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("canCreateRootChannel").GetBoolean().Should().BeTrue();
+        json.GetProperty("categories").GetArrayLength().Should().Be(0);
+    }
 }

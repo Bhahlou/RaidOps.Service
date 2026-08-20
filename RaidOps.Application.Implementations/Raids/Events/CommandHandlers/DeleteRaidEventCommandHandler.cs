@@ -1,9 +1,11 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Helpers;
 using RaidOps.Domain.Enums;
+using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
@@ -13,16 +15,18 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// removing a raid event — its slot assignments are cascade-deleted with it at the database level.
 /// Deleting an already-published event also posts a "Raid cancelled" Discord notification (there is
 /// no separate cancel flow) — deleting a still-draft event stays silent, nobody outside officers
-/// ever saw it.
+/// ever saw it. Also deletes the event's dedicated Discord channel, but only when RaidOps created it
+/// specifically for this event (see <see cref="Domain.Models.Raids.RaidEvent.DedicatedAnnouncementChannelIsBotOwned"/>) —
+/// an officer-picked existing channel is left alone.
 /// </summary>
 public class DeleteRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
     IRaidEventRepository raidEventRepository,
     IGuildsRepository guildsRepository,
     IAuditLogService auditLogService,
-    IGuildNotificationDispatcher guildNotificationDispatcher,
-    IRaidNotificationContentBuilder raidNotificationContentBuilder,
-    IRaidCompositionAnnouncementService raidCompositionAnnouncementService) : ICommandHandlerAsync<DeleteRaidEventCommand>
+    IRaidEventDeletionNotifier raidEventDeletionNotifier,
+    IDiscordBotService discordBotService,
+    ILogger<DeleteRaidEventCommandHandler> logger) : ICommandHandlerAsync<DeleteRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeleteRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -36,6 +40,21 @@ public class DeleteRaidEventCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
         await raidEventRepository.DeleteAsync(command.EventId, command.GuildBranchId, cancellationToken);
+
+        if (existing.DedicatedAnnouncementChannelIsBotOwned && existing.DedicatedAnnouncementChannelId is not null)
+        {
+            try
+            {
+                await discordBotService.Guilds.DeleteChannelAsync(existing.DedicatedAnnouncementChannelId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Failed to delete bot-owned dedicated channel {ChannelId} for deleted raid event {RaidEventId}",
+                    existing.DedicatedAnnouncementChannelId, command.EventId);
+            }
+        }
 
         var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
         var startsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(existing.StartsAtUtc, guild?.Timezone);
@@ -52,21 +71,7 @@ public class DeleteRaidEventCommandHandler(
             },
             cancellationToken);
 
-        if (existing.PublicationStatus == RaidPublicationStatus.Published)
-        {
-            var embed = await raidNotificationContentBuilder.BuildCancelledAsync(command.GuildId, command.RequesterDiscordId, existing, cancellationToken);
-            await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidCancelled, command.GuildBranchId, embed, cancellationToken);
-
-            await raidCompositionAnnouncementService.DeleteAnnouncementAsync(existing, cancellationToken);
-
-            // Sent unconditionally (ignores the DM setting) — the only guaranteed way an assigned
-            // player learns their raid was cancelled, since the public embed never pings anyone.
-            foreach (var assignment in existing.Assignments)
-            {
-                var character = new RaidCharacterRef(assignment.Character.Name, assignment.Character.ClassId, assignment.Spec.Name);
-                await raidCompositionAnnouncementService.NotifyPlayerRaidCancelledAsync(existing, assignment.AssignedPlayerDiscordId, character, cancellationToken);
-            }
-        }
+        await raidEventDeletionNotifier.NotifyAsync(command.GuildId, command.RequesterDiscordId, command.GuildBranchId, existing, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event deleted successfully."));
     }

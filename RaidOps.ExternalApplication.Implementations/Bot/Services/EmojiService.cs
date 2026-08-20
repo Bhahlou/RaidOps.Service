@@ -60,4 +60,8 @@ public class EmojiService(
     /// <inheritdoc/>
     public string? GetMarkdown(string name) =>
         _emojiIdsByName.TryGetValue(name, out var id) ? $"<:{name}:{id}>" : null;
+
+    /// <inheritdoc/>
+    public ulong? GetId(string name) =>
+        _emojiIdsByName.TryGetValue(name, out var id) ? id : null;
 }

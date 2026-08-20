@@ -18,7 +18,11 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// otherwise keep an assignment the UI can never again render or unassign (no slot to click), and
 /// role counters would keep counting a character nobody can see anymore. If the event is already
 /// published and the start time actually changes, also posts a "Raid rescheduled" Discord
-/// notification — other field changes (grid size, zones, name) never trigger one.
+/// notification — other field changes (grid size, zones, name) never trigger one. If the dedicated
+/// channel actually changes, the standing composition/signup-call embeds are dropped from the old
+/// channel, their references cleared, the signup-call embed re-posted fresh in the new channel
+/// (Signup-mode events only), and the old channel itself deleted if RaidOps had created it just for
+/// this event — see <see cref="Domain.Models.Raids.RaidEvent.DedicatedAnnouncementChannelIsBotOwned"/>.
 /// </summary>
 public class UpdateRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
@@ -26,8 +30,7 @@ public class UpdateRaidEventCommandHandler(
     IRaidZoneRepository raidZoneRepository,
     IGuildsRepository guildsRepository,
     IAuditLogService auditLogService,
-    IGuildNotificationDispatcher guildNotificationDispatcher,
-    IRaidNotificationContentBuilder raidNotificationContentBuilder) : ICommandHandlerAsync<UpdateRaidEventCommand>
+    IRaidEventUpdateNotifier raidEventUpdateNotifier) : ICommandHandlerAsync<UpdateRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -54,6 +57,8 @@ public class UpdateRaidEventCommandHandler(
         if (zones.Count != distinctZoneIds.Count)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidZoneNotFound, "One or more raid zones do not exist.");
 
+        var channelChanged = command.DedicatedAnnouncementChannelId != existing.DedicatedAnnouncementChannelId;
+
         var raidEvent = new RaidEvent
         {
             Id = command.EventId,
@@ -61,12 +66,17 @@ public class UpdateRaidEventCommandHandler(
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,
+            DedicatedAnnouncementChannelId = command.DedicatedAnnouncementChannelId,
+            DedicatedAnnouncementChannelIsBotOwned = command.DedicatedAnnouncementChannelId is not null && command.DedicatedAnnouncementChannelIsBotOwned,
             UpdatedAt = DateTime.UtcNow,
         };
 
         var updated = await raidEventRepository.UpdateAsync(raidEvent, command.GuildBranchId, distinctZoneIds, cancellationToken);
         if (!updated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
+
+        if (channelChanged)
+            await raidEventUpdateNotifier.MoveDedicatedChannelAsync(command.EventId, command.GuildBranchId, existing, cancellationToken);
 
         var guild = await guildsRepository.GetByIdAsync(command.GuildId, cancellationToken);
         var oldStartsAtLocal = GuildTimeHelper.ToGuildLocalDateTime(existing.StartsAtUtc, guild?.Timezone);
@@ -87,10 +97,7 @@ public class UpdateRaidEventCommandHandler(
             cancellationToken);
 
         if (existing.PublicationStatus == RaidPublicationStatus.Published && command.StartsAtUtc != existing.StartsAtUtc)
-        {
-            var embed = await raidNotificationContentBuilder.BuildRescheduledAsync(command.GuildId, command.RequesterDiscordId, raidEvent, existing.StartsAtUtc, cancellationToken);
-            await guildNotificationDispatcher.NotifyAsync(command.GuildId, GuildNotificationEventType.RaidRescheduled, command.GuildBranchId, embed, cancellationToken);
-        }
+            await raidEventUpdateNotifier.NotifyRescheduledAsync(command.GuildId, command.RequesterDiscordId, command.GuildBranchId, raidEvent, existing.StartsAtUtc, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event updated successfully."));
     }

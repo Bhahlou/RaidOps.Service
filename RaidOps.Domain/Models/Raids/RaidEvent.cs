@@ -84,6 +84,41 @@ public class RaidEvent
     /// </summary>
     public string? CompositionAnnouncementMessageId { get; set; }
 
+    /// <summary>
+    /// Discord snowflake ID of the channel the standing signup-call embed (Accept/Tentative/Decline
+    /// buttons) was posted in, for <see cref="SignupMode.Signup"/> events. <c>null</c> if it's never
+    /// been posted (signup-call announcements are disabled for this guild/branch, the event isn't
+    /// published yet, or its mode isn't <see cref="SignupMode.Signup"/>).
+    /// </summary>
+    public string? SignupCallAnnouncementChannelId { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of the standing signup-call announcement message — edited in place as
+    /// responses come in, rather than reposted. <c>null</c> alongside
+    /// <see cref="SignupCallAnnouncementChannelId"/>.
+    /// </summary>
+    public string? SignupCallAnnouncementMessageId { get; set; }
+
+    /// <summary>
+    /// Discord snowflake ID of a dedicated channel this event's raid-related notifications
+    /// (published/composition/signup-call) should all post to instead of whatever's configured
+    /// guild-wide — officer-chosen at creation time (or copied from the originating
+    /// <see cref="RaidSeries"/>). <c>null</c> means "use the guild-wide configured channel," the
+    /// default. Distinct from <see cref="CompositionAnnouncementChannelId"/>/
+    /// <see cref="SignupCallAnnouncementChannelId"/>, which only ever cache where a message ended
+    /// up, never drive the choice of channel.
+    /// </summary>
+    public string? DedicatedAnnouncementChannelId { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="DedicatedAnnouncementChannelId"/> was created by RaidOps specifically for
+    /// this event (the create dialog's "new channel" path) rather than an existing channel the
+    /// officer picked. Drives whether deleting this event also deletes the Discord channel —
+    /// deleting an officer-picked existing channel would be destructive well beyond this raid.
+    /// Always <c>false</c> when <see cref="DedicatedAnnouncementChannelId"/> is <c>null</c>.
+    /// </summary>
+    public bool DedicatedAnnouncementChannelIsBotOwned { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The guild this event belongs to.</summary>
@@ -100,4 +135,7 @@ public class RaidEvent
 
     /// <summary>The sparse slot assignments for this event.</summary>
     public virtual ICollection<RaidSlotAssignment> Assignments { get; set; } = [];
+
+    /// <summary>Member responses for this event, only meaningful when <see cref="SignupMode"/> is <see cref="SignupMode.Signup"/>.</summary>
+    public virtual ICollection<RaidSignup> Signups { get; set; } = [];
 }

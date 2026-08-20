@@ -13,6 +13,7 @@ namespace RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 /// <param name="FooterText">Optional footer text.</param>
 /// <param name="Url">Optional URL that turns the title into a link — e.g. a deep link to the raid/event in RaidOps.</param>
 /// <param name="Author">Optional small byline shown above the title (e.g. the member who triggered the event, with their avatar).</param>
+/// <param name="Buttons">Optional row of buttons attached alongside the embed (e.g. the raid signup-call's Accept/Tentative/Decline row) — a Discord message-level concern, not part of the embed itself.</param>
 public record DiscordEmbedContent(
     string Title,
     string? Description = null,
@@ -20,7 +21,23 @@ public record DiscordEmbedContent(
     IReadOnlyList<DiscordEmbedField>? Fields = null,
     string? FooterText = null,
     string? Url = null,
-    DiscordEmbedAuthor? Author = null);
+    DiscordEmbedAuthor? Author = null,
+    IReadOnlyList<DiscordEmbedButton>? Buttons = null);
+
+/// <summary>A single button attached to a <see cref="DiscordEmbedContent"/>'s message.</summary>
+/// <param name="Label">Button text.</param>
+/// <param name="CustomId">Opaque identifier round-tripped back on click — see the interaction module handling it for its encoding scheme.</param>
+/// <param name="Style">Visual style.</param>
+public record DiscordEmbedButton(string Label, string CustomId, DiscordEmbedButtonStyle Style = DiscordEmbedButtonStyle.Secondary);
+
+/// <summary>Mirrors NetCord's own button style enum, kept separate so this layer stays SDK-independent.</summary>
+public enum DiscordEmbedButtonStyle
+{
+    Primary,
+    Secondary,
+    Success,
+    Danger,
+}
 
 /// <summary>A single name/value field of a <see cref="DiscordEmbedContent"/>.</summary>
 /// <param name="Name">Field label.</param>

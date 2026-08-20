@@ -11,7 +11,10 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// <summary>
 /// Handles <see cref="PublishRaidEventCommand"/> by verifying officer access and marking the event
 /// published — it becomes visible to non-officer roster members and starts counting toward the
-/// "unassigned members" computation. Also posts a "Raid published" Discord notification.
+/// "unassigned members" computation. Also posts a "Raid published" Discord notification, always via
+/// the guild-wide configured channel — unlike composition/signup-call/grouping-ping, this
+/// notification is deliberately NOT redirected to a raid's dedicated announcement channel even when
+/// one is set, since it's a generic "a raid exists" ping, not raid-specific content.
 /// </summary>
 public class PublishRaidEventCommandHandler(
     IGuildAccessService guildAccessService,

@@ -11,7 +11,11 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="CreateAdhocRaidEventCommand"/> by verifying officer access, validating the
-/// requested grid shape and target zones, then persisting a standalone raid event.
+/// requested grid shape and target zones, then persisting a standalone raid event. For a
+/// Signup-mode event, also posts the standing signup-call embed immediately — unlike composition
+/// (only meaningful once assigned) and the "Raid published" ping (only meant for the roster once
+/// official), the whole point of the signup call is to gather responses *before* the raid is built,
+/// so it can't wait for publish. It stays a Draft on the site either way.
 /// </summary>
 public class CreateAdhocRaidEventCommandHandler(
     IRaidGridAndZoneValidator gridAndZoneValidator,
@@ -19,7 +23,8 @@ public class CreateAdhocRaidEventCommandHandler(
     IRaidZoneRepository raidZoneRepository,
     IGuildsRepository guildsRepository,
     IGuildBranchesRepository guildBranchesRepository,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<CreateAdhocRaidEventCommand>
+    IAuditLogService auditLogService,
+    IRaidSignupAnnouncementService raidSignupAnnouncementService) : ICommandHandlerAsync<CreateAdhocRaidEventCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(CreateAdhocRaidEventCommand command, CancellationToken cancellationToken = default)
@@ -44,7 +49,9 @@ public class CreateAdhocRaidEventCommandHandler(
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,
-            SignupMode = branch?.SignupMode ?? SignupMode.DefaultPresent,
+            SignupMode = command.SignupModeOverride ?? branch?.SignupMode ?? SignupMode.DefaultPresent,
+            DedicatedAnnouncementChannelId = command.DedicatedAnnouncementChannelId,
+            DedicatedAnnouncementChannelIsBotOwned = command.DedicatedAnnouncementChannelId is not null && command.DedicatedAnnouncementChannelIsBotOwned,
             Status = RaidEventStatus.Scheduled,
             CreatedByDiscordId = command.RequesterDiscordId,
             CreatedAt = DateTime.UtcNow,
@@ -68,6 +75,9 @@ public class CreateAdhocRaidEventCommandHandler(
                 ["raidZoneNames"] = string.Join(", ", zones.Select(z => z.Name)),
             },
             cancellationToken);
+
+        if (created.SignupMode == SignupMode.Signup)
+            await raidSignupAnnouncementService.PublishOrUpdateSignupCallAsync(created, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event created successfully.", new { created.Id }));
     }

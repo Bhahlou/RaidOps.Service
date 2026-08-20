@@ -5,6 +5,7 @@ using RaidOps.Application.Contracts.Raids.Series.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Series.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -31,7 +32,9 @@ public class CreateRaidSeriesCommandHandlerTests
             .ReturnsAsync(Result<List<int>>.Ok([1]));
     }
 
-    private static CreateRaidSeriesCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null, int intervalWeeks = 1) => new()
+    private static CreateRaidSeriesCommand MakeCommand(
+        int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null, int intervalWeeks = 1,
+        string? dedicatedAnnouncementChannelId = null, string? dedicatedAnnouncementChannelCategoryId = null) => new()
     {
         GuildId = GuildId,
         RequesterDiscordId = RequesterId,
@@ -43,6 +46,8 @@ public class CreateRaidSeriesCommandHandlerTests
         GroupCount = groupCount,
         SlotsPerGroup = slotsPerGroup,
         RaidZoneIds = zoneIds ?? [1],
+        DedicatedAnnouncementChannelId = dedicatedAnnouncementChannelId,
+        DedicatedAnnouncementChannelCategoryId = dedicatedAnnouncementChannelCategoryId,
     };
 
     [Fact]
@@ -70,6 +75,33 @@ public class CreateRaidSeriesCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_SignupModeOverrideSet_TakesPrecedenceOverTheBranchDefault()
+    {
+        _raidSeriesRepository.Setup(r => r.AddAsync(It.IsAny<RaidSeries>(), default)).ReturnsAsync((RaidSeries s, CancellationToken _) => { s.Id = 5; return s; });
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, SignupMode = SignupMode.DefaultPresent });
+
+        var command = MakeCommand();
+        command.SignupModeOverride = SignupMode.Signup;
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSeriesRepository.Verify(r => r.AddAsync(It.Is<RaidSeries>(s => s.SignupMode == SignupMode.Signup), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoOverride_UsesTheBranchsConfiguredSignupMode()
+    {
+        _raidSeriesRepository.Setup(r => r.AddAsync(It.IsAny<RaidSeries>(), default)).ReturnsAsync((RaidSeries s, CancellationToken _) => { s.Id = 5; return s; });
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, SignupMode = SignupMode.Signup });
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSeriesRepository.Verify(r => r.AddAsync(It.Is<RaidSeries>(s => s.SignupMode == SignupMode.Signup), default), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_Success_CreatesActiveSeriesAndLogsAudit()
     {
         _raidSeriesRepository.Setup(r => r.AddAsync(It.IsAny<RaidSeries>(), default)).ReturnsAsync((RaidSeries s, CancellationToken _) => { s.Id = 5; return s; });
@@ -84,5 +116,48 @@ public class CreateRaidSeriesCommandHandlerTests
             s.CreatedByDiscordId == RequesterId && s.DefaultZones.Count == 1),
             default), Times.Once);
         _auditLogService.Verify(a => a.LogAsync(GuildId, RequesterId, GuildAuditAction.RaidSeriesCreated, It.IsAny<Dictionary<string, string>>(), default), Times.Once);
+    }
+
+    // ── Dedicated channel / category ─────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_CategoryOnly_PersistsCategoryAndNoChannel()
+    {
+        _raidSeriesRepository.Setup(r => r.AddAsync(It.IsAny<RaidSeries>(), default)).ReturnsAsync((RaidSeries s, CancellationToken _) => { s.Id = 5; return s; });
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelCategoryId: "cat-1"));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSeriesRepository.Verify(r => r.AddAsync(It.Is<RaidSeries>(s =>
+            s.DedicatedAnnouncementChannelId == null && s.DedicatedAnnouncementChannelCategoryId == "cat-1"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelIdSet_IgnoresCategoryEvenIfBothSent()
+    {
+        _raidSeriesRepository.Setup(r => r.AddAsync(It.IsAny<RaidSeries>(), default)).ReturnsAsync((RaidSeries s, CancellationToken _) => { s.Id = 5; return s; });
+
+        // Defensive: the front only ever sends one or the other, but the handler must not let a
+        // channel id and a category coexist — an explicit existing-channel pick wins.
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "chan-1", dedicatedAnnouncementChannelCategoryId: "cat-1"));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSeriesRepository.Verify(r => r.AddAsync(It.Is<RaidSeries>(s =>
+            s.DedicatedAnnouncementChannelId == "chan-1" && s.DedicatedAnnouncementChannelCategoryId == null),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NeitherChannelNorCategory_PersistsBothNull()
+    {
+        _raidSeriesRepository.Setup(r => r.AddAsync(It.IsAny<RaidSeries>(), default)).ReturnsAsync((RaidSeries s, CancellationToken _) => { s.Id = 5; return s; });
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidSeriesRepository.Verify(r => r.AddAsync(It.Is<RaidSeries>(s =>
+            s.DedicatedAnnouncementChannelId == null && s.DedicatedAnnouncementChannelCategoryId == null),
+            default), Times.Once);
     }
 }

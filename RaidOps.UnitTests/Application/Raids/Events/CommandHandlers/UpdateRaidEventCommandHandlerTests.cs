@@ -7,7 +7,6 @@ using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
-using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.UnitTests.Application.Raids.Events.CommandHandlers;
@@ -19,8 +18,7 @@ public class UpdateRaidEventCommandHandlerTests
     private readonly Mock<IRaidZoneRepository> _raidZoneRepository = new();
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
-    private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
-    private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
+    private readonly Mock<IRaidEventUpdateNotifier> _raidEventUpdateNotifier = new();
     private readonly UpdateRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -32,10 +30,12 @@ public class UpdateRaidEventCommandHandlerTests
     {
         _sut = new UpdateRaidEventCommandHandler(
             _access.Object, _raidEventRepository.Object, _raidZoneRepository.Object, _guildsRepository.Object, _auditLogService.Object,
-            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object);
+            _raidEventUpdateNotifier.Object);
     }
 
-    private static UpdateRaidEventCommand MakeCommand(int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null) => new()
+    private static UpdateRaidEventCommand MakeCommand(
+        int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null,
+        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false) => new()
     {
         GuildId = GuildId,
         RequesterDiscordId = RequesterId,
@@ -46,7 +46,18 @@ public class UpdateRaidEventCommandHandlerTests
         GroupCount = groupCount,
         SlotsPerGroup = slotsPerGroup,
         RaidZoneIds = zoneIds ?? [1],
+        DedicatedAnnouncementChannelId = dedicatedAnnouncementChannelId,
+        DedicatedAnnouncementChannelIsBotOwned = dedicatedAnnouncementChannelIsBotOwned,
     };
+
+    /// <summary>Wires the successful-update happy path shared by every dedicated-channel test below.</summary>
+    private void SetupSuccessfulUpdate(RaidEvent existing)
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(existing);
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+    }
 
     private void SetupOfficer() =>
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
@@ -227,8 +238,8 @@ public class UpdateRaidEventCommandHandlerTests
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsSuccess.Should().BeTrue();
-        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(
-            It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+        _raidEventUpdateNotifier.Verify(n => n.NotifyRescheduledAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<RaidEvent>(), It.IsAny<DateTime>(), default), Times.Never);
     }
 
     [Fact]
@@ -250,12 +261,12 @@ public class UpdateRaidEventCommandHandlerTests
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsSuccess.Should().BeTrue();
-        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(
-            It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+        _raidEventUpdateNotifier.Verify(n => n.NotifyRescheduledAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<RaidEvent>(), It.IsAny<DateTime>(), default), Times.Never);
     }
 
     [Fact]
-    public async Task HandleAsync_PublishedEventWithTimeChange_BuildsAndDispatchesRescheduledNotification()
+    public async Task HandleAsync_PublishedEventWithTimeChange_NotifiesReschedule()
     {
         SetupOfficer();
         var oldStartsAtUtc = new DateTime(2026, 1, 1, 20, 0, 0, DateTimeKind.Utc);
@@ -268,14 +279,49 @@ public class UpdateRaidEventCommandHandlerTests
         });
         _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
         _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
-        var embed = new DiscordEmbedContent("Raid rescheduled");
-        _raidNotificationContentBuilder
-            .Setup(b => b.BuildRescheduledAsync(GuildId, RequesterId, It.Is<RaidEvent>(e => e.Id == EventId), oldStartsAtUtc, default))
-            .ReturnsAsync(embed);
 
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsSuccess.Should().BeTrue();
-        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidRescheduled, GuildBranchId, embed, default), Times.Once);
+        _raidEventUpdateNotifier.Verify(n => n.NotifyRescheduledAsync(
+            GuildId, RequesterId, GuildBranchId, It.Is<RaidEvent>(e => e.Id == EventId), oldStartsAtUtc, default), Times.Once);
+    }
+
+    // ── Dedicated channel move ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_ChannelUnchanged_DoesNotMoveAnything()
+    {
+        SetupSuccessfulUpdate(new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = true });
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "111", dedicatedAnnouncementChannelIsBotOwned: true));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventUpdateNotifier.Verify(n => n.MoveDedicatedChannelAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<RaidEvent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelChanged_MovesTheDedicatedChannel()
+    {
+        var existing = new RaidEvent { Id = EventId, DedicatedAnnouncementChannelId = "111", DedicatedAnnouncementChannelIsBotOwned = false };
+        SetupSuccessfulUpdate(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222"));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventUpdateNotifier.Verify(n => n.MoveDedicatedChannelAsync(EventId, GuildBranchId, existing, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelIdSetAndBotOwnedTrue_PersistsBotOwnedTrue()
+    {
+        SetupSuccessfulUpdate(new RaidEvent { Id = EventId });
+
+        var result = await _sut.HandleAsync(MakeCommand(dedicatedAnnouncementChannelId: "222", dedicatedAnnouncementChannelIsBotOwned: true));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.UpdateAsync(
+            It.Is<RaidEvent>(e => e.DedicatedAnnouncementChannelId == "222" && e.DedicatedAnnouncementChannelIsBotOwned),
+            GuildBranchId, It.IsAny<IEnumerable<int>>(), default), Times.Once);
     }
 }

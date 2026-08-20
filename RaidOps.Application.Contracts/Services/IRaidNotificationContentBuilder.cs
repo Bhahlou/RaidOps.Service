@@ -1,3 +1,4 @@
+using RaidOps.Application.Contracts.Raids.Signups.Responses;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 
@@ -60,6 +61,14 @@ public interface IRaidNotificationContentBuilder
     /// state that may reflect several officers' edits since it was first posted.
     /// </summary>
     Task<DiscordEmbedContent> BuildCompositionAnnouncementAsync(string guildId, RaidEvent raidEvent, IReadOnlyList<RaidSlotAssignment> assignments, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Builds the standing signup-call embed for a published <see cref="Domain.Enums.SignupMode.Signup"/>
+    /// event — one field listing every roster member grouped by their current response (Accepted/
+    /// Tentative/Declined/no response yet), plus an Accept/Tentative/Decline button row. Like
+    /// <see cref="BuildCompositionAnnouncementAsync"/>, this is a re-rendered snapshot with no author.
+    /// </summary>
+    Task<DiscordEmbedContent> BuildSignupCallAsync(string guildId, int guildBranchId, RaidEvent raidEvent, IReadOnlyList<RaidSignupResponse> signups, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Composition announcement family (DM) — a player was added to a published raid's

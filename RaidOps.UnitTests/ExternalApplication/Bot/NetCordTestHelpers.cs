@@ -9,6 +9,7 @@ using NetCord.JsonModels;
 using NetCord.Rest;
 using NetCord.Rest.JsonModels;
 using NetCord.Services.ApplicationCommands;
+using NetCord.Services.ComponentInteractions;
 using Moq;
 
 namespace RaidOps.UnitTests.ExternalApplication.Bot;
@@ -149,6 +150,27 @@ internal static class NetCordTestHelpers
         SetField(channel, typeof(TextGuildChannel).BaseType!.BaseType!, "_jsonModel", jc);
         SetField(channel, typeof(TextGuildChannel), "<GuildId>k__BackingField", guildId);
         SetField(channel, typeof(TextGuildChannel), "<PermissionOverwrites>k__BackingField", new Dictionary<ulong, PermissionOverwrite>());
+
+        return channel;
+    }
+
+    /// <summary>
+    /// Builds a minimal category channel with no permission overwrites. Unlike <see cref="MakeTextChannel"/>,
+    /// <c>CategoryGuildChannel</c> inherits directly from <c>Channel</c> (one level, not two —
+    /// <c>TextGuildChannel</c> has the extra empty <c>TextChannel</c> rung in between), so
+    /// <c>_jsonModel</c> is set one level up rather than two.
+    /// </summary>
+    internal static CategoryGuildChannel MakeCategoryChannel(ulong id, string name, ulong guildId)
+    {
+        var jsonChannelType = Type.GetType("NetCord.JsonModels.JsonChannel, NetCord")!;
+        var jc = RuntimeHelpers.GetUninitializedObject(jsonChannelType);
+        SetField(jc, jsonChannelType.BaseType!, "<Id>k__BackingField", id);
+        SetField(jc, jsonChannelType, "<Name>k__BackingField", name);
+
+        var channel = Uninitialized<CategoryGuildChannel>();
+        SetField(channel, typeof(CategoryGuildChannel).BaseType!, "_jsonModel", jc);
+        SetField(channel, typeof(CategoryGuildChannel), "<GuildId>k__BackingField", guildId);
+        SetField(channel, typeof(CategoryGuildChannel), "<PermissionOverwrites>k__BackingField", new Dictionary<ulong, PermissionOverwrite>());
 
         return channel;
     }
@@ -357,6 +379,62 @@ internal static class NetCordTestHelpers
         var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
         return new AutocompleteInteractionContext(interaction, gatewayClient);
     }
+
+    /// <summary>
+    /// Minimal <see cref="JsonMessage"/> for the message a component interaction is attached to —
+    /// <c>MessageComponentInteraction</c>'s ctor (unlike <c>SlashCommandInteraction</c>'s) unconditionally
+    /// reads it to build its own <c>Message</c>, and dereferences several of its array properties the
+    /// same unconditional way <see cref="MakeBaseJsonInteraction"/>'s doc already describes.
+    /// </summary>
+    private static JsonMessage MakeBaseJsonMessage() => new()
+    {
+        Id = 1,
+        ChannelId = 1,
+        Author = new JsonUser { Id = 1 },
+        Content = "",
+        MentionedUsers = [],
+        MentionedRoleIds = [],
+        MentionedChannels = [],
+        Attachments = [],
+        Embeds = [],
+        Reactions = [],
+        Components = [],
+        Stickers = [],
+        MessageSnapshots = [],
+    };
+
+    /// <summary>Same shape as <see cref="MakeSlashCommandContext"/>, for a button click's <see cref="ButtonInteractionContext"/>.</summary>
+    internal static ButtonInteractionContext MakeButtonInteractionContext(ulong userId, Guild? guild, RestClient rest)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+        jsonInteraction.User = new JsonUser { Id = userId };
+        jsonInteraction.Message = MakeBaseJsonMessage();
+
+        var interaction = new ButtonInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new ButtonInteractionContext(interaction, gatewayClient);
+    }
+
+    /// <summary>Same shape as <see cref="MakeSlashCommandContext"/>, for a select menu's <see cref="StringMenuInteractionContext"/> — <paramref name="selectedValues"/> becomes <c>Context.SelectedValues</c>.</summary>
+    internal static StringMenuInteractionContext MakeStringMenuInteractionContext(ulong userId, Guild? guild, RestClient rest, params string[] selectedValues)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+        jsonInteraction.User = new JsonUser { Id = userId };
+        jsonInteraction.Message = MakeBaseJsonMessage();
+        jsonInteraction.Data = new JsonInteractionData { Id = 1, SelectedValues = selectedValues };
+
+        var interaction = new StringMenuInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new StringMenuInteractionContext(interaction, gatewayClient);
+    }
+
+    /// <summary>
+    /// <see cref="MessageOptions"/> (the type <c>ModifyResponseAsync(Action&lt;MessageOptions&gt;)</c>
+    /// mutates) has no accessible constructor from outside NetCord — same reflection workaround as
+    /// every other constructor-less type in this file. Its <c>With*</c> methods only ever write their
+    /// own backing fields, so a skipped constructor is safe here.
+    /// </summary>
+    internal static MessageOptions MakeMessageOptions() => Uninitialized<MessageOptions>();
 
     /// <summary>
     /// The delegate an <see cref="NetCord.Interaction"/> uses for its very first response

@@ -1,14 +1,13 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Raids.Events.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 using RaidOps.Domain.Enums;
-using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
-using RaidOps.Domain.Models.Reference;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -20,9 +19,10 @@ public class DeleteRaidEventCommandHandlerTests
     private readonly Mock<IRaidEventRepository> _raidEventRepository = new();
     private readonly Mock<IGuildsRepository> _guildsRepository = new();
     private readonly Mock<IAuditLogService> _auditLogService = new();
-    private readonly Mock<IGuildNotificationDispatcher> _guildNotificationDispatcher = new();
-    private readonly Mock<IRaidNotificationContentBuilder> _raidNotificationContentBuilder = new();
-    private readonly Mock<IRaidCompositionAnnouncementService> _raidCompositionAnnouncementService = new();
+    private readonly Mock<IRaidEventDeletionNotifier> _raidEventDeletionNotifier = new();
+    private readonly Mock<IDiscordBotService> _discordBotService = new();
+    private readonly Mock<IGuildService> _guildService = new();
+    private readonly Mock<ILogger<DeleteRaidEventCommandHandler>> _logger = new();
     private readonly DeleteRaidEventCommandHandler _sut;
 
     private const string GuildId = "guild-1";
@@ -32,9 +32,10 @@ public class DeleteRaidEventCommandHandlerTests
 
     public DeleteRaidEventCommandHandlerTests()
     {
+        _discordBotService.Setup(d => d.Guilds).Returns(_guildService.Object);
         _sut = new DeleteRaidEventCommandHandler(
             _access.Object, _raidEventRepository.Object, _guildsRepository.Object, _auditLogService.Object,
-            _guildNotificationDispatcher.Object, _raidNotificationContentBuilder.Object, _raidCompositionAnnouncementService.Object);
+            _raidEventDeletionNotifier.Object, _discordBotService.Object, _logger.Object);
     }
 
     private static DeleteRaidEventCommand MakeCommand() => new()
@@ -110,71 +111,87 @@ public class DeleteRaidEventCommandHandlerTests
             default), Times.Once);
     }
 
-    // ── Draft vs Published notification gating ──────────────────────────────
+    [Fact]
+    public async Task HandleAsync_Success_NotifiesDeletionWithTheDeletedEvent()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        var existing = new RaidEvent { Id = EventId, Name = "Split 1", PublicationStatus = RaidPublicationStatus.Published };
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(existing);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventDeletionNotifier.Verify(n => n.NotifyAsync(GuildId, RequesterId, GuildBranchId, existing, default), Times.Once);
+    }
 
     [Fact]
-    public async Task HandleAsync_DraftEvent_Succeeds_ButDoesNotNotify()
+    public async Task HandleAsync_NotOfficer_DoesNotNotify()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+
+        await _sut.HandleAsync(MakeCommand());
+
+        _raidEventDeletionNotifier.Verify(n => n.NotifyAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<RaidEvent>(), default), Times.Never);
+    }
+
+    // ── Bot-owned dedicated channel cleanup ──────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_BotOwnedChannel_DeletesTheChannel()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
         {
-            Id = EventId,
-            Name = "Split 1",
-            PublicationStatus = RaidPublicationStatus.Draft,
+            Id = EventId, Name = "Split 1", DedicatedAnnouncementChannelId = "999", DedicatedAnnouncementChannelIsBotOwned = true,
         });
 
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsSuccess.Should().BeTrue();
-        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(
-            It.IsAny<string>(), It.IsAny<GuildNotificationEventType>(), It.IsAny<int?>(), It.IsAny<DiscordEmbedContent>(), default), Times.Never);
+        _guildService.Verify(g => g.DeleteChannelAsync("999", default), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_PublishedEvent_BuildsAndDispatchesCancelledNotification()
+    public async Task HandleAsync_NotBotOwnedChannel_NeverDeletesTheChannel()
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        var existing = new RaidEvent { Id = EventId, Name = "Split 1", PublicationStatus = RaidPublicationStatus.Published };
-        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(existing);
-        var embed = new DiscordEmbedContent("Raid cancelled");
-        _raidNotificationContentBuilder.Setup(b => b.BuildCancelledAsync(GuildId, RequesterId, existing, default)).ReturnsAsync(embed);
-
-        var result = await _sut.HandleAsync(MakeCommand());
-
-        result.IsSuccess.Should().BeTrue();
-        _guildNotificationDispatcher.Verify(d => d.NotifyAsync(GuildId, GuildNotificationEventType.RaidCancelled, GuildBranchId, embed, default), Times.Once);
-    }
-
-    [Fact]
-    public async Task HandleAsync_PublishedEvent_DeletesAnnouncementAndNotifiesEveryAssignedPlayerOfCancellation()
-    {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        var assignments = new List<RaidSlotAssignment>
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
         {
-            new()
-            {
-                AssignedPlayerDiscordId = "player-1",
-                Character = new Character { Id = 1, Name = "Arthas", ClassId = 6 },
-                Spec = new Spec { Name = "Blood" },
-            },
-            new()
-            {
-                AssignedPlayerDiscordId = "player-2",
-                Character = new Character { Id = 2, Name = "Jaina", ClassId = 8 },
-                Spec = new Spec { Name = "Frost" },
-            },
-        };
-        var existing = new RaidEvent { Id = EventId, Name = "Split 1", PublicationStatus = RaidPublicationStatus.Published, Assignments = assignments };
-        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(existing);
-        _raidNotificationContentBuilder.Setup(b => b.BuildCancelledAsync(GuildId, RequesterId, existing, default)).ReturnsAsync(new DiscordEmbedContent("Raid cancelled"));
+            Id = EventId, Name = "Split 1", DedicatedAnnouncementChannelId = "999", DedicatedAnnouncementChannelIsBotOwned = false,
+        });
 
         var result = await _sut.HandleAsync(MakeCommand());
 
         result.IsSuccess.Should().BeTrue();
-        _raidCompositionAnnouncementService.Verify(s => s.DeleteAnnouncementAsync(existing, default), Times.Once);
-        _raidCompositionAnnouncementService.Verify(s => s.NotifyPlayerRaidCancelledAsync(
-            existing, "player-1", It.Is<RaidCharacterRef>(c => c.Name == "Arthas" && c.ClassId == 6 && c.SpecName == "Blood"), default), Times.Once);
-        _raidCompositionAnnouncementService.Verify(s => s.NotifyPlayerRaidCancelledAsync(
-            existing, "player-2", It.Is<RaidCharacterRef>(c => c.Name == "Jaina" && c.ClassId == 8 && c.SpecName == "Frost"), default), Times.Once);
+        _guildService.Verify(g => g.DeleteChannelAsync(It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoChannel_NeverCallsDeleteChannel()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Name = "Split 1" });
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _guildService.Verify(g => g.DeleteChannelAsync(It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ChannelDeleteThrows_StillSucceeds()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId, Name = "Split 1", DedicatedAnnouncementChannelId = "999", DedicatedAnnouncementChannelIsBotOwned = true,
+        });
+        _guildService.Setup(g => g.DeleteChannelAsync("999", default)).ThrowsAsync(new InvalidOperationException("already gone"));
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.DeleteAsync(EventId, GuildBranchId, default), Times.Once);
     }
 }

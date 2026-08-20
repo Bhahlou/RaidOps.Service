@@ -19,16 +19,23 @@ public class RaidCompositionAnnouncementService(
     /// <inheritdoc/>
     public async Task PublishOrUpdateAnnouncementAsync(RaidEvent raidEvent, CancellationToken cancellationToken = default)
     {
-        var setting = await notificationSettingsRepository.GetAsync(
-            raidEvent.GuildId, GuildNotificationEventType.RaidCompositionAnnouncementPosted, raidEvent.GuildBranchId, cancellationToken);
-        if (setting is not { Enabled: true, ChannelId: not null })
-            return;
+        // An explicit per-raid channel choice is itself the opt-in, independent of the guild-wide toggle.
+        string? resolvedChannelId = raidEvent.DedicatedAnnouncementChannelId;
+        if (resolvedChannelId is null)
+        {
+            var setting = await notificationSettingsRepository.GetAsync(
+                raidEvent.GuildId, GuildNotificationEventType.RaidCompositionAnnouncementPosted, raidEvent.GuildBranchId, cancellationToken);
+            if (setting is not { Enabled: true, ChannelId: not null })
+                return;
+
+            resolvedChannelId = setting.ChannelId;
+        }
 
         try
         {
             var assignments = await raidCompositionRepository.GetAssignmentsForEventAsync(raidEvent.Id, cancellationToken);
             var embed = await contentBuilder.BuildCompositionAnnouncementAsync(raidEvent.GuildId, raidEvent, assignments, cancellationToken);
-            var channelId = ulong.Parse(setting.ChannelId);
+            var channelId = ulong.Parse(resolvedChannelId);
 
             if (raidEvent.CompositionAnnouncementChannelId is null || raidEvent.CompositionAnnouncementMessageId is null)
             {
