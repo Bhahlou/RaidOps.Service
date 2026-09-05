@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.7.0...v1.8.0) (2026-09-05)
+
+
+### 🚀 Features
+
+* Let a raid event extend another raid event's lockout across multiple nights ([#79](https://github.com/Bhahlou/RaidOps.Service/issues/79)) ([4fa5cf4](https://github.com/Bhahlou/RaidOps.Service/commit/4fa5cf4307a52f91d310aba047ea6e2f51955193))
+
 ## [1.7.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.6.0...v1.7.0) (2026-08-20)
 
 
