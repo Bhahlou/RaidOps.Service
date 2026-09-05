@@ -36,6 +36,18 @@ public class CreateAdhocRaidEventCommandHandler(
 
         var distinctZoneIds = validation.Value!;
 
+        int? extendsRaidEventId = null;
+        if (command.ExtendsRaidEventId is { } requestedExtendsId)
+        {
+            var extendsTarget = await raidEventRepository.GetByIdAsync(requestedExtendsId, command.GuildBranchId, cancellationToken);
+            if (extendsTarget == null)
+                return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{requestedExtendsId}' does not exist on this guild branch.");
+
+            // Normalized to the chain's root (never an intermediate link) so any two events in the
+            // same extension group compare equal with a single field, no graph walk needed.
+            extendsRaidEventId = extendsTarget.ExtendsRaidEventId ?? extendsTarget.Id;
+        }
+
         var branch = await guildBranchesRepository.GetByIdAsync(command.GuildBranchId, cancellationToken);
 
         // PublicationStatus is left unset here, relying on RaidEvent's own Draft default —
@@ -45,6 +57,7 @@ public class CreateAdhocRaidEventCommandHandler(
             GuildId = command.GuildId,
             GuildBranchId = command.GuildBranchId,
             RaidSeriesId = null,
+            ExtendsRaidEventId = extendsRaidEventId,
             Name = command.Name,
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,

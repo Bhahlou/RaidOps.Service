@@ -23,6 +23,9 @@ namespace RaidOps.Application.Implementations.Raids.Events.CommandHandlers;
 /// channel, their references cleared, the signup-call embed re-posted fresh in the new channel
 /// (Signup-mode events only), and the old channel itself deleted if RaidOps had created it just for
 /// this event — see <see cref="Domain.Models.Raids.RaidEvent.DedicatedAnnouncementChannelIsBotOwned"/>.
+/// Changing <see cref="UpdateRaidEventCommand.ExtendsRaidEventId"/> re-normalizes to the target's
+/// chain root exactly like creation, and — if this event was itself a chain's root with other events
+/// pointing at it — re-points those over to the new root so the flattening invariant survives the edit.
 /// </summary>
 public class UpdateRaidEventCommandHandler(
     IGuildAccessService guildAccessService,
@@ -57,6 +60,23 @@ public class UpdateRaidEventCommandHandler(
         if (zones.Count != distinctZoneIds.Count)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidZoneNotFound, "One or more raid zones do not exist.");
 
+        int? extendsRaidEventId = null;
+        if (command.ExtendsRaidEventId is { } requestedExtendsId)
+        {
+            if (requestedExtendsId == command.EventId)
+                return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "A raid event cannot extend itself.");
+
+            var extendsTarget = await raidEventRepository.GetByIdAsync(requestedExtendsId, command.GuildBranchId, cancellationToken);
+            if (extendsTarget == null)
+                return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{requestedExtendsId}' does not exist on this guild branch.");
+
+            // Normalized to the chain's root, same as creation — see CreateAdhocRaidEventCommandHandler.
+            extendsRaidEventId = extendsTarget.ExtendsRaidEventId ?? extendsTarget.Id;
+
+            if (extendsRaidEventId == command.EventId)
+                return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "This raid event is already part of that extension chain — it can't extend it too.");
+        }
+
         var channelChanged = command.DedicatedAnnouncementChannelId != existing.DedicatedAnnouncementChannelId;
 
         var raidEvent = new RaidEvent
@@ -66,6 +86,7 @@ public class UpdateRaidEventCommandHandler(
             StartsAtUtc = command.StartsAtUtc,
             GroupCount = command.GroupCount,
             SlotsPerGroup = command.SlotsPerGroup,
+            ExtendsRaidEventId = extendsRaidEventId,
             DedicatedAnnouncementChannelId = command.DedicatedAnnouncementChannelId,
             DedicatedAnnouncementChannelIsBotOwned = command.DedicatedAnnouncementChannelId is not null && command.DedicatedAnnouncementChannelIsBotOwned,
             UpdatedAt = DateTime.UtcNow,
@@ -74,6 +95,11 @@ public class UpdateRaidEventCommandHandler(
         var updated = await raidEventRepository.UpdateAsync(raidEvent, command.GuildBranchId, distinctZoneIds, cancellationToken);
         if (!updated)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
+
+        // If this event was itself an extension chain's root (other events pointing at it), keep the
+        // flattening invariant intact by re-pointing them straight at wherever this event now points.
+        if (extendsRaidEventId != existing.ExtendsRaidEventId)
+            await raidEventRepository.RepointExtensionChainAsync(command.EventId, extendsRaidEventId, command.GuildBranchId, cancellationToken);
 
         if (channelChanged)
             await raidEventUpdateNotifier.MoveDedicatedChannelAsync(command.EventId, command.GuildBranchId, existing, cancellationToken);

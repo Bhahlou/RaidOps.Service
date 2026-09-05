@@ -34,6 +34,13 @@ public class CreateAdhocRaidEventCommand : ICommandRequest
     public required List<int> RaidZoneIds { get; set; }
 
     /// <summary>
+    /// Surrogate ID of another raid event (in this same guild branch) whose lockout this one
+    /// extends — e.g. a second night on the same Black Temple lock. <c>null</c> for a standalone
+    /// event, the common case.
+    /// </summary>
+    public int? ExtendsRaidEventId { get; set; }
+
+    /// <summary>
     /// Overrides the guild branch's default <see cref="SignupMode"/> for this one event, e.g. an
     /// exceptional Signup-mode raid on an otherwise DefaultPresent branch. <c>null</c> means "use
     /// the branch default," the common case.

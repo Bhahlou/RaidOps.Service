@@ -38,6 +38,8 @@ public static class RaidEventResponseMapper
         {
             Id = raidEvent.Id,
             RaidSeriesId = raidEvent.RaidSeriesId,
+            ExtendsRaidEventId = raidEvent.ExtendsRaidEventId,
+            ExtendsRaidEventName = raidEvent.ExtendsRaidEvent?.Name,
             Name = raidEvent.Name,
             BranchId = raidEvent.GuildBranch.BranchId,
             BranchName = raidEvent.GuildBranch.Branch.Name,

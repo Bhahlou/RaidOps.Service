@@ -88,6 +88,13 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task GetEventChoices_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/choices?aroundStartsAtUtc=2026-01-01T20:00:00Z");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task CreateEvent_WithoutToken_Returns401()
     {
         var response = await Client.PostAsJsonAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events", new { });
@@ -284,6 +291,16 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         var client = CreateClientWithoutSubClaim();
 
         var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/board?rangeStart=2026-01-01&rangeEnd=2026-01-07");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetEventChoices_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/630000000000000001/branches/1/raids/events/choices?aroundStartsAtUtc=2026-01-01T20:00:00Z");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -802,6 +819,158 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             ev.Status.Should().Be(RaidEventStatus.Scheduled);
             ev.PublicationStatus.Should().Be(RaidPublicationStatus.Draft);
         }
+    }
+
+    [Fact]
+    public async Task CreateEvent_WithExtendsRaidEventId_PersistsNormalizedLink()
+    {
+        const string id = "610000000000000200";
+        const string guildId = "630000000000000200";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var rootEventId = await CreateAdhocEventAsync(client, guildId, branchId);
+
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId, extendsRaidEventId: rootEventId);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var ev = await db.RaidEvents.FirstAsync(e => e.Id == eventId);
+            ev.ExtendsRaidEventId.Should().Be(rootEventId);
+        }
+    }
+
+    [Fact]
+    public async Task CreateEvent_ExtendsAnAlreadyExtendingEvent_NormalizesToChainRoot()
+    {
+        const string id = "610000000000000201";
+        const string guildId = "630000000000000201";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var rootEventId = await CreateAdhocEventAsync(client, guildId, branchId);
+        var middleEventId = await CreateAdhocEventAsync(client, guildId, branchId, extendsRaidEventId: rootEventId);
+
+        // Extending the middle link must flatten straight to the root, not to the middle event.
+        var thirdEventId = await CreateAdhocEventAsync(client, guildId, branchId, extendsRaidEventId: middleEventId);
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var ev = await db.RaidEvents.FirstAsync(e => e.Id == thirdEventId);
+            ev.ExtendsRaidEventId.Should().Be(rootEventId);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateEvent_ExtendsSelf_Returns400()
+    {
+        const string id = "610000000000000202";
+        const string guildId = "630000000000000202";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var eventId = await CreateAdhocEventAsync(client, guildId, branchId);
+
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{eventId}", JsonContent.Create(new
+        {
+            name = "One-shot event",
+            startsAtUtc = DateTime.UtcNow.AddDays(3),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+            extendsRaidEventId = eventId,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("InvalidRequest");
+    }
+
+    [Fact]
+    public async Task UpdateEvent_ChangingRootsLink_RepointsFormerChildrenToTheNewRoot()
+    {
+        const string id = "610000000000000203";
+        const string guildId = "630000000000000203";
+        var branchId = await SeedGuildAndBranch(id, guildId);
+        var client = CreateAuthenticatedClient(discordId: id);
+        var rootEventId = await CreateAdhocEventAsync(client, guildId, branchId);
+        var childEventId = await CreateAdhocEventAsync(client, guildId, branchId, extendsRaidEventId: rootEventId);
+        var newRootEventId = await CreateAdhocEventAsync(client, guildId, branchId);
+
+        // rootEventId was a chain root with childEventId pointing at it — re-pointing rootEventId's
+        // own link must carry childEventId along to the new root too.
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/{rootEventId}", JsonContent.Create(new
+        {
+            name = "One-shot event",
+            startsAtUtc = DateTime.UtcNow.AddDays(3),
+            groupCount = 2,
+            slotsPerGroup = 5,
+            raidZoneIds = DefaultZoneIds,
+            extendsRaidEventId = newRootEventId,
+        }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            (await db.RaidEvents.FirstAsync(e => e.Id == rootEventId)).ExtendsRaidEventId.Should().Be(newRootEventId);
+            (await db.RaidEvents.FirstAsync(e => e.Id == childEventId)).ExtendsRaidEventId.Should().Be(newRootEventId);
+        }
+    }
+
+    [Fact]
+    public async Task GetEventChoices_NotOfficer_Returns400()
+    {
+        const string id = "610000000000000204";
+        const string guildId = "630000000000000204";
+        var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/choices?aroundStartsAtUtc=2026-02-05T20:00:00Z");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("Forbidden");
+    }
+
+    [Fact]
+    public async Task GetEventChoices_ReturnsEventsOnThisBranchWithinTheLockoutWindow()
+    {
+        const string id = "610000000000000205";
+        const string guildId = "630000000000000205";
+        var branchId = await SeedGuildAndBranch(id, guildId, region: "eu");
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        // Same weekly lockout window as the reference date (a few days apart, far from any reset).
+        var nearbyEventId = await CreateAdhocEventAsync(client, guildId, branchId, startsAtUtc: new DateTime(2026, 2, 5, 20, 0, 0, DateTimeKind.Utc));
+        // Roughly 5 months out — outside any weekly window around the reference date.
+        var farAwayEventId = await CreateAdhocEventAsync(client, guildId, branchId, startsAtUtc: new DateTime(2026, 7, 5, 20, 0, 0, DateTimeKind.Utc));
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/raids/events/choices?aroundStartsAtUtc=2026-02-05T20:00:01Z");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var choices = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+        choices.Should().ContainSingle(c => c.GetProperty("id").GetInt32() == nearbyEventId);
+        choices.Should().NotContain(c => c.GetProperty("id").GetInt32() == farAwayEventId);
+    }
+
+    [Fact]
+    public async Task AssignSlot_SameCharacterAcrossTwoEventsInSameExtensionChain_Succeeds()
+    {
+        const string id = "610000000000000206";
+        const string guildId = "630000000000000206";
+        var branchId = await SeedGuildAndBranch(id, guildId, region: "eu");
+        var client = CreateAuthenticatedClient(discordId: id);
+        var characterId = await SeedCharacterOnRoster(id, guildId, branchId, bnetCharacterId: 610206001);
+
+        // Same two instants as the "ReturnsLockoutConflict" regression test — the only difference is
+        // eventB explicitly extends eventA's lockout this time.
+        var eventA = await CreateAdhocEventAsync(client, guildId, branchId, startsAtUtc: new DateTime(2026, 2, 5, 20, 0, 0, DateTimeKind.Utc));
+        var eventB = await CreateAdhocEventAsync(client, guildId, branchId, startsAtUtc: new DateTime(2026, 2, 5, 20, 0, 1, DateTimeKind.Utc), extendsRaidEventId: eventA);
+        await AssignSlotAsync(client, guildId, branchId, eventA, characterId, groupNumber: 1, slotNumber: 1);
+
+        var response = await AssignSlotAsync(client, guildId, branchId, eventB, characterId, groupNumber: 1, slotNumber: 1);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -1511,7 +1680,9 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         return json.GetProperty("body").GetProperty("id").GetInt32();
     }
 
-    private static async Task<int> CreateAdhocEventAsync(HttpClient client, string guildId, int guildBranchId, DateTime? startsAtUtc = null, int[]? zoneIds = null, SignupMode? signupModeOverride = null)
+    private static async Task<int> CreateAdhocEventAsync(
+        HttpClient client, string guildId, int guildBranchId, DateTime? startsAtUtc = null, int[]? zoneIds = null,
+        SignupMode? signupModeOverride = null, int? extendsRaidEventId = null)
     {
         var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events", new
         {
@@ -1521,6 +1692,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
             slotsPerGroup = 5,
             raidZoneIds = zoneIds ?? DefaultZoneIds,
             signupModeOverride,
+            extendsRaidEventId,
         });
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         return json.GetProperty("body").GetProperty("id").GetInt32();

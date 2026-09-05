@@ -37,6 +37,9 @@ public class UpdateRaidEventCommand : ICommandRequest
     /// <summary>IDs of the raid zones this event targets. Must contain at least one zone.</summary>
     public required List<int> RaidZoneIds { get; set; }
 
+    /// <inheritdoc cref="CreateAdhocRaidEventCommand.ExtendsRaidEventId"/>
+    public int? ExtendsRaidEventId { get; set; }
+
     /// <summary>
     /// Discord snowflake ID of a dedicated channel this event's raid-related notifications should
     /// all post to, or <c>null</c>. Only ever changed for a <see cref="Domain.Enums.SignupMode.Signup"/>

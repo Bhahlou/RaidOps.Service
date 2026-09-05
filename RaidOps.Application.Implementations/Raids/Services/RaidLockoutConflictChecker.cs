@@ -27,6 +27,7 @@ public class RaidLockoutConflictChecker(
         var guildOverrides = await raidZoneRepository.GetGuildOverridesAsync(guildId, targetZoneIds, cancellationToken);
         var guildOverridesByZone = guildOverrides.ToDictionary(o => o.RaidZoneId);
         var otherAssignments = await raidCompositionRepository.GetActiveAssignmentsForCharacterInGuildBranchAsync(characterId, guildBranchId, cancellationToken);
+        var extensionGroupKey = raidEvent.ExtendsRaidEventId ?? raidEvent.Id;
 
         foreach (var zone in zones)
         {
@@ -50,6 +51,9 @@ public class RaidLockoutConflictChecker(
             {
                 if (other.RaidEventId == raidEvent.Id)
                     continue; // same event — not a cross-event conflict
+
+                if ((other.RaidEvent.ExtendsRaidEventId ?? other.RaidEvent.Id) == extensionGroupKey)
+                    continue; // same extension chain — sharing the lockout window is intentional
 
                 if (!other.RaidEvent.TargetZones.Any(z => z.RaidZoneId == zone.Id))
                     continue;
