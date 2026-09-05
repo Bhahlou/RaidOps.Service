@@ -144,4 +144,28 @@ public class GetRaidEventChoicesForBranchQueryHandlerTests
         // 2026-02-05 20:00 UTC -> Europe/Paris is UTC+1 in February (no DST) -> 21:00 local.
         choice.StartsAtLocal.Should().Be(new DateTime(2026, 2, 5, 21, 0, 0));
     }
+
+    [Fact]
+    public async Task HandleAsync_GuildNotFound_FallsBackToUtcForStartsAtLocal()
+    {
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, GuildId = GuildId, Region = null });
+        _guildsRepository.Setup(g => g.GetByIdAsync(GuildId, default)).ReturnsAsync((Guild?)null);
+        var startsAtUtc = new DateTime(2026, 2, 5, 20, 0, 0, DateTimeKind.Utc);
+        _raidEventRepository.Setup(r => r.GetForGuildBranchInRangeAsync(GuildBranchId, It.IsAny<DateTime>(), It.IsAny<DateTime>(), default)).ReturnsAsync(
+        [
+            new RaidEvent
+            {
+                Id = 77,
+                GuildBranchId = GuildBranchId,
+                Name = "Split 1",
+                StartsAtUtc = startsAtUtc,
+                GuildBranch = new GuildBranch { Id = GuildBranchId, Branch = new Branch { Name = "Classic Era" } },
+            },
+        ]);
+
+        var result = await _sut.HandleAsync(MakeQuery(), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Should().ContainSingle().Which.StartsAtLocal.Should().Be(startsAtUtc);
+    }
 }

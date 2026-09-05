@@ -60,22 +60,10 @@ public class UpdateRaidEventCommandHandler(
         if (zones.Count != distinctZoneIds.Count)
             return Result<CommandResponse>.Fail(ResponseDetail.RaidZoneNotFound, "One or more raid zones do not exist.");
 
-        int? extendsRaidEventId = null;
-        if (command.ExtendsRaidEventId is { } requestedExtendsId)
-        {
-            if (requestedExtendsId == command.EventId)
-                return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "A raid event cannot extend itself.");
-
-            var extendsTarget = await raidEventRepository.GetByIdAsync(requestedExtendsId, command.GuildBranchId, cancellationToken);
-            if (extendsTarget == null)
-                return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{requestedExtendsId}' does not exist on this guild branch.");
-
-            // Normalized to the chain's root, same as creation — see CreateAdhocRaidEventCommandHandler.
-            extendsRaidEventId = extendsTarget.ExtendsRaidEventId ?? extendsTarget.Id;
-
-            if (extendsRaidEventId == command.EventId)
-                return Result<CommandResponse>.Fail(ResponseDetail.InvalidRequest, "This raid event is already part of that extension chain — it can't extend it too.");
-        }
+        var extendsResolution = await ResolveExtendsRaidEventIdAsync(command.ExtendsRaidEventId, command.EventId, command.GuildBranchId, cancellationToken);
+        if (extendsResolution.IsFailed)
+            return Result<CommandResponse>.Fail(extendsResolution.Error!, extendsResolution.Detail);
+        var extendsRaidEventId = extendsResolution.Value!.Value;
 
         var channelChanged = command.DedicatedAnnouncementChannelId != existing.DedicatedAnnouncementChannelId;
 
@@ -127,4 +115,37 @@ public class UpdateRaidEventCommandHandler(
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid event updated successfully."));
     }
+
+    /// <summary>
+    /// Resolves <paramref name="requestedExtendsId"/> (the raw value off the command) to the value
+    /// actually persisted on <see cref="RaidEvent.ExtendsRaidEventId"/> — <c>null</c> for a
+    /// standalone event, otherwise normalized to the target's chain root exactly like
+    /// <c>CreateAdhocRaidEventCommandHandler</c>. Fails if the target doesn't exist, is this event
+    /// itself, or would create a cycle (its chain already ends at <paramref name="eventId"/>).
+    /// </summary>
+    private async Task<Result<ExtendsRaidEventIdResolution>> ResolveExtendsRaidEventIdAsync(int? requestedExtendsId, int eventId, int guildBranchId, CancellationToken cancellationToken)
+    {
+        if (requestedExtendsId is not { } id)
+            return Result<ExtendsRaidEventIdResolution>.Ok(new ExtendsRaidEventIdResolution(null));
+
+        if (id == eventId)
+            return Result<ExtendsRaidEventIdResolution>.Fail(ResponseDetail.InvalidRequest, "A raid event cannot extend itself.");
+
+        var extendsTarget = await raidEventRepository.GetByIdAsync(id, guildBranchId, cancellationToken);
+        if (extendsTarget == null)
+            return Result<ExtendsRaidEventIdResolution>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{id}' does not exist on this guild branch.");
+
+        var resolvedId = extendsTarget.ExtendsRaidEventId ?? extendsTarget.Id;
+        if (resolvedId == eventId)
+            return Result<ExtendsRaidEventIdResolution>.Fail(ResponseDetail.InvalidRequest, "This raid event is already part of that extension chain — it can't extend it too.");
+
+        return Result<ExtendsRaidEventIdResolution>.Ok(new ExtendsRaidEventIdResolution(resolvedId));
+    }
+
+    /// <summary>
+    /// Non-null wrapper around the actually-nullable resolved value — <see cref="Result{TSuccess}.Ok"/>
+    /// rejects a literal <c>null</c> success value, so "standalone event" (a legitimate success
+    /// outcome) has to be boxed in something itself non-null.
+    /// </summary>
+    private sealed record ExtendsRaidEventIdResolution(int? Value);
 }
