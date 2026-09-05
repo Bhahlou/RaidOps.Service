@@ -25,6 +25,15 @@ public interface IRaidEventRepository
     Task<bool> UpdateAsync(RaidEvent raidEvent, int guildBranchId, IEnumerable<int> raidZoneIds, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Re-points every event whose <see cref="RaidEvent.ExtendsRaidEventId"/> is <paramref name="oldRootId"/>
+    /// over to <paramref name="newRootId"/> instead. Keeps the extension-chain flattening invariant
+    /// intact (every non-root event points directly at its chain's root, never at an intermediate
+    /// link) when the root itself is edited to join a different chain or become standalone — a no-op
+    /// when nothing currently points at <paramref name="oldRootId"/>.
+    /// </summary>
+    Task RepointExtensionChainAsync(int oldRootId, int? newRootId, int guildBranchId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Sets <see cref="RaidEvent.PublicationStatus"/> to <see cref="RaidPublicationStatus.Published"/>,
     /// stamping <see cref="RaidEvent.PublishedAt"/> (UTC now) and <see cref="RaidEvent.PublishedByDiscordId"/>.
     /// Returns <c>false</c> if no matching event exists on <paramref name="guildBranchId"/>.

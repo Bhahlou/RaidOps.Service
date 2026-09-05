@@ -25,6 +25,17 @@ public class RaidEvent
     /// <summary>FK to the series this occurrence was materialized from, or <c>null</c> for an ad-hoc event.</summary>
     public int? RaidSeriesId { get; set; }
 
+    /// <summary>
+    /// FK to another <see cref="RaidEvent"/> whose lockout this occurrence extends — the WoW notion
+    /// of extending a raid ID across several nights (e.g. the same Black Temple lock carried from
+    /// Tuesday into Thursday) rather than resetting it. When set, the lockout conflict checker no
+    /// longer treats a character assigned to both events as a lockout conflict. Always normalized
+    /// to the extension chain's root event at creation (never an intermediate link), so comparing two
+    /// events for same-chain membership is a single equality check instead of a graph walk. <c>null</c>
+    /// for a standalone event, including a chain's own root.
+    /// </summary>
+    public int? ExtendsRaidEventId { get; set; }
+
     /// <summary>Display name (e.g. "Split 1").</summary>
     [Required, MaxLength(128)]
     public string Name { get; set; } = string.Empty;
@@ -126,6 +137,9 @@ public class RaidEvent
 
     /// <summary>The series this occurrence was materialized from, or <c>null</c> for an ad-hoc event.</summary>
     public virtual RaidSeries? RaidSeries { get; set; }
+
+    /// <summary>The event whose lockout this occurrence extends, or <c>null</c> for a standalone event.</summary>
+    public virtual RaidEvent? ExtendsRaidEvent { get; set; }
 
     /// <summary>The guild branch this event targets.</summary>
     public virtual GuildBranch GuildBranch { get; set; } = null!;

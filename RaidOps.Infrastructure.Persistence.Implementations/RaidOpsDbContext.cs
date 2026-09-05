@@ -510,6 +510,14 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(e => e.RaidSeriesId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Self-referencing — deleting the root event of an extension chain just detaches the link
+        // rather than taking the nights that extended it down too.
+        modelBuilder.Entity<RaidEvent>()
+            .HasOne(e => e.ExtendsRaidEvent)
+            .WithMany()
+            .HasForeignKey(e => e.ExtendsRaidEventId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<RaidEvent>()
             .HasIndex(e => new { e.GuildId, e.StartsAtUtc });
 

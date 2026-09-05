@@ -20,6 +20,7 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
             .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
             .Include(e => e.Assignments).ThenInclude(a => a.Spec)
             .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(e => e.ExtendsRaidEvent)
             .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
@@ -32,6 +33,7 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
             .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
             .Include(e => e.Assignments).ThenInclude(a => a.Spec)
             .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(e => e.ExtendsRaidEvent)
             .AsSplitQuery()
             .AsNoTracking()
             .OrderBy(e => e.StartsAtUtc)
@@ -61,6 +63,7 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
         existing.StartsAtUtc = raidEvent.StartsAtUtc;
         existing.GroupCount = raidEvent.GroupCount;
         existing.SlotsPerGroup = raidEvent.SlotsPerGroup;
+        existing.ExtendsRaidEventId = raidEvent.ExtendsRaidEventId;
         existing.DedicatedAnnouncementChannelId = raidEvent.DedicatedAnnouncementChannelId;
         existing.DedicatedAnnouncementChannelIsBotOwned = raidEvent.DedicatedAnnouncementChannelIsBotOwned;
         existing.UpdatedAt = raidEvent.UpdatedAt;
@@ -82,6 +85,14 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
         context.RaidEventZones.AddRange(freshZones);
         await context.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    /// <inheritdoc/>
+    public async Task RepointExtensionChainAsync(int oldRootId, int? newRootId, int guildBranchId, CancellationToken cancellationToken = default)
+    {
+        await context.RaidEvents
+            .Where(e => e.ExtendsRaidEventId == oldRootId && e.GuildBranchId == guildBranchId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(e => e.ExtendsRaidEventId, newRootId), cancellationToken);
     }
 
     /// <inheritdoc/>
