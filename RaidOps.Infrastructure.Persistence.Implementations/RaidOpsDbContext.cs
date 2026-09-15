@@ -4,6 +4,7 @@ using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
@@ -71,6 +72,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="Spec"/> lookup table, keyed by Blizzard specialisation ID.</summary>
     public DbSet<Spec> Specs => Set<Spec>();
 
+    /// <summary>Gets the <see cref="Spell"/> lookup table, keyed by Blizzard spell ID.</summary>
+    public DbSet<Spell> Spells => Set<Spell>();
+
     // ── Runtime data ──────────────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="Realm"/> table (on-demand BNet realm cache).</summary>
@@ -122,6 +126,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="RaidSignup"/> table (member Accepted/Tentative/Declined responses for Signup-mode events).</summary>
     public DbSet<RaidSignup> RaidSignups => Set<RaidSignup>();
+
+    /// <summary>Gets the <see cref="GuildAttributionDefinition"/> table (guild-wide raid-attribution templates).</summary>
+    public DbSet<GuildAttributionDefinition> GuildAttributionDefinitions => Set<GuildAttributionDefinition>();
+
+    /// <summary>Gets the <see cref="AttributionDefinitionCell"/> table (ordered icon/name-slot cells within a row).</summary>
+    public DbSet<AttributionDefinitionCell> AttributionDefinitionCells => Set<AttributionDefinitionCell>();
+
+    /// <summary>Gets the <see cref="RaidEventAttribution"/> table (sparse per-event attribution fills).</summary>
+    public DbSet<RaidEventAttribution> RaidEventAttributions => Set<RaidEventAttribution>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -598,6 +611,63 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .WithMany()
             .HasForeignKey(s => s.SpecId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // GuildAttributionDefinition — surrogate PK, guild-wide only (no branch override)
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasOne(d => d.Guild)
+            .WithMany()
+            .HasForeignKey(d => d.GuildId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasIndex(d => new { d.GuildId, d.SortOrder });
+
+        // AttributionDefinitionCell — surrogate PK, ordered children of a GuildAttributionDefinition
+        modelBuilder.Entity<AttributionDefinitionCell>()
+            .HasOne(c => c.GuildAttributionDefinition)
+            .WithMany(d => d.Cells)
+            .HasForeignKey(c => c.GuildAttributionDefinitionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AttributionDefinitionCell>()
+            .HasOne(c => c.Spell)
+            .WithMany()
+            .HasForeignKey(c => c.SpellId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AttributionDefinitionCell>()
+            .HasIndex(c => new { c.GuildAttributionDefinitionId, c.CellIndex });
+
+        // RaidEventAttribution uses a composite primary key of event, cell and instance index.
+        // Deleting an event or a template row (which cascades its cells) drops its fills too.
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasKey(a => new { a.RaidEventId, a.AttributionDefinitionCellId, a.InstanceIndex });
+
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasOne(a => a.RaidEvent)
+            .WithMany()
+            .HasForeignKey(a => a.RaidEventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasOne(a => a.AttributionDefinitionCell)
+            .WithMany()
+            .HasForeignKey(a => a.AttributionDefinitionCellId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasOne(a => a.Character)
+            .WithMany()
+            .HasForeignKey(a => a.CharacterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Spell — static reference table, seeded via a JSON-driven upsert (see SpellSeeder) rather
+        // than EF HasData: row count per expansion doesn't fit in a generated migration file.
+        modelBuilder.Entity<Spell>()
+            .HasOne(s => s.Expansion)
+            .WithMany()
+            .HasForeignKey(s => s.ExpansionId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     // ── Static seed data ──────────────────────────────────────────────────
@@ -716,57 +786,57 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<Spec>().HasData(
             // ── Warrior ───────────────────────────────────────────────────
-            new Spec { Id = 71,   Name = "Arms",          Role = SpecRole.Dps,    ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_savageblow.jpg" },
-            new Spec { Id = 72,   Name = "Fury",          Role = SpecRole.Dps,    ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_innerrage.jpg" },
-            new Spec { Id = 73,   Name = "Protection",    Role = SpecRole.Tank,   ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_defensivestance.jpg" },
+            new Spec { Id = 71,   Name = "Arms",          Role = SpecRole.MeleeDps,  ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_savageblow.jpg" },
+            new Spec { Id = 72,   Name = "Fury",          Role = SpecRole.MeleeDps,  ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_innerrage.jpg" },
+            new Spec { Id = 73,   Name = "Protection",    Role = SpecRole.Tank,      ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_defensivestance.jpg" },
             // ── Paladin ───────────────────────────────────────────────────
-            new Spec { Id = 65,   Name = "Holy",          Role = SpecRole.Healer, ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_holybolt.jpg" },
-            new Spec { Id = 66,   Name = "Protection",    Role = SpecRole.Tank,   ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_paladin_shieldofthetemplar.jpg" },
-            new Spec { Id = 70,   Name = "Retribution",   Role = SpecRole.Dps,    ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_auraoflight.jpg" },
+            new Spec { Id = 65,   Name = "Holy",          Role = SpecRole.Healer,    ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_holybolt.jpg" },
+            new Spec { Id = 66,   Name = "Protection",    Role = SpecRole.Tank,      ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_paladin_shieldofthetemplar.jpg" },
+            new Spec { Id = 70,   Name = "Retribution",   Role = SpecRole.MeleeDps,  ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_auraoflight.jpg" },
             // ── Hunter ────────────────────────────────────────────────────
-            new Spec { Id = 253,  Name = "Beast Mastery", Role = SpecRole.Dps,    ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_bestialdiscipline.jpg" },
-            new Spec { Id = 254,  Name = "Marksmanship",  Role = SpecRole.Dps,    ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_focusedaim.jpg" },
-            new Spec { Id = 255,  Name = "Survival",      Role = SpecRole.Dps,    ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_camouflage.jpg" },
+            new Spec { Id = 253,  Name = "Beast Mastery", Role = SpecRole.RangedDps, ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_bestialdiscipline.jpg" },
+            new Spec { Id = 254,  Name = "Marksmanship",  Role = SpecRole.RangedDps, ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_focusedaim.jpg" },
+            new Spec { Id = 255,  Name = "Survival",      Role = SpecRole.MeleeDps,  ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_camouflage.jpg" },
             // ── Rogue ─────────────────────────────────────────────────────
-            new Spec { Id = 259,  Name = "Assassination", Role = SpecRole.Dps,    ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_deadlybrew.jpg" },
-            new Spec { Id = 260,  Name = "Outlaw",        Role = SpecRole.Dps,    ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_waylay.jpg" },
-            new Spec { Id = 261,  Name = "Subtlety",      Role = SpecRole.Dps,    ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_stealth.jpg" },
+            new Spec { Id = 259,  Name = "Assassination", Role = SpecRole.MeleeDps,  ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_deadlybrew.jpg" },
+            new Spec { Id = 260,  Name = "Outlaw",        Role = SpecRole.MeleeDps,  ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_waylay.jpg" },
+            new Spec { Id = 261,  Name = "Subtlety",      Role = SpecRole.MeleeDps,  ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_stealth.jpg" },
             // ── Priest ────────────────────────────────────────────────────
-            new Spec { Id = 256,  Name = "Discipline",    Role = SpecRole.Healer, ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_powerwordshield.jpg" },
-            new Spec { Id = 257,  Name = "Holy",          Role = SpecRole.Healer, ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_guardianspirit.jpg" },
-            new Spec { Id = 258,  Name = "Shadow",        Role = SpecRole.Dps,    ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_shadowwordpain.jpg" },
+            new Spec { Id = 256,  Name = "Discipline",    Role = SpecRole.Healer,    ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_powerwordshield.jpg" },
+            new Spec { Id = 257,  Name = "Holy",          Role = SpecRole.Healer,    ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_guardianspirit.jpg" },
+            new Spec { Id = 258,  Name = "Shadow",        Role = SpecRole.RangedDps, ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_shadowwordpain.jpg" },
             // ── Death Knight ──────────────────────────────────────────────
-            new Spec { Id = 250,  Name = "Blood",         Role = SpecRole.Tank,   ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_bloodpresence.jpg" },
-            new Spec { Id = 251,  Name = "Frost",         Role = SpecRole.Dps,    ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_frostpresence.jpg" },
-            new Spec { Id = 252,  Name = "Unholy",        Role = SpecRole.Dps,    ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_unholypresence.jpg" },
+            new Spec { Id = 250,  Name = "Blood",         Role = SpecRole.Tank,      ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_bloodpresence.jpg" },
+            new Spec { Id = 251,  Name = "Frost",         Role = SpecRole.MeleeDps,  ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_frostpresence.jpg" },
+            new Spec { Id = 252,  Name = "Unholy",        Role = SpecRole.MeleeDps,  ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_unholypresence.jpg" },
             // ── Shaman ────────────────────────────────────────────────────
-            new Spec { Id = 262,  Name = "Elemental",     Role = SpecRole.Dps,    ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_lightning.jpg" },
-            new Spec { Id = 263,  Name = "Enhancement",   Role = SpecRole.Dps,    ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shaman_improvedstormstrike.jpg" },
-            new Spec { Id = 264,  Name = "Restoration",   Role = SpecRole.Healer, ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_magicimmunity.jpg" },
+            new Spec { Id = 262,  Name = "Elemental",     Role = SpecRole.RangedDps, ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_lightning.jpg" },
+            new Spec { Id = 263,  Name = "Enhancement",   Role = SpecRole.MeleeDps,  ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shaman_improvedstormstrike.jpg" },
+            new Spec { Id = 264,  Name = "Restoration",   Role = SpecRole.Healer,    ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_magicimmunity.jpg" },
             // ── Mage ──────────────────────────────────────────────────────
-            new Spec { Id = 62,   Name = "Arcane",        Role = SpecRole.Dps,    ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_magicalsentry.jpg" },
-            new Spec { Id = 63,   Name = "Fire",          Role = SpecRole.Dps,    ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_fire_firebolt02.jpg" },
-            new Spec { Id = 64,   Name = "Frost",         Role = SpecRole.Dps,    ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_frost_frostbolt02.jpg" },
+            new Spec { Id = 62,   Name = "Arcane",        Role = SpecRole.RangedDps, ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_magicalsentry.jpg" },
+            new Spec { Id = 63,   Name = "Fire",          Role = SpecRole.RangedDps, ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_fire_firebolt02.jpg" },
+            new Spec { Id = 64,   Name = "Frost",         Role = SpecRole.RangedDps, ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_frost_frostbolt02.jpg" },
             // ── Warlock ───────────────────────────────────────────────────
-            new Spec { Id = 265,  Name = "Affliction",    Role = SpecRole.Dps,    ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_deathcoil.jpg" },
-            new Spec { Id = 266,  Name = "Demonology",    Role = SpecRole.Dps,    ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_metamorphosis.jpg" },
-            new Spec { Id = 267,  Name = "Destruction",   Role = SpecRole.Dps,    ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_rainoffire.jpg" },
+            new Spec { Id = 265,  Name = "Affliction",    Role = SpecRole.RangedDps, ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_deathcoil.jpg" },
+            new Spec { Id = 266,  Name = "Demonology",    Role = SpecRole.RangedDps, ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_metamorphosis.jpg" },
+            new Spec { Id = 267,  Name = "Destruction",   Role = SpecRole.RangedDps, ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_rainoffire.jpg" },
             // ── Monk ──────────────────────────────────────────────────────
-            new Spec { Id = 268,  Name = "Brewmaster",    Role = SpecRole.Tank,   ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_brewmaster_spec.jpg" },
-            new Spec { Id = 269,  Name = "Windwalker",    Role = SpecRole.Dps,    ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_windwalker_spec.jpg" },
-            new Spec { Id = 270,  Name = "Mistweaver",    Role = SpecRole.Healer, ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_mistweaver_spec.jpg" },
+            new Spec { Id = 268,  Name = "Brewmaster",    Role = SpecRole.Tank,      ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_brewmaster_spec.jpg" },
+            new Spec { Id = 269,  Name = "Windwalker",    Role = SpecRole.MeleeDps,  ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_windwalker_spec.jpg" },
+            new Spec { Id = 270,  Name = "Mistweaver",    Role = SpecRole.Healer,    ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_mistweaver_spec.jpg" },
             // ── Druid ─────────────────────────────────────────────────────
-            new Spec { Id = 102,  Name = "Balance",       Role = SpecRole.Dps,    ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_starfall.jpg" },
-            new Spec { Id = 103,  Name = "Feral",         Role = SpecRole.Dps,    ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "ability_druid_catform.jpg" },
-            new Spec { Id = 104,  Name = "Guardian",      Role = SpecRole.Tank,   ClassId = 11, FirstExpansionId = 5,  IconUrl = iconBase + "ability_racial_bearform.jpg" },
-            new Spec { Id = 105,  Name = "Restoration",   Role = SpecRole.Healer, ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_healingtouch.jpg" },
+            new Spec { Id = 102,  Name = "Balance",       Role = SpecRole.RangedDps, ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_starfall.jpg" },
+            new Spec { Id = 103,  Name = "Feral",         Role = SpecRole.MeleeDps,  ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "ability_druid_catform.jpg" },
+            new Spec { Id = 104,  Name = "Guardian",      Role = SpecRole.Tank,      ClassId = 11, FirstExpansionId = 5,  IconUrl = iconBase + "ability_racial_bearform.jpg" },
+            new Spec { Id = 105,  Name = "Restoration",   Role = SpecRole.Healer,    ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_healingtouch.jpg" },
             // ── Demon Hunter ──────────────────────────────────────────────
-            new Spec { Id = 577,  Name = "Havoc",         Role = SpecRole.Dps,    ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_specdps.jpg" },
-            new Spec { Id = 581,  Name = "Vengeance",     Role = SpecRole.Tank,   ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_spectank.jpg" },
+            new Spec { Id = 577,  Name = "Havoc",         Role = SpecRole.MeleeDps,  ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_specdps.jpg" },
+            new Spec { Id = 581,  Name = "Vengeance",     Role = SpecRole.Tank,      ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_spectank.jpg" },
             // ── Evoker ────────────────────────────────────────────────────
-            new Spec { Id = 1467, Name = "Devastation",   Role = SpecRole.Dps,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_devastation.jpg" },
-            new Spec { Id = 1468, Name = "Preservation",  Role = SpecRole.Healer, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_preservation.jpg" },
-            new Spec { Id = 1473, Name = "Augmentation",  Role = SpecRole.Dps,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_augmentation.jpg" }
+            new Spec { Id = 1467, Name = "Devastation",   Role = SpecRole.RangedDps, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_devastation.jpg" },
+            new Spec { Id = 1468, Name = "Preservation",  Role = SpecRole.Healer,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_preservation.jpg" },
+            new Spec { Id = 1473, Name = "Augmentation",  Role = SpecRole.RangedDps, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_augmentation.jpg" }
         );
     }
 

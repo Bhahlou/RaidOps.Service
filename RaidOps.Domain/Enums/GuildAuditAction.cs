@@ -97,4 +97,10 @@ public enum GuildAuditAction
 
     /// <summary>A guild branch's default raid signup mode was set or changed.</summary>
     BranchSignupModeUpdated = 31,
+
+    /// <summary>A raid attribution template row was created, updated, deleted, or reordered.</summary>
+    AttributionTemplateUpdated = 32,
+
+    /// <summary>A raid event's attribution slot was filled or cleared.</summary>
+    RaidEventAttributionUpdated = 33,
 }
