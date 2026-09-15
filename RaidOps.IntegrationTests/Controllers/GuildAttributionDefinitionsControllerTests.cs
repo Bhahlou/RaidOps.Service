@@ -25,6 +25,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         new { kind = "NameSlot", iconSource = "None", slotLabel = "De", requiredClassIds = Array.Empty<int>(), requiredRoles = Array.Empty<string>(), requiredSpecIds = Array.Empty<int>() },
     ];
 
+    private static readonly int[] SingleOrderedId = [1];
+
     // ── Auth enforcement ─────────────────────────────────────────────────────
 
     [Fact]
@@ -58,7 +60,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task ReorderDefinitions_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions/reorder", new { orderedIds = new[] { 1 } });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions/reorder", new { orderedIds = SingleOrderedId });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 

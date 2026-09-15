@@ -638,8 +638,8 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         modelBuilder.Entity<AttributionDefinitionCell>()
             .HasIndex(c => new { c.GuildAttributionDefinitionId, c.CellIndex });
 
-        // RaidEventAttribution — composite PK (RaidEventId, AttributionDefinitionCellId);
-        // deleting an event or a template row (cascading its cells) drops its fills
+        // RaidEventAttribution uses a composite primary key of event, cell and instance index.
+        // Deleting an event or a template row (which cascades its cells) drops its fills too.
         modelBuilder.Entity<RaidEventAttribution>()
             .HasKey(a => new { a.RaidEventId, a.AttributionDefinitionCellId, a.InstanceIndex });
 

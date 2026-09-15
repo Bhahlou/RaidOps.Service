@@ -44,12 +44,12 @@ internal static class SpellSeeder
             });
 
             var inserted = await spellRepository.InsertMissingAsync(spells, cancellationToken);
-            if (inserted > 0)
+            if (inserted > 0 && logger.IsEnabled(LogLevel.Information))
                 logger.LogInformation("Seeded {Count} new spells from {FileName}.", inserted, fileName);
         }
     }
 
-    private class SpellSeedEntry
+    private sealed class SpellSeedEntry
     {
         [JsonPropertyName("id")] public int Id { get; set; }
         [JsonPropertyName("nameEn")] public string NameEn { get; set; } = string.Empty;

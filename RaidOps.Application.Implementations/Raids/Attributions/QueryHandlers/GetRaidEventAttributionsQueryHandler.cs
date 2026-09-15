@@ -17,7 +17,7 @@ public class GetRaidEventAttributionsQueryHandler(
     IRaidEventAttributionsRepository attributionsRepository) : IQueryHandlerAsync<GetRaidEventAttributionsQuery, RaidEventAttributionsResponse>
 {
     /// <inheritdoc/>
-    public async Task<Result<RaidEventAttributionsResponse>> HandleAsync(GetRaidEventAttributionsQuery query, CancellationToken cancellationToken = default)
+    public async Task<Result<RaidEventAttributionsResponse>> HandleAsync(GetRaidEventAttributionsQuery query, CancellationToken cancellationToken)
     {
         var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, query.GuildBranchId, cancellationToken);
         if (accessLevel < GuildAccessLevel.Roster)

@@ -17,7 +17,7 @@ public class SearchSpellsQueryHandler(
     private const int MaxResults = 20;
 
     /// <inheritdoc/>
-    public async Task<Result<List<SpellResponse>>> HandleAsync(SearchSpellsQuery query, CancellationToken cancellationToken = default)
+    public async Task<Result<List<SpellResponse>>> HandleAsync(SearchSpellsQuery query, CancellationToken cancellationToken)
     {
         var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)

@@ -3,6 +3,8 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Attributions.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Raids.Attributions.CommandHandlers;
@@ -48,12 +50,8 @@ public class SetRaidEventAttributionCommandHandler(
         if (assignment == null)
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotSeatedInEvent, "Character is not seated in this raid event.");
 
-        if (cell.RequiredClassIds.Count > 0 && !cell.RequiredClassIds.Contains(assignment.Character.ClassId))
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterDoesNotMeetSlotRequirement, "Character's class does not match this slot's requirement.");
-        if (cell.RequiredRoles.Count > 0 && !cell.RequiredRoles.Contains(assignment.Spec.Role))
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterDoesNotMeetSlotRequirement, "Character's role does not match this slot's requirement.");
-        if (cell.RequiredSpecIds.Count > 0 && !cell.RequiredSpecIds.Contains(assignment.SpecId))
-            return Result<CommandResponse>.Fail(ResponseDetail.CharacterDoesNotMeetSlotRequirement, "Character's spec does not match this slot's requirement.");
+        if (!MeetsSlotRequirement(cell, assignment))
+            return Result<CommandResponse>.Fail(ResponseDetail.CharacterDoesNotMeetSlotRequirement, "Character does not match this slot's class/role/spec requirement.");
 
         await attributionsRepository.SetAsync(command.EventId, cell.Id, definition.Id, command.InstanceIndex, command.CharacterId, command.RequesterDiscordId, cancellationToken);
 
@@ -66,4 +64,9 @@ public class SetRaidEventAttributionCommandHandler(
 
         return Result<CommandResponse>.Ok(new CommandResponse("Attribution slot filled successfully."));
     }
+
+    private static bool MeetsSlotRequirement(AttributionDefinitionCell cell, RaidSlotAssignment assignment) =>
+        (cell.RequiredClassIds.Count == 0 || cell.RequiredClassIds.Contains(assignment.Character.ClassId))
+        && (cell.RequiredRoles.Count == 0 || cell.RequiredRoles.Contains(assignment.Spec.Role))
+        && (cell.RequiredSpecIds.Count == 0 || cell.RequiredSpecIds.Contains(assignment.SpecId));
 }

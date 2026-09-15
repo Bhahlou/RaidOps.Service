@@ -16,7 +16,7 @@ public class GetGuildAttributionDefinitionsQueryHandler(
     : IQueryHandlerAsync<GetGuildAttributionDefinitionsQuery, List<GuildAttributionDefinitionResponse>>
 {
     /// <inheritdoc/>
-    public async Task<Result<List<GuildAttributionDefinitionResponse>>> HandleAsync(GetGuildAttributionDefinitionsQuery query, CancellationToken cancellationToken = default)
+    public async Task<Result<List<GuildAttributionDefinitionResponse>>> HandleAsync(GetGuildAttributionDefinitionsQuery query, CancellationToken cancellationToken)
     {
         var accessLevel = await guildAccessService.GetAccessLevelAsync(query.RequesterDiscordId, query.GuildId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
