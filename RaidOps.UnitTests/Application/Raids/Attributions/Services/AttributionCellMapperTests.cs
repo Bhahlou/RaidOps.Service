@@ -60,6 +60,25 @@ public class AttributionCellMapperTests
     }
 
     [Fact]
+    public void ToEntity_IconCellWithStaticRoleSource_MapsStaticRoleFieldAndBlanksTheOthers()
+    {
+        var request = new AttributionCellRequest
+        {
+            Kind = AttributionCellKind.Icon,
+            IconSource = AttributionIconSource.StaticRole,
+            StaticRole = SpecRole.Healer,
+            SpellId = 29166,
+            RaidMarker = RaidMarkerIcon.Skull,
+        };
+
+        var entity = AttributionCellMapper.ToEntity(request, 0);
+
+        entity.StaticRole.Should().Be(SpecRole.Healer);
+        entity.SpellId.Should().BeNull();
+        entity.RaidMarker.Should().BeNull();
+    }
+
+    [Fact]
     public void ToEntity_NameSlotCell_MapsNameSlotFieldsAndForcesIconSourceToNone()
     {
         // A well-formed NameSlot request (mirroring what the dialog's toPayload() ever actually
