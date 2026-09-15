@@ -13,8 +13,8 @@ namespace RaidOps.IntegrationTests.Controllers;
 
 /// <summary>
 /// Integration tests for <see cref="RaidOps.API.Controllers.v1.GuildAttributionDefinitionsController"/>.
-/// All Discord IDs and guild IDs are in the 980… range to avoid primary-key conflicts with other
-/// test classes.
+/// All Discord IDs and guild IDs are in the 982… range to avoid primary-key conflicts with other
+/// test classes (980… already belongs to <see cref="AvailabilityControllerTests"/>).
 /// </summary>
 [Collection("Integration")]
 public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFactory factory)
@@ -30,42 +30,42 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task GetDefinitions_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/guilds/980000000000000001/attribution-definitions");
+        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/attribution-definitions");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task CreateDefinition_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/980000000000000001/attribution-definitions", new { label = "x", cells = NameSlotCells });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions", new { label = "x", cells = NameSlotCells });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task UpdateDefinition_WithoutToken_Returns401()
     {
-        var response = await Client.PatchAsync("/api/v1/guilds/980000000000000001/attribution-definitions/1", JsonContent.Create(new { label = "x", cells = NameSlotCells }));
+        var response = await Client.PatchAsync("/api/v1/guilds/982000000000000001/attribution-definitions/1", JsonContent.Create(new { label = "x", cells = NameSlotCells }));
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task DeleteDefinition_WithoutToken_Returns401()
     {
-        var response = await Client.DeleteAsync("/api/v1/guilds/980000000000000001/attribution-definitions/1");
+        var response = await Client.DeleteAsync("/api/v1/guilds/982000000000000001/attribution-definitions/1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task ReorderDefinitions_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/980000000000000001/attribution-definitions/reorder", new { orderedIds = new[] { 1 } });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions/reorder", new { orderedIds = new[] { 1 } });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task SearchSpells_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/guilds/980000000000000001/spells/search?expansionId=2&searchTerm=inn&locale=en");
+        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/spells/search?expansionId=2&searchTerm=inn&locale=en");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -74,7 +74,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.GetAsync("/api/v1/guilds/980000000000000001/attribution-definitions");
+        var response = await client.GetAsync("/api/v1/guilds/982000000000000001/attribution-definitions");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -84,8 +84,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task GetDefinitions_WhenNotOfficer_Returns400()
     {
-        const string id = "980000000000000002";
-        const string guildId = "980000000000000002";
+        const string id = "982000000000000002";
+        const string guildId = "982000000000000002";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -103,8 +103,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task GetDefinitions_WhenOfficer_ReturnsSeededDefinitionWithItsCells()
     {
-        const string id = "980000000000000003";
-        const string guildId = "980000000000000003";
+        const string id = "982000000000000003";
+        const string guildId = "982000000000000003";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -145,8 +145,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task CreateDefinition_WhenOfficer_Returns200AndPersists()
     {
-        const string id = "980000000000000004";
-        const string guildId = "980000000000000004";
+        const string id = "982000000000000004";
+        const string guildId = "982000000000000004";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -173,8 +173,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task CreateDefinition_NoCells_Returns400WithNoCellsInDefinitionError()
     {
-        const string id = "980000000000000005";
-        const string guildId = "980000000000000005";
+        const string id = "982000000000000005";
+        const string guildId = "982000000000000005";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -197,8 +197,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task UpdateDefinition_WhenOfficer_Returns200AndPersists()
     {
-        const string id = "980000000000000006";
-        const string guildId = "980000000000000006";
+        const string id = "982000000000000006";
+        const string guildId = "982000000000000006";
         int definitionId;
         await SeedAsync(db =>
         {
@@ -237,8 +237,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task UpdateDefinition_NotFound_Returns400()
     {
-        const string id = "980000000000000007";
-        const string guildId = "980000000000000007";
+        const string id = "982000000000000007";
+        const string guildId = "982000000000000007";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -259,8 +259,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task DeleteDefinition_WhenOfficer_Returns200AndDeletes()
     {
-        const string id = "980000000000000008";
-        const string guildId = "980000000000000008";
+        const string id = "982000000000000008";
+        const string guildId = "982000000000000008";
         int definitionId;
         await SeedAsync(db =>
         {
@@ -296,8 +296,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task DeleteDefinition_NotFound_Returns400()
     {
-        const string id = "980000000000000009";
-        const string guildId = "980000000000000009";
+        const string id = "982000000000000009";
+        const string guildId = "982000000000000009";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
@@ -317,8 +317,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task ReorderDefinitions_WhenOfficer_Returns200AndPersistsOrder()
     {
-        const string id = "980000000000000010";
-        const string guildId = "980000000000000010";
+        const string id = "982000000000000010";
+        const string guildId = "982000000000000010";
         int firstId, secondId;
         await SeedAsync(db =>
         {
@@ -355,8 +355,8 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task SearchSpells_WhenOfficer_ReturnsMatchingSpellLocalizedToRequesterLocale()
     {
-        const string id = "980000000000000011";
-        const string guildId = "980000000000000011";
+        const string id = "982000000000000011";
+        const string guildId = "982000000000000011";
         await SeedAsync(db =>
         {
             db.Users.Add(TestDataBuilder.CreateUser(id));
