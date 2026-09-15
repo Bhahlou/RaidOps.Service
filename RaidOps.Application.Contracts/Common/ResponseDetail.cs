@@ -79,4 +79,14 @@ public static class ResponseDetail
     public const string CharacterRequiredForSignup = nameof(CharacterRequiredForSignup);
     public const string SpecRequiredForSignup = nameof(SpecRequiredForSignup);
     public const string DiscordChannelCreationFailed = nameof(DiscordChannelCreationFailed);
+
+    // ── Raid attributions ─────────────────────────────────────────────────
+    public const string AttributionDefinitionNotFound = nameof(AttributionDefinitionNotFound);
+    public const string CharacterNotSeatedInEvent = nameof(CharacterNotSeatedInEvent);
+    public const string SpellNotFound = nameof(SpellNotFound);
+    public const string AttributionCellNotFound = nameof(AttributionCellNotFound);
+    public const string AttributionCellNotNameSlot = nameof(AttributionCellNotNameSlot);
+    public const string CharacterDoesNotMeetSlotRequirement = nameof(CharacterDoesNotMeetSlotRequirement);
+    public const string NoCellsInDefinition = nameof(NoCellsInDefinition);
+    public const string InvalidInstanceIndex = nameof(InvalidInstanceIndex);
 }

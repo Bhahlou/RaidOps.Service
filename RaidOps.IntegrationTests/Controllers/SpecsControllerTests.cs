@@ -32,6 +32,6 @@ public class SpecsControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var specs = await response.Content.ReadFromJsonAsync<List<SpecDto>>();
         specs.Should().HaveCount(39)
-            .And.Contain(s => s.Id == 62 && s.Name == "Arcane" && s.ClassId == 8 && s.Role == "Dps");
+            .And.Contain(s => s.Id == 62 && s.Name == "Arcane" && s.ClassId == 8 && s.Role == "RangedDps");
     }
 }
