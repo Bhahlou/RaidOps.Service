@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -12,9 +13,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260915204749_AddRaidBossesAndAttributionScope")]
+    partial class AddRaidBossesAndAttributionScope
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -707,26 +710,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<int>("SectionIconSource")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SectionRaidMarker")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SectionSpellId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SectionStaticRole")
-                        .HasColumnType("integer");
-
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("RaidBossId");
-
-                    b.HasIndex("SectionSpellId");
 
                     b.HasIndex("GuildId", "SortOrder");
 
@@ -2866,16 +2855,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasForeignKey("RaidBossId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("RaidOps.Domain.Models.Reference.Spell", "SectionSpell")
-                        .WithMany()
-                        .HasForeignKey("SectionSpellId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Guild");
 
                     b.Navigation("RaidBoss");
-
-                    b.Navigation("SectionSpell");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.RaidEventAttribution", b =>

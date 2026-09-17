@@ -64,4 +64,25 @@ public class GetGuildAttributionDefinitionsQueryHandlerTests
         definition.IsRepeatable.Should().BeTrue();
         definition.Cells.Should().ContainSingle(c => c.Id == 10 && c.SlotLabel == "De");
     }
+
+    [Fact]
+    public async Task HandleAsync_RaidBossIdGiven_PassesItThroughToTheRepository()
+    {
+        var query = new GetGuildAttributionDefinitionsQuery { GuildId = GuildId, RequesterDiscordId = RequesterId, RaidBossId = 14 };
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _definitions.Setup(d => d.GetForGuildAsync(GuildId, 14, default)).ReturnsAsync(
+        [
+            new GuildAttributionDefinition
+            {
+                Id = 2, GuildId = GuildId, RaidBossId = 14, Label = "Interrupt", SortOrder = 0,
+                Cells = [new AttributionDefinitionCell { Id = 20, Kind = AttributionCellKind.NameSlot, SlotLabel = "Interrupt" }],
+            },
+        ]);
+
+        var result = await _sut.HandleAsync(query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(d => d.Id == 2 && d.RaidBossId == 14);
+        _definitions.Verify(d => d.GetForGuildAsync(GuildId, 14, default), Times.Once);
+    }
 }

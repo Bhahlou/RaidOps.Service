@@ -41,4 +41,21 @@ internal static class AttributionCellMapper
         RequiredRoles = cell.RequiredRoles,
         RequiredSpecIds = cell.RequiredSpecIds,
     };
+
+    /// <summary>Maps a persisted row (with its cells) to its response DTO — shared by every query handler that returns definitions.</summary>
+    public static GuildAttributionDefinitionResponse ToDefinitionResponse(GuildAttributionDefinition definition) => new()
+    {
+        Id = definition.Id,
+        Label = definition.Label,
+        Section = definition.Section,
+        IsRepeatable = definition.IsRepeatable,
+        RaidBossId = definition.RaidBossId,
+        SectionIconSource = definition.SectionIconSource,
+        SectionSpellId = definition.SectionSpellId,
+        SectionSpellIconUrl = definition.SectionSpell?.IconUrl,
+        SectionRaidMarker = definition.SectionRaidMarker,
+        SectionStaticRole = definition.SectionStaticRole,
+        Cells = definition.Cells.Select(ToResponse).ToList(),
+        SortOrder = definition.SortOrder,
+    };
 }

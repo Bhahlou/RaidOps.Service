@@ -7,8 +7,12 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Attributions.Commands;
 using RaidOps.Application.Contracts.Raids.Attributions.Queries;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Queries;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 using RaidOps.Application.Contracts.Raids.Spells.Queries;
 using RaidOps.Application.Contracts.Raids.Spells.Responses;
+using RaidOps.Application.Contracts.Raids.Zones.Queries;
+using RaidOps.Application.Contracts.Raids.Zones.Responses;
 using RaidOps.Domain.Enums;
 
 namespace RaidOps.UnitTests.Controllers;
@@ -29,7 +33,7 @@ public class GuildAttributionDefinitionsControllerTests
     [Fact]
     public async Task GetDefinitions_NoDiscordId_ReturnsUnauthorized()
     {
-        var result = await MakeSut(null).GetDefinitions("guild-1", default);
+        var result = await MakeSut(null).GetDefinitions("guild-1", null, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -42,7 +46,7 @@ public class GuildAttributionDefinitionsControllerTests
                 It.Is<GetGuildAttributionDefinitionsQuery>(qr => qr.GuildId == "guild-1" && qr.RequesterDiscordId == "user-1"), default))
             .ReturnsAsync(Result<List<GuildAttributionDefinitionResponse>>.Ok(response));
 
-        var result = await MakeSut().GetDefinitions("guild-1", default);
+        var result = await MakeSut().GetDefinitions("guild-1", null, default);
 
         result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeSameAs(response);
     }
@@ -53,7 +57,75 @@ public class GuildAttributionDefinitionsControllerTests
         _queries.Setup(q => q.DispatchAsync<GetGuildAttributionDefinitionsQuery, List<GuildAttributionDefinitionResponse>>(It.IsAny<GetGuildAttributionDefinitionsQuery>(), default))
             .ReturnsAsync(Result<List<GuildAttributionDefinitionResponse>>.Fail(ResponseDetail.Forbidden));
 
-        var result = await MakeSut().GetDefinitions("guild-1", default);
+        var result = await MakeSut().GetDefinitions("guild-1", null, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    // ── GetRaidZonesForGuild ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_NoDiscordId_ReturnsUnauthorized()
+    {
+        var result = await MakeSut(null).GetRaidZonesForGuild("guild-1", default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_QuerySucceeds_ReturnsOk()
+    {
+        var response = new List<RaidZoneResponse>();
+        _queries.Setup(q => q.DispatchAsync<GetRaidZonesForGuildQuery, List<RaidZoneResponse>>(
+                It.Is<GetRaidZonesForGuildQuery>(qr => qr.GuildId == "guild-1" && qr.RequesterDiscordId == "user-1"), default))
+            .ReturnsAsync(Result<List<RaidZoneResponse>>.Ok(response));
+
+        var result = await MakeSut().GetRaidZonesForGuild("guild-1", default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeSameAs(response);
+    }
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetRaidZonesForGuildQuery, List<RaidZoneResponse>>(It.IsAny<GetRaidZonesForGuildQuery>(), default))
+            .ReturnsAsync(Result<List<RaidZoneResponse>>.Fail(ResponseDetail.Forbidden));
+
+        var result = await MakeSut().GetRaidZonesForGuild("guild-1", default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    // ── GetBossesForZone ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetBossesForZone_NoDiscordId_ReturnsUnauthorized()
+    {
+        var result = await MakeSut(null).GetBossesForZone("guild-1", 4, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetBossesForZone_QuerySucceeds_ReturnsOk()
+    {
+        var response = new List<RaidBossResponse>();
+        _queries.Setup(q => q.DispatchAsync<GetRaidBossesForZoneQuery, List<RaidBossResponse>>(
+                It.Is<GetRaidBossesForZoneQuery>(qr => qr.GuildId == "guild-1" && qr.RequesterDiscordId == "user-1" && qr.RaidZoneId == 4), default))
+            .ReturnsAsync(Result<List<RaidBossResponse>>.Ok(response));
+
+        var result = await MakeSut().GetBossesForZone("guild-1", 4, default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeSameAs(response);
+    }
+
+    [Fact]
+    public async Task GetBossesForZone_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetRaidBossesForZoneQuery, List<RaidBossResponse>>(It.IsAny<GetRaidBossesForZoneQuery>(), default))
+            .ReturnsAsync(Result<List<RaidBossResponse>>.Fail(ResponseDetail.Forbidden));
+
+        var result = await MakeSut().GetBossesForZone("guild-1", 4, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -217,6 +289,47 @@ public class GuildAttributionDefinitionsControllerTests
         var command = new ReorderGuildAttributionDefinitionsCommand { OrderedIds = [] };
 
         var result = await MakeSut().ReorderDefinitions("guild-1", command, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    // ── SetSectionIcon ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SetSectionIcon_NoDiscordId_ReturnsUnauthorized()
+    {
+        var command = new SetAttributionSectionIconCommand { Section = "Interrupts", IconSource = AttributionIconSource.RaidMarker, RaidMarker = RaidMarkerIcon.Skull };
+
+        var result = await MakeSut(null).SetSectionIcon("guild-1", command, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task SetSectionIcon_SetsGuildIdAndRequesterFromRouteAndClaim()
+    {
+        SetAttributionSectionIconCommand? dispatched = null;
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<SetAttributionSectionIconCommand>(), default))
+            .Callback<SetAttributionSectionIconCommand, CancellationToken>((c, _) => dispatched = c)
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+        var command = new SetAttributionSectionIconCommand { Section = "Interrupts", IconSource = AttributionIconSource.RaidMarker, RaidMarker = RaidMarkerIcon.Skull };
+
+        var result = await MakeSut("user-1").SetSectionIcon("guild-1", command, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        dispatched.Should().NotBeNull();
+        dispatched!.GuildId.Should().Be("guild-1");
+        dispatched.RequesterDiscordId.Should().Be("user-1");
+    }
+
+    [Fact]
+    public async Task SetSectionIcon_CommandFails_ReturnsBadRequest()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<SetAttributionSectionIconCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound));
+        var command = new SetAttributionSectionIconCommand { Section = "Interrupts", IconSource = AttributionIconSource.RaidMarker, RaidMarker = RaidMarkerIcon.Skull };
+
+        var result = await MakeSut().SetSectionIcon("guild-1", command, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

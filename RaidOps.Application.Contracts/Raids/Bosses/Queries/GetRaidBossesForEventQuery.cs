@@ -1,10 +1,13 @@
 using RaidOps.Application.Contracts.CQRS;
-using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 
-namespace RaidOps.Application.Contracts.Raids.Attributions.Queries;
+namespace RaidOps.Application.Contracts.Raids.Bosses.Queries;
 
-/// <summary>Returns the guild's attribution template merged with a raid event's existing fills and seated characters — backs the raid detail page's Assignments tab.</summary>
-public class GetRaidEventAttributionsQuery : IQueryRequest<RaidEventAttributionsResponse>
+/// <summary>
+/// Returns every boss encounter of the zone(s) a raid event targets — backs the boss navigation
+/// strip on the event's Assignments page.
+/// </summary>
+public class GetRaidBossesForEventQuery : IQueryRequest<List<RaidBossResponse>>
 {
     /// <summary>Discord snowflake ID of the guild. Set by the controller, not from the request body.</summary>
     public required string GuildId { get; set; }
@@ -17,7 +20,4 @@ public class GetRaidEventAttributionsQuery : IQueryRequest<RaidEventAttributions
 
     /// <summary>Surrogate ID of the raid event.</summary>
     public required int EventId { get; set; }
-
-    /// <summary>Boss to return attributions for, or <c>null</c> for the "General" (raid-wide) page. Set by the controller from the query string.</summary>
-    public int? BossId { get; set; }
 }

@@ -100,6 +100,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="RaidZone"/> lookup table (Karazhan, SSC, Black Temple, …).</summary>
     public DbSet<RaidZone> RaidZones => Set<RaidZone>();
 
+    /// <summary>Gets the <see cref="RaidBoss"/> lookup table (boss encounters within a <see cref="RaidZone"/>).</summary>
+    public DbSet<RaidBoss> RaidBosses => Set<RaidBoss>();
+
     /// <summary>Gets the <see cref="WeeklyLockoutSchedule"/> lookup table (one row per Blizzard API region).</summary>
     public DbSet<WeeklyLockoutSchedule> WeeklyLockoutSchedules => Set<WeeklyLockoutSchedule>();
 
@@ -442,6 +445,16 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(z => z.ExpansionId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // RaidBoss → RaidZone (reference data, removed along with their zone)
+        modelBuilder.Entity<RaidBoss>()
+            .HasOne(b => b.RaidZone)
+            .WithMany(z => z.Bosses)
+            .HasForeignKey(b => b.RaidZoneId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidBoss>()
+            .HasIndex(b => new { b.RaidZoneId, b.SortOrder });
+
         // RaidLockoutCadenceOverride → RaidZone; overrides are removed along with their zone (reference data cleanup only)
         modelBuilder.Entity<RaidLockoutCadenceOverride>()
             .HasOne(o => o.RaidZone)
@@ -622,6 +635,22 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         modelBuilder.Entity<GuildAttributionDefinition>()
             .HasIndex(d => new { d.GuildId, d.SortOrder });
 
+        // GuildAttributionDefinition → RaidBoss; null RaidBossId is a "General" row, reference data
+        // so a boss is never deleted while templates reference it
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasOne(d => d.RaidBoss)
+            .WithMany()
+            .HasForeignKey(d => d.RaidBossId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // GuildAttributionDefinition → Spell (section header icon) — same convention as
+        // AttributionDefinitionCell.Spell, denormalized across every row of a section
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasOne(d => d.SectionSpell)
+            .WithMany()
+            .HasForeignKey(d => d.SectionSpellId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // AttributionDefinitionCell — surrogate PK, ordered children of a GuildAttributionDefinition
         modelBuilder.Entity<AttributionDefinitionCell>()
             .HasOne(c => c.GuildAttributionDefinition)
@@ -680,6 +709,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         SeedClasses(modelBuilder);
         SeedSpecs(modelBuilder);
         SeedRaidZones(modelBuilder);
+        SeedRaidBosses(modelBuilder);
         SeedWeeklyLockoutSchedules(modelBuilder);
     }
 
@@ -855,7 +885,84 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new RaidZone { Id = 5, Name = "The Eye",             ShortCode = "TK", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 5 },
             new RaidZone { Id = 6, Name = "Mount Hyjal",         ShortCode = "Hyjal", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 6 },
             new RaidZone { Id = 7, Name = "Black Temple",        ShortCode = "BT", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 7 },
-            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 8 }
+            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 8 },
+            // Added later, alongside per-boss attributions — appended (Id 9) rather than
+            // renumbered so the original 8 zones' seeded rows are untouched by this migration.
+            new RaidZone { Id = 9, Name = "Zul'Aman",            ShortCode = "ZA", ExpansionId = 2, GroupCount = 2, SlotsPerGroup = 5, SortOrder = 9 }
+        );
+    }
+
+    private static void SeedRaidBosses(ModelBuilder modelBuilder)
+    {
+        // Ids are sequential across all zones (same convention as RaidZone.Id); SortOrder resets
+        // per zone and reflects the commonly-used pull/attunement order.
+        modelBuilder.Entity<RaidBoss>().HasData(
+            // Karazhan (RaidZoneId = 1)
+            new RaidBoss { Id = 1,  RaidZoneId = 1, Name = "Attumen the Huntsman",     SortOrder = 1 },
+            new RaidBoss { Id = 2,  RaidZoneId = 1, Name = "Moroes",                   SortOrder = 2 },
+            new RaidBoss { Id = 3,  RaidZoneId = 1, Name = "Maiden of Virtue",         SortOrder = 3 },
+            new RaidBoss { Id = 4,  RaidZoneId = 1, Name = "The Opera Event",          SortOrder = 4 },
+            new RaidBoss { Id = 5,  RaidZoneId = 1, Name = "The Curator",              SortOrder = 5 },
+            new RaidBoss { Id = 6,  RaidZoneId = 1, Name = "Terestian Illhoof",        SortOrder = 6 },
+            new RaidBoss { Id = 7,  RaidZoneId = 1, Name = "Shade of Aran",            SortOrder = 7 },
+            new RaidBoss { Id = 8,  RaidZoneId = 1, Name = "Netherspite",              SortOrder = 8 },
+            new RaidBoss { Id = 9,  RaidZoneId = 1, Name = "Chess Event",              SortOrder = 9 },
+            new RaidBoss { Id = 10, RaidZoneId = 1, Name = "Prince Malchezaar",        SortOrder = 10 },
+
+            // Gruul's Lair (RaidZoneId = 2)
+            new RaidBoss { Id = 11, RaidZoneId = 2, Name = "High King Maulgar",        SortOrder = 1 },
+            new RaidBoss { Id = 12, RaidZoneId = 2, Name = "Gruul the Dragonkiller",   SortOrder = 2 },
+
+            // Magtheridon's Lair (RaidZoneId = 3)
+            new RaidBoss { Id = 13, RaidZoneId = 3, Name = "Magtheridon",              SortOrder = 1 },
+
+            // Serpentshrine Cavern (RaidZoneId = 4)
+            new RaidBoss { Id = 14, RaidZoneId = 4, Name = "Hydross the Unstable",     SortOrder = 1 },
+            new RaidBoss { Id = 15, RaidZoneId = 4, Name = "The Lurker Below",         SortOrder = 2 },
+            new RaidBoss { Id = 16, RaidZoneId = 4, Name = "Leotheras the Blind",      SortOrder = 3 },
+            new RaidBoss { Id = 17, RaidZoneId = 4, Name = "Fathom-Lord Karathress",   SortOrder = 4 },
+            new RaidBoss { Id = 18, RaidZoneId = 4, Name = "Morogrim Tidewalker",      SortOrder = 5 },
+            new RaidBoss { Id = 19, RaidZoneId = 4, Name = "Lady Vashj",               SortOrder = 6 },
+
+            // The Eye (RaidZoneId = 5)
+            new RaidBoss { Id = 20, RaidZoneId = 5, Name = "Al'ar",                    SortOrder = 1 },
+            new RaidBoss { Id = 21, RaidZoneId = 5, Name = "Void Reaver",              SortOrder = 2 },
+            new RaidBoss { Id = 22, RaidZoneId = 5, Name = "High Astromancer Solarian",SortOrder = 3 },
+            new RaidBoss { Id = 23, RaidZoneId = 5, Name = "Kael'thas Sunstrider",     SortOrder = 4 },
+
+            // Mount Hyjal (RaidZoneId = 6)
+            new RaidBoss { Id = 24, RaidZoneId = 6, Name = "Rage Winterchill",         SortOrder = 1 },
+            new RaidBoss { Id = 25, RaidZoneId = 6, Name = "Anetheron",                SortOrder = 2 },
+            new RaidBoss { Id = 26, RaidZoneId = 6, Name = "Kaz'rogal",                SortOrder = 3 },
+            new RaidBoss { Id = 27, RaidZoneId = 6, Name = "Azgalor",                  SortOrder = 4 },
+            new RaidBoss { Id = 28, RaidZoneId = 6, Name = "Archimonde",               SortOrder = 5 },
+
+            // Black Temple (RaidZoneId = 7)
+            new RaidBoss { Id = 29, RaidZoneId = 7, Name = "High Warlord Naj'entus",   SortOrder = 1 },
+            new RaidBoss { Id = 30, RaidZoneId = 7, Name = "Supremus",                 SortOrder = 2 },
+            new RaidBoss { Id = 31, RaidZoneId = 7, Name = "Shade of Akama",           SortOrder = 3 },
+            new RaidBoss { Id = 32, RaidZoneId = 7, Name = "Teron Gorefiend",          SortOrder = 4 },
+            new RaidBoss { Id = 33, RaidZoneId = 7, Name = "Gurtogg Bloodboil",        SortOrder = 5 },
+            new RaidBoss { Id = 34, RaidZoneId = 7, Name = "Reliquary of Souls",       SortOrder = 6 },
+            new RaidBoss { Id = 35, RaidZoneId = 7, Name = "Mother Shahraz",           SortOrder = 7 },
+            new RaidBoss { Id = 36, RaidZoneId = 7, Name = "The Illidari Council",     SortOrder = 8 },
+            new RaidBoss { Id = 37, RaidZoneId = 7, Name = "Illidan Stormrage",        SortOrder = 9 },
+
+            // Sunwell Plateau (RaidZoneId = 8)
+            new RaidBoss { Id = 38, RaidZoneId = 8, Name = "Kalecgos",                 SortOrder = 1 },
+            new RaidBoss { Id = 39, RaidZoneId = 8, Name = "Brutallus",                SortOrder = 2 },
+            new RaidBoss { Id = 40, RaidZoneId = 8, Name = "Felmyst",                  SortOrder = 3 },
+            new RaidBoss { Id = 41, RaidZoneId = 8, Name = "Eredar Twins",             SortOrder = 4 },
+            new RaidBoss { Id = 42, RaidZoneId = 8, Name = "M'uru",                    SortOrder = 5 },
+            new RaidBoss { Id = 43, RaidZoneId = 8, Name = "Kil'jaeden",               SortOrder = 6 },
+
+            // Zul'Aman (RaidZoneId = 9)
+            new RaidBoss { Id = 44, RaidZoneId = 9, Name = "Akil'zon",                 SortOrder = 1 },
+            new RaidBoss { Id = 45, RaidZoneId = 9, Name = "Nalorakk",                 SortOrder = 2 },
+            new RaidBoss { Id = 46, RaidZoneId = 9, Name = "Jan'alai",                 SortOrder = 3 },
+            new RaidBoss { Id = 47, RaidZoneId = 9, Name = "Halazzi",                  SortOrder = 4 },
+            new RaidBoss { Id = 48, RaidZoneId = 9, Name = "Hex Lord Malacrass",       SortOrder = 5 },
+            new RaidBoss { Id = 49, RaidZoneId = 9, Name = "Zul'jin",                  SortOrder = 6 }
         );
     }
 

@@ -89,4 +89,7 @@ public static class ResponseDetail
     public const string CharacterDoesNotMeetSlotRequirement = nameof(CharacterDoesNotMeetSlotRequirement);
     public const string NoCellsInDefinition = nameof(NoCellsInDefinition);
     public const string InvalidInstanceIndex = nameof(InvalidInstanceIndex);
+    public const string RaidBossNotFound = nameof(RaidBossNotFound);
+    public const string BossNotTargetedByEvent = nameof(BossNotTargetedByEvent);
+    public const string DefinitionBossMismatch = nameof(DefinitionBossMismatch);
 }

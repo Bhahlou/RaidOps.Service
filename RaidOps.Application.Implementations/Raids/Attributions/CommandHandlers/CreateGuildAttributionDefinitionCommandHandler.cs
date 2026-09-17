@@ -9,11 +9,12 @@ using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Raids.Attributions.CommandHandlers;
 
-/// <summary>Handles <see cref="CreateGuildAttributionDefinitionCommand"/> by validating the officer's access and the icon-source fields, then appending a new template row.</summary>
+/// <summary>Handles <see cref="CreateGuildAttributionDefinitionCommand"/> by validating the officer's access, the target boss (if any), and the icon-source fields, then appending a new template row.</summary>
 public class CreateGuildAttributionDefinitionCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildAttributionDefinitionsRepository definitionsRepository,
     ISpellRepository spellRepository,
+    IRaidBossRepository raidBossRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<CreateGuildAttributionDefinitionCommand>
 {
     /// <inheritdoc/>
@@ -22,6 +23,9 @@ public class CreateGuildAttributionDefinitionCommandHandler(
         var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
             return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+
+        if (command.RaidBossId != null && await raidBossRepository.GetByIdAsync(command.RaidBossId.Value, cancellationToken) == null)
+            return Result<CommandResponse>.Fail(ResponseDetail.RaidBossNotFound, $"Raid boss '{command.RaidBossId}' does not exist.");
 
         var validation = await AttributionDefinitionValidator.ValidateAsync(command.Cells, spellRepository, cancellationToken);
         if (validation != null)
@@ -33,6 +37,7 @@ public class CreateGuildAttributionDefinitionCommandHandler(
             Label = command.Label,
             Section = command.Section,
             IsRepeatable = command.IsRepeatable,
+            RaidBossId = command.RaidBossId,
             Cells = AttributionCellMapper.ToEntities(command.Cells),
             CreatedAt = DateTime.UtcNow,
             CreatedByDiscordId = command.RequesterDiscordId,

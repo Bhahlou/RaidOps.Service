@@ -14,4 +14,7 @@ public class GetGuildAttributionDefinitionsQuery : IQueryRequest<List<GuildAttri
 
     /// <summary>Discord snowflake ID of the requesting user. Set by the controller, not from the request body.</summary>
     public required string RequesterDiscordId { get; set; }
+
+    /// <summary>Scope to return rows for — the boss's ID, or <c>null</c> for "General" rows. Set by the controller from the query string.</summary>
+    public int? RaidBossId { get; set; }
 }

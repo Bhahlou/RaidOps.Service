@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
@@ -114,6 +115,87 @@ public class RaidAttributionsControllerTests(RaidOpsWebApplicationFactory factor
         return (guildBranchId, eventId, definitionId, cellId, characterId);
     }
 
+    private const int SscZoneId = 4;
+    private const int HydrossBossId = 14; // Seeded boss of SscZoneId.
+
+    /// <summary>Same as <see cref="SeedRaidWithSeatedCharacterAsync"/>, but the event targets Serpentshrine Cavern (so <see cref="HydrossBossId"/> is a valid boss scope) and the guild's one attribution definition is scoped to that boss instead of General.</summary>
+    private async Task<(int GuildBranchId, int EventId, int DefinitionId, int CellId, int CharacterId)> SeedRaidTargetingSscWithSeatedCharacterAsync(string discordId, string guildId, bool isOfficer)
+    {
+        int guildBranchId, eventId, definitionId, cellId, characterId;
+
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(discordId));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(discordId, guildId, isAdmin: isOfficer));
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var guildBranch = TestDataBuilder.CreateGuildBranch(guildId, branchId: 1);
+            db.GuildBranches.Add(guildBranch);
+            await db.SaveChangesAsync();
+            guildBranchId = guildBranch.Id;
+
+            var realm = TestDataBuilder.CreateRealm(branchId: 1, slug: $"realm-{guildId}");
+            db.Realms.Add(realm);
+            await db.SaveChangesAsync();
+
+            var character = TestDataBuilder.CreateCharacter(discordId, realm.Id, branchId: 1, classId: 1, isActive: true, bnetCharacterId: long.Parse(guildId), name: "SeatedChar");
+            db.Characters.Add(character);
+            await db.SaveChangesAsync();
+            characterId = character.Id;
+
+            var raidEvent = new RaidEvent
+            {
+                GuildId = guildId,
+                GuildBranchId = guildBranchId,
+                Name = "Boss Attributions Test Event",
+                PublicationStatus = RaidPublicationStatus.Published,
+                StartsAtUtc = DateTime.UtcNow.AddDays(1),
+                GroupCount = 2,
+                SlotsPerGroup = 5,
+                CreatedByDiscordId = discordId,
+                CreatedAt = DateTime.UtcNow,
+                TargetZones = [new RaidEventZone { RaidZoneId = SscZoneId }],
+            };
+            db.RaidEvents.Add(raidEvent);
+            await db.SaveChangesAsync();
+            eventId = raidEvent.Id;
+
+            db.RaidSlotAssignments.Add(new RaidSlotAssignment
+            {
+                RaidEventId = eventId,
+                GroupNumber = 1,
+                SlotNumber = 1,
+                CharacterId = characterId,
+                SpecId = 71,
+                AssignedPlayerDiscordId = discordId,
+                AssignedAt = DateTime.UtcNow,
+                AssignedByDiscordId = discordId,
+            });
+
+            var definition = new GuildAttributionDefinition
+            {
+                GuildId = guildId,
+                RaidBossId = HydrossBossId,
+                Label = "Interrupt",
+                SortOrder = 0,
+                CreatedAt = DateTime.UtcNow,
+                CreatedByDiscordId = discordId,
+                Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot, SlotLabel = "Interrupt" }],
+            };
+            db.GuildAttributionDefinitions.Add(definition);
+            await db.SaveChangesAsync();
+            definitionId = definition.Id;
+            cellId = definition.Cells.Single().Id;
+        }
+
+        return (guildBranchId, eventId, definitionId, cellId, characterId);
+    }
+
     // ── Auth enforcement ─────────────────────────────────────────────────────
 
     [Fact]
@@ -147,6 +229,13 @@ public class RaidAttributionsControllerTests(RaidOpsWebApplicationFactory factor
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task GetBossesForEvent_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/981000000000000001/branches/1/raids/events/1/bosses");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     // ── GetAttributions ──────────────────────────────────────────────────────
 
     [Fact]
@@ -177,6 +266,67 @@ public class RaidAttributionsControllerTests(RaidOpsWebApplicationFactory factor
         body!.Definitions.Should().ContainSingle(d => d.Id == definitionId && d.Cells.Any(c => c.Id == cellId));
         body.SeatedCharacters.Should().ContainSingle(c => c.CharacterId == characterId && c.Name == "SeatedChar");
         body.Fills.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAttributions_BossIdGiven_ZoneTargetedByEvent_ReturnsThatBossScopeOnly()
+    {
+        const string id = "981000000000000011";
+        const string guildId = "981000000000000011";
+        var (guildBranchId, eventId, definitionId, cellId, _) = await SeedRaidTargetingSscWithSeatedCharacterAsync(id, guildId, isOfficer: true);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events/{eventId}/attributions?bossId={HydrossBossId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<RaidEventAttributionsResponse>(ApiJsonOptions);
+        body!.Definitions.Should().ContainSingle(d => d.Id == definitionId && d.RaidBossId == HydrossBossId && d.Cells.Any(c => c.Id == cellId));
+    }
+
+    [Fact]
+    public async Task GetAttributions_BossIdGiven_ZoneNotTargetedByEvent_Returns400WithBossNotTargetedByEventError()
+    {
+        const string id = "981000000000000012";
+        const string guildId = "981000000000000012";
+        // This event only targets a default (unset) zone list — Hydross's zone (SSC) isn't one of them.
+        var (guildBranchId, eventId, _, _, _) = await SeedRaidWithSeatedCharacterAsync(id, guildId, isOfficer: true);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events/{eventId}/attributions?bossId={HydrossBossId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("BossNotTargetedByEvent");
+    }
+
+    // ── GetBossesForEvent ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetBossesForEvent_WhenOfficer_ReturnsBossesOfTheEventsTargetZones()
+    {
+        const string id = "981000000000000013";
+        const string guildId = "981000000000000013";
+        var (guildBranchId, eventId, _, _, _) = await SeedRaidTargetingSscWithSeatedCharacterAsync(id, guildId, isOfficer: true);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events/{eventId}/bosses");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var bosses = await response.Content.ReadFromJsonAsync<List<RaidBossResponse>>(ApiJsonOptions);
+        bosses.Should().Contain(b => b.Id == HydrossBossId && b.Name == "Hydross the Unstable");
+    }
+
+    [Fact]
+    public async Task GetBossesForEvent_WhenNotOnRoster_Returns400()
+    {
+        const string id = "981000000000000014";
+        const string guildId = "981000000000000014";
+        var (guildBranchId, eventId, _, _, _) = await SeedRaidWithSeatedCharacterAsync(id, guildId, isOfficer: false, rosterMode: RosterMode.DiscordRoleOnly);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events/{eventId}/bosses");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ── SetAttribution ───────────────────────────────────────────────────────

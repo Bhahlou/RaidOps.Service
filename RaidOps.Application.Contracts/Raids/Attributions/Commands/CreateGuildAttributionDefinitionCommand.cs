@@ -20,6 +20,9 @@ public class CreateGuildAttributionDefinitionCommand : ICommandRequest
     /// <summary>Whether officers can add a variable number of instances of this row per raid event.</summary>
     public bool IsRepeatable { get; set; }
 
+    /// <summary>FK to the boss this row is scoped to, or <c>null</c> for a "General" row shown on every raid event.</summary>
+    public int? RaidBossId { get; set; }
+
     /// <summary>The row's ordered cells (icons and name slots). Must contain at least one.</summary>
     public required List<AttributionCellRequest> Cells { get; set; }
 }

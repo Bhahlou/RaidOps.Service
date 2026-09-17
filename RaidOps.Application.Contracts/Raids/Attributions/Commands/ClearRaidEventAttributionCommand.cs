@@ -17,6 +17,9 @@ public class ClearRaidEventAttributionCommand : ICommandRequest
     /// <summary>Surrogate ID of the raid event. Set by the controller from the route.</summary>
     public int EventId { get; set; }
 
+    /// <summary>Boss this fill belongs to, or <c>null</c> for the "General" (raid-wide) page. Must match the target definition's <c>RaidBossId</c>.</summary>
+    public int? BossId { get; set; }
+
     /// <summary>FK to the guild's template row being cleared.</summary>
     public required int DefinitionId { get; set; }
 

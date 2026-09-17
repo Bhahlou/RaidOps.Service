@@ -20,6 +20,7 @@ public class SetRaidEventAttributionCommandHandler(
     IRaidEventRepository raidEventRepository,
     IGuildAttributionDefinitionsRepository definitionsRepository,
     IRaidEventAttributionsRepository attributionsRepository,
+    IRaidBossRepository raidBossRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<SetRaidEventAttributionCommand>
 {
     /// <inheritdoc/>
@@ -36,6 +37,16 @@ public class SetRaidEventAttributionCommandHandler(
         var definition = await definitionsRepository.GetByIdAsync(command.DefinitionId, cancellationToken);
         if (definition == null || definition.GuildId != command.GuildId)
             return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild.");
+
+        if (definition.RaidBossId != command.BossId)
+            return Result<CommandResponse>.Fail(ResponseDetail.DefinitionBossMismatch, $"Definition '{command.DefinitionId}' does not belong to boss '{command.BossId}'.");
+
+        if (command.BossId != null)
+        {
+            var boss = await raidBossRepository.GetByIdAsync(command.BossId.Value, cancellationToken);
+            if (boss == null || raidEvent.TargetZones.All(z => z.RaidZoneId != boss.RaidZoneId))
+                return Result<CommandResponse>.Fail(ResponseDetail.BossNotTargetedByEvent, $"Boss '{command.BossId}' is not targeted by this raid event.");
+        }
 
         var cell = definition.Cells.FirstOrDefault(c => c.Id == command.CellId);
         if (cell == null)
