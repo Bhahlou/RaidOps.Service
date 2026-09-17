@@ -5,6 +5,7 @@ using RaidOps.Application.Contracts.Raids.Attributions.Commands;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.Attributions.CommandHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -18,6 +19,7 @@ public class CreateGuildAttributionDefinitionCommandHandlerTests
     private readonly Mock<IGuildAccessService> _access = new();
     private readonly Mock<IGuildAttributionDefinitionsRepository> _definitions = new();
     private readonly Mock<ISpellRepository> _spells = new();
+    private readonly Mock<IRaidBossRepository> _raidBosses = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
     private readonly CreateGuildAttributionDefinitionCommandHandler _sut;
 
@@ -36,7 +38,7 @@ public class CreateGuildAttributionDefinitionCommandHandlerTests
 
     public CreateGuildAttributionDefinitionCommandHandlerTests()
     {
-        _sut = new CreateGuildAttributionDefinitionCommandHandler(_access.Object, _definitions.Object, _spells.Object, _auditLog.Object);
+        _sut = new CreateGuildAttributionDefinitionCommandHandler(_access.Object, _definitions.Object, _spells.Object, _raidBosses.Object, _auditLog.Object);
     }
 
     private void SetupOfficer() => _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
@@ -83,6 +85,7 @@ public class CreateGuildAttributionDefinitionCommandHandlerTests
         added.Label.Should().Be("Innervate");
         added.Section.Should().Be("Personals");
         added.IsRepeatable.Should().BeTrue();
+        added.RaidBossId.Should().BeNull();
         added.CreatedByDiscordId.Should().Be(RequesterId);
         added.Cells.Should().HaveCount(1);
 
@@ -90,5 +93,46 @@ public class CreateGuildAttributionDefinitionCommandHandlerTests
             GuildId, RequesterId, GuildAuditAction.AttributionTemplateUpdated,
             It.Is<Dictionary<string, string>>(v => v["label"] == "Innervate"),
             default), Times.Once);
+    }
+
+    // ── RaidBossId scope ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_RaidBossIdGiven_BossNotFound_ReturnsRaidBossNotFound()
+    {
+        SetupOfficer();
+        _raidBosses.Setup(b => b.GetByIdAsync(999, default)).ReturnsAsync((RaidBoss?)null);
+        var command = new CreateGuildAttributionDefinitionCommand
+        {
+            GuildId = GuildId, RequesterDiscordId = RequesterId, Label = "Interrupt", RaidBossId = 999,
+            Cells = [new AttributionCellRequest { Kind = AttributionCellKind.NameSlot }],
+        };
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.RaidBossNotFound);
+        _definitions.Verify(d => d.AddAsync(It.IsAny<GuildAttributionDefinition>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RaidBossIdGiven_BossFound_ScopesTheNewRowToIt()
+    {
+        SetupOfficer();
+        _raidBosses.Setup(b => b.GetByIdAsync(14, default)).ReturnsAsync(new RaidBoss { Id = 14, Name = "Hydross the Unstable", RaidZoneId = 4 });
+        GuildAttributionDefinition? added = null;
+        _definitions.Setup(d => d.AddAsync(It.IsAny<GuildAttributionDefinition>(), default))
+            .Callback<GuildAttributionDefinition, CancellationToken>((d, _) => added = d)
+            .ReturnsAsync((GuildAttributionDefinition d, CancellationToken _) => d);
+        var command = new CreateGuildAttributionDefinitionCommand
+        {
+            GuildId = GuildId, RequesterDiscordId = RequesterId, Label = "Interrupt", RaidBossId = 14,
+            Cells = [new AttributionCellRequest { Kind = AttributionCellKind.NameSlot }],
+        };
+
+        var result = await _sut.HandleAsync(command);
+
+        result.IsSuccess.Should().BeTrue();
+        added!.RaidBossId.Should().Be(14);
     }
 }

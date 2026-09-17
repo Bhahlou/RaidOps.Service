@@ -25,7 +25,7 @@ internal static class AttributionDefinitionValidator
             switch (cell.Kind)
             {
                 case AttributionCellKind.Icon:
-                    var iconValidation = await ValidateIconAsync(cell, spellRepository, cancellationToken);
+                    var iconValidation = await ValidateIconAsync(cell.IconSource, cell.SpellId, cell.RaidMarker, cell.StaticRole, spellRepository, cancellationToken);
                     if (iconValidation != null)
                         return iconValidation;
                     break;
@@ -41,24 +41,42 @@ internal static class AttributionDefinitionValidator
         return null;
     }
 
-    private static async Task<string?> ValidateIconAsync(AttributionCellRequest cell, ISpellRepository spellRepository, CancellationToken cancellationToken)
+    /// <summary>
+    /// Validates a standalone set of icon fields (not attached to a cell) — shared with cell
+    /// validation above and with <c>SetAttributionSectionIconCommandHandler</c>'s section-header icon.
+    /// </summary>
+    /// <param name="allowNone">
+    /// Whether <see cref="AttributionIconSource.None"/> is itself a valid state — <c>true</c> for a
+    /// section header icon (no icon is a normal, clearable state); <c>false</c> for an icon cell,
+    /// which must always resolve to a real icon.
+    /// </param>
+    public static async Task<string?> ValidateIconAsync(
+        AttributionIconSource iconSource,
+        int? spellId,
+        RaidMarkerIcon? raidMarker,
+        SpecRole? staticRole,
+        ISpellRepository spellRepository,
+        CancellationToken cancellationToken,
+        bool allowNone = false)
     {
-        switch (cell.IconSource)
+        switch (iconSource)
         {
             case AttributionIconSource.Spell:
-                if (cell.SpellId == null)
+                if (spellId == null)
                     return ResponseDetail.InvalidRequest;
-                if (await spellRepository.GetByIdAsync(cell.SpellId.Value, cancellationToken) == null)
+                if (await spellRepository.GetByIdAsync(spellId.Value, cancellationToken) == null)
                     return ResponseDetail.SpellNotFound;
                 return null;
 
             case AttributionIconSource.RaidMarker:
-                return cell.RaidMarker == null ? ResponseDetail.InvalidRequest : null;
+                return raidMarker == null ? ResponseDetail.InvalidRequest : null;
 
             case AttributionIconSource.StaticRole:
-                return cell.StaticRole == null ? ResponseDetail.InvalidRequest : null;
+                return staticRole == null ? ResponseDetail.InvalidRequest : null;
 
             case AttributionIconSource.None:
+                return allowNone ? null : ResponseDetail.InvalidRequest;
+
             default:
                 return ResponseDetail.InvalidRequest;
         }

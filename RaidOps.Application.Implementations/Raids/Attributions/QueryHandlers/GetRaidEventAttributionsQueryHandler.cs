@@ -14,7 +14,8 @@ public class GetRaidEventAttributionsQueryHandler(
     IGuildAccessService guildAccessService,
     IRaidEventRepository raidEventRepository,
     IGuildAttributionDefinitionsRepository definitionsRepository,
-    IRaidEventAttributionsRepository attributionsRepository) : IQueryHandlerAsync<GetRaidEventAttributionsQuery, RaidEventAttributionsResponse>
+    IRaidEventAttributionsRepository attributionsRepository,
+    IRaidBossRepository raidBossRepository) : IQueryHandlerAsync<GetRaidEventAttributionsQuery, RaidEventAttributionsResponse>
 {
     /// <inheritdoc/>
     public async Task<Result<RaidEventAttributionsResponse>> HandleAsync(GetRaidEventAttributionsQuery query, CancellationToken cancellationToken)
@@ -31,27 +32,31 @@ public class GetRaidEventAttributionsQueryHandler(
         if (accessLevel < GuildAccessLevel.Officer && !visibleToRequester)
             return Result<RaidEventAttributionsResponse>.Fail(ResponseDetail.Forbidden, "This raid event isn't published yet.");
 
-        var definitions = await definitionsRepository.GetForGuildAsync(query.GuildId, cancellationToken);
+        if (query.BossId != null)
+        {
+            var boss = await raidBossRepository.GetByIdAsync(query.BossId.Value, cancellationToken);
+            if (boss == null || raidEvent.TargetZones.All(z => z.RaidZoneId != boss.RaidZoneId))
+                return Result<RaidEventAttributionsResponse>.Fail(ResponseDetail.BossNotTargetedByEvent, $"Boss '{query.BossId}' is not targeted by this raid event.");
+        }
+
+        var definitions = await definitionsRepository.GetForGuildAsync(query.GuildId, query.BossId, cancellationToken);
         var fills = await attributionsRepository.GetForEventAsync(query.EventId, cancellationToken);
 
         var seatedAssignmentsById = raidEvent.Assignments
             .DistinctBy(a => a.CharacterId)
             .ToDictionary(a => a.CharacterId);
 
+        var definitionIds = definitions.Select(d => d.Id).ToHashSet();
+
         var response = new RaidEventAttributionsResponse
         {
-            Definitions = definitions.Select(d => new GuildAttributionDefinitionResponse
-            {
-                Id = d.Id,
-                Label = d.Label,
-                Section = d.Section,
-                IsRepeatable = d.IsRepeatable,
-                Cells = d.Cells.Select(AttributionCellMapper.ToResponse).ToList(),
-                SortOrder = d.SortOrder,
-            }).ToList(),
+            Definitions = definitions.Select(AttributionCellMapper.ToDefinitionResponse).ToList(),
 
+            // Scoped to this page's own definitions — the event's other boss pages' fills are
+            // irrelevant here and would only bloat the payload (cell IDs are globally unique
+            // surrogate keys, so there's no cross-boss collision risk either way).
             Fills = fills
-                .Where(f => seatedAssignmentsById.ContainsKey(f.CharacterId))
+                .Where(f => definitionIds.Contains(f.GuildAttributionDefinitionId) && seatedAssignmentsById.ContainsKey(f.CharacterId))
                 .Select(f =>
                 {
                     var character = seatedAssignmentsById[f.CharacterId].Character;

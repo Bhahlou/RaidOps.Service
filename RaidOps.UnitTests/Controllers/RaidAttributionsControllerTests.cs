@@ -7,6 +7,8 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Attributions.Commands;
 using RaidOps.Application.Contracts.Raids.Attributions.Queries;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Queries;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 
 namespace RaidOps.UnitTests.Controllers;
 
@@ -24,7 +26,7 @@ public class RaidAttributionsControllerTests
     [Fact]
     public async Task GetAttributions_NoDiscordId_ReturnsUnauthorized()
     {
-        var result = await MakeSut(null).GetAttributions("guild-1", 7, 42, default);
+        var result = await MakeSut(null).GetAttributions("guild-1", 7, 42, null, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -37,7 +39,7 @@ public class RaidAttributionsControllerTests
                 It.Is<GetRaidEventAttributionsQuery>(qr => qr.GuildId == "guild-1" && qr.GuildBranchId == 7 && qr.EventId == 42 && qr.RequesterDiscordId == "user-1"), default))
             .ReturnsAsync(Result<RaidEventAttributionsResponse>.Ok(response));
 
-        var result = await MakeSut().GetAttributions("guild-1", 7, 42, default);
+        var result = await MakeSut().GetAttributions("guild-1", 7, 42, null, default);
 
         result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeSameAs(response);
     }
@@ -48,7 +50,53 @@ public class RaidAttributionsControllerTests
         _queries.Setup(q => q.DispatchAsync<GetRaidEventAttributionsQuery, RaidEventAttributionsResponse>(It.IsAny<GetRaidEventAttributionsQuery>(), default))
             .ReturnsAsync(Result<RaidEventAttributionsResponse>.Fail(ResponseDetail.Forbidden));
 
-        var result = await MakeSut().GetAttributions("guild-1", 7, 42, default);
+        var result = await MakeSut().GetAttributions("guild-1", 7, 42, null, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetAttributions_BossIdGiven_PassesItThrough()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetRaidEventAttributionsQuery, RaidEventAttributionsResponse>(
+                It.Is<GetRaidEventAttributionsQuery>(qr => qr.BossId == 14), default))
+            .ReturnsAsync(Result<RaidEventAttributionsResponse>.Ok(new RaidEventAttributionsResponse { Definitions = [], Fills = [], SeatedCharacters = [] }));
+
+        var result = await MakeSut().GetAttributions("guild-1", 7, 42, 14, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    // ── GetBossesForEvent ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetBossesForEvent_NoDiscordId_ReturnsUnauthorized()
+    {
+        var result = await MakeSut(null).GetBossesForEvent("guild-1", 7, 42, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task GetBossesForEvent_QuerySucceeds_ReturnsOk()
+    {
+        var response = new List<RaidBossResponse>();
+        _queries.Setup(q => q.DispatchAsync<GetRaidBossesForEventQuery, List<RaidBossResponse>>(
+                It.Is<GetRaidBossesForEventQuery>(qr => qr.GuildId == "guild-1" && qr.GuildBranchId == 7 && qr.EventId == 42 && qr.RequesterDiscordId == "user-1"), default))
+            .ReturnsAsync(Result<List<RaidBossResponse>>.Ok(response));
+
+        var result = await MakeSut().GetBossesForEvent("guild-1", 7, 42, default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeSameAs(response);
+    }
+
+    [Fact]
+    public async Task GetBossesForEvent_QueryFails_ReturnsBadRequest()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetRaidBossesForEventQuery, List<RaidBossResponse>>(It.IsAny<GetRaidBossesForEventQuery>(), default))
+            .ReturnsAsync(Result<List<RaidBossResponse>>.Fail(ResponseDetail.Forbidden));
+
+        var result = await MakeSut().GetBossesForEvent("guild-1", 7, 42, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

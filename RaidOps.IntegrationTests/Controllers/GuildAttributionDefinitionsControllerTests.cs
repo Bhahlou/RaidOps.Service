@@ -1,7 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 using RaidOps.Application.Contracts.Raids.Spells.Responses;
+using RaidOps.Application.Contracts.Raids.Zones.Responses;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Domain.Models.Reference;
@@ -68,6 +70,27 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     public async Task SearchSpells_WithoutToken_Returns401()
     {
         var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/spells/search?expansionId=2&searchTerm=inn&locale=en");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/raid-zones");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetBossesForZone_WithoutToken_Returns401()
+    {
+        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/raid-zones/4/bosses");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SetSectionIcon_WithoutToken_Returns401()
+    {
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions/sections/icon", new { section = "Interrupts", iconSource = "RaidMarker", raidMarker = "Skull" });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -140,6 +163,92 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         definition.Section.Should().Be("Personals");
         definition.IsRepeatable.Should().BeTrue();
         definition.Cells.Should().ContainSingle(c => c.Kind == AttributionCellKind.NameSlot && c.SlotLabel == "De");
+    }
+
+    // ── GetRaidZonesForGuild ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_WhenOfficer_ReturnsZonesOfTheGuildsActiveBranchExpansion()
+    {
+        const string id = "982000000000000012";
+        const string guildId = "982000000000000012";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            // Branch 4 = "BC Classic (Anniv.)", CurrentExpansionId 2 — the expansion the seeded TBC raid zones belong to.
+            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId, branchId: 4));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var zones = await response.Content.ReadFromJsonAsync<List<RaidZoneResponse>>(ApiJsonOptions);
+        zones.Should().Contain(z => z.ShortCode == "SSC");
+    }
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_WhenNotOfficer_Returns400()
+    {
+        const string id = "982000000000000013";
+        const string guildId = "982000000000000013";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // ── GetBossesForZone ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetBossesForZone_WhenOfficer_ReturnsThatZonesBosses()
+    {
+        const string id = "982000000000000014";
+        const string guildId = "982000000000000014";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones/4/bosses"); // SSC
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var bosses = await response.Content.ReadFromJsonAsync<List<RaidBossResponse>>(ApiJsonOptions);
+        bosses.Should().Contain(b => b.Id == 14 && b.Name == "Hydross the Unstable");
+    }
+
+    [Fact]
+    public async Task GetBossesForZone_WhenNotOfficer_Returns400()
+    {
+        const string id = "982000000000000015";
+        const string guildId = "982000000000000015";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones/4/bosses");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ── CreateDefinition ─────────────────────────────────────────────────────
@@ -350,6 +459,67 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             (await db.GuildAttributionDefinitions.FindAsync(secondId))!.SortOrder.Should().Be(0);
             (await db.GuildAttributionDefinitions.FindAsync(firstId))!.SortOrder.Should().Be(1);
         }
+    }
+
+    // ── SetSectionIcon ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SetSectionIcon_WhenOfficer_Returns200AndUpdatesEveryRowInThatSection()
+    {
+        const string id = "982000000000000016";
+        const string guildId = "982000000000000016";
+        int firstId, secondId;
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var (seedScope, seedDb) = CreateDbScope();
+        using (seedScope)
+        {
+            var first = new GuildAttributionDefinition { GuildId = guildId, Label = "Innervate", Section = "Personals", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
+            var second = new GuildAttributionDefinition { GuildId = guildId, Label = "PW: Shield", Section = "Personals", SortOrder = 1, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
+            seedDb.GuildAttributionDefinitions.AddRange(first, second);
+            await seedDb.SaveChangesAsync();
+            firstId = first.Id;
+            secondId = second.Id;
+        }
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = new { section = "Personals", iconSource = "RaidMarker", raidMarker = "Skull" };
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions/sections/icon", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            (await db.GuildAttributionDefinitions.FindAsync(firstId))!.SectionIconSource.Should().Be(AttributionIconSource.RaidMarker);
+            (await db.GuildAttributionDefinitions.FindAsync(secondId))!.SectionRaidMarker.Should().Be(RaidMarkerIcon.Skull);
+        }
+    }
+
+    [Fact]
+    public async Task SetSectionIcon_NoRowUsesThatSection_Returns400WithAttributionDefinitionNotFoundError()
+    {
+        const string id = "982000000000000017";
+        const string guildId = "982000000000000017";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+        var body = new { section = "No such section", iconSource = "RaidMarker", raidMarker = "Skull" };
+
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions/sections/icon", body);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("AttributionDefinitionNotFound");
     }
 
     // ── SearchSpells ─────────────────────────────────────────────────────────

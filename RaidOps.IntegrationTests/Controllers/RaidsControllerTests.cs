@@ -496,7 +496,7 @@ public class RaidsControllerTests(RaidOpsWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         var zones = json.EnumerateArray().ToList();
-        zones.Should().HaveCount(8);
+        zones.Should().HaveCount(9);
         zones.Should().Contain(z => z.GetProperty("name").GetString() == "Karazhan");
     }
 

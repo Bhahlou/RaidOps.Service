@@ -22,6 +22,7 @@ public class SetRaidEventAttributionCommandHandlerTests
     private readonly Mock<IRaidEventRepository> _raidEvents = new();
     private readonly Mock<IGuildAttributionDefinitionsRepository> _definitions = new();
     private readonly Mock<IRaidEventAttributionsRepository> _attributions = new();
+    private readonly Mock<IRaidBossRepository> _raidBosses = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
     private readonly SetRaidEventAttributionCommandHandler _sut;
 
@@ -33,10 +34,10 @@ public class SetRaidEventAttributionCommandHandlerTests
     private const int CellId = 2;
     private const int CharacterId = 100;
 
-    private static SetRaidEventAttributionCommand MakeCommand(int instanceIndex = 0) => new()
+    private static SetRaidEventAttributionCommand MakeCommand(int instanceIndex = 0, int? bossId = null) => new()
     {
         GuildId = GuildId, RequesterDiscordId = RequesterId, GuildBranchId = GuildBranchId, EventId = EventId,
-        DefinitionId = DefinitionId, CellId = CellId, InstanceIndex = instanceIndex, CharacterId = CharacterId,
+        DefinitionId = DefinitionId, CellId = CellId, InstanceIndex = instanceIndex, CharacterId = CharacterId, BossId = bossId,
     };
 
     private static AttributionDefinitionCell MakeCell(AttributionCellKind kind = AttributionCellKind.NameSlot, List<int>? classIds = null, List<SpecRole>? roles = null, List<int>? specIds = null) => new()
@@ -48,9 +49,9 @@ public class SetRaidEventAttributionCommandHandlerTests
         RequiredSpecIds = specIds ?? [],
     };
 
-    private static GuildAttributionDefinition MakeDefinition(bool isRepeatable = false, AttributionDefinitionCell? cell = null) => new()
+    private static GuildAttributionDefinition MakeDefinition(bool isRepeatable = false, AttributionDefinitionCell? cell = null, int? raidBossId = null) => new()
     {
-        Id = DefinitionId, GuildId = GuildId, IsRepeatable = isRepeatable, Cells = [cell ?? MakeCell()],
+        Id = DefinitionId, GuildId = GuildId, IsRepeatable = isRepeatable, Cells = [cell ?? MakeCell()], RaidBossId = raidBossId,
     };
 
     private static RaidSlotAssignment MakeAssignment(int characterId = CharacterId, int classId = 1, SpecRole role = SpecRole.MeleeDps, int specId = 71) => new()
@@ -63,7 +64,7 @@ public class SetRaidEventAttributionCommandHandlerTests
 
     public SetRaidEventAttributionCommandHandlerTests()
     {
-        _sut = new SetRaidEventAttributionCommandHandler(_access.Object, _raidEvents.Object, _definitions.Object, _attributions.Object, _auditLog.Object);
+        _sut = new SetRaidEventAttributionCommandHandler(_access.Object, _raidEvents.Object, _definitions.Object, _attributions.Object, _raidBosses.Object, _auditLog.Object);
     }
 
     private void SetupOfficer() => _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
@@ -248,6 +249,66 @@ public class SetRaidEventAttributionCommandHandlerTests
         _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(MakeDefinition());
 
         var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _attributions.Verify(a => a.SetAsync(EventId, CellId, DefinitionId, 0, CharacterId, RequesterId, default), Times.Once);
+    }
+
+    // ── BossId scope ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_CommandBossIdDoesNotMatchDefinitionScope_ReturnsDefinitionBossMismatch()
+    {
+        SetupOfficer();
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [MakeAssignment()] });
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(MakeDefinition(raidBossId: 14));
+
+        var result = await _sut.HandleAsync(MakeCommand()); // BossId defaults to null — mismatches the row's RaidBossId=14
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.DefinitionBossMismatch);
+        _attributions.Verify(a => a.SetAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BossIdGiven_BossDoesNotExist_ReturnsBossNotTargetedByEvent()
+    {
+        SetupOfficer();
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [MakeAssignment()] });
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(MakeDefinition(raidBossId: 14));
+        _raidBosses.Setup(b => b.GetByIdAsync(14, default)).ReturnsAsync((RaidBoss?)null);
+
+        var result = await _sut.HandleAsync(MakeCommand(bossId: 14));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.BossNotTargetedByEvent);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BossIdGiven_BossZoneNotTargetedByEvent_ReturnsBossNotTargetedByEvent()
+    {
+        SetupOfficer();
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default))
+            .ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [MakeAssignment()], TargetZones = [new RaidEventZone { RaidZoneId = 1 }] });
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(MakeDefinition(raidBossId: 14));
+        _raidBosses.Setup(b => b.GetByIdAsync(14, default)).ReturnsAsync(new RaidBoss { Id = 14, Name = "Hydross the Unstable", RaidZoneId = 4 });
+
+        var result = await _sut.HandleAsync(MakeCommand(bossId: 14));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.BossNotTargetedByEvent);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BossIdGiven_BossZoneTargetedByEvent_Succeeds()
+    {
+        SetupOfficer();
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default))
+            .ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [MakeAssignment()], TargetZones = [new RaidEventZone { RaidZoneId = 4 }] });
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(MakeDefinition(raidBossId: 14));
+        _raidBosses.Setup(b => b.GetByIdAsync(14, default)).ReturnsAsync(new RaidBoss { Id = 14, Name = "Hydross the Unstable", RaidZoneId = 4 });
+
+        var result = await _sut.HandleAsync(MakeCommand(bossId: 14));
 
         result.IsSuccess.Should().BeTrue();
         _attributions.Verify(a => a.SetAsync(EventId, CellId, DefinitionId, 0, CharacterId, RequesterId, default), Times.Once);

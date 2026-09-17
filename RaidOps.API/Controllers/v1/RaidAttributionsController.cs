@@ -6,6 +6,8 @@ using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Raids.Attributions.Commands;
 using RaidOps.Application.Contracts.Raids.Attributions.Queries;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Queries;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace RaidOps.API.Controllers.v1;
@@ -18,16 +20,31 @@ public class RaidAttributionsController(
     ICommandDispatcher commandDispatcher,
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
-    /// <summary>Returns the guild's attribution template merged with this event's existing fills and seated characters.</summary>
+    /// <summary>Returns the guild's attribution template for one scope ("General", or one specific boss) merged with this event's existing fills and seated characters.</summary>
     [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/attributions")]
-    public async Task<IActionResult> GetAttributions(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAttributions(string guildId, int guildBranchId, int eventId, [FromQuery] int? bossId, CancellationToken cancellationToken)
     {
         var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (discordId == null)
             return Unauthorized();
 
         var result = await QueryDispatcher.DispatchAsync<GetRaidEventAttributionsQuery, RaidEventAttributionsResponse>(
-            new GetRaidEventAttributionsQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
+            new GetRaidEventAttributionsQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, BossId = bossId, RequesterDiscordId = discordId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>Returns every boss of the zone(s) this raid event targets — backs the Assignments page's boss navigation strip.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/{eventId:int}/bosses")]
+    public async Task<IActionResult> GetBossesForEvent(string guildId, int guildBranchId, int eventId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetRaidBossesForEventQuery, List<RaidBossResponse>>(
+            new GetRaidBossesForEventQuery { GuildId = guildId, GuildBranchId = guildBranchId, EventId = eventId, RequesterDiscordId = discordId },
             cancellationToken);
 
         return ToActionResult(result);

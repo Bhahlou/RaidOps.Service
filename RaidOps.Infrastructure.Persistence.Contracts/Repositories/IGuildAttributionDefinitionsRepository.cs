@@ -5,8 +5,11 @@ namespace RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 /// <summary>Repository contract for <see cref="GuildAttributionDefinition"/> persistence.</summary>
 public interface IGuildAttributionDefinitionsRepository
 {
-    /// <summary>Returns every definition of the guild, ordered by <see cref="GuildAttributionDefinition.SortOrder"/>.</summary>
-    Task<List<GuildAttributionDefinition>> GetForGuildAsync(string guildId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Returns every definition of the guild scoped to <paramref name="raidBossId"/> (<c>null</c> for
+    /// "General" rows), ordered by <see cref="GuildAttributionDefinition.SortOrder"/>.
+    /// </summary>
+    Task<List<GuildAttributionDefinition>> GetForGuildAsync(string guildId, int? raidBossId, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the definition identified by <paramref name="id"/>, or <c>null</c> if not found.</summary>
     Task<GuildAttributionDefinition?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
@@ -22,4 +25,17 @@ public interface IGuildAttributionDefinitionsRepository
 
     /// <summary>Re-numbers <see cref="GuildAttributionDefinition.SortOrder"/> for the guild's definitions to match <paramref name="orderedIds"/>'s order. IDs not belonging to the guild are ignored.</summary>
     Task ReorderAsync(string guildId, IReadOnlyList<int> orderedIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the section-header icon fields on every row of <paramref name="guildId"/> scoped to
+    /// <paramref name="raidBossId"/> whose trimmed <see cref="GuildAttributionDefinition.Section"/>
+    /// matches <paramref name="section"/> (trimmed). Returns the number of rows updated — <c>0</c>
+    /// means no row currently uses that section.
+    /// </summary>
+    Task<int> SetSectionIconAsync(
+        string guildId,
+        int? raidBossId,
+        string section,
+        SectionIconFields icon,
+        CancellationToken cancellationToken = default);
 }
