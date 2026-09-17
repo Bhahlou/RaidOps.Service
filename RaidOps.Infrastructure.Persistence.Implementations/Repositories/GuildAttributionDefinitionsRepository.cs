@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -107,15 +106,7 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     }
 
     /// <inheritdoc/>
-    public async Task<int> SetSectionIconAsync(
-        string guildId,
-        int? raidBossId,
-        string section,
-        AttributionIconSource iconSource,
-        int? spellId,
-        RaidMarkerIcon? raidMarker,
-        SpecRole? staticRole,
-        CancellationToken cancellationToken = default)
+    public async Task<int> SetSectionIconAsync(string guildId, int? raidBossId, string section, SectionIconFields icon, CancellationToken cancellationToken = default)
     {
         var trimmedSection = section.Trim();
 
@@ -123,10 +114,10 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
             .Where(d => d.GuildId == guildId && d.RaidBossId == raidBossId && d.Section != null && d.Section.Trim() == trimmedSection)
             .ExecuteUpdateAsync(
                 s => s
-                    .SetProperty(d => d.SectionIconSource, iconSource)
-                    .SetProperty(d => d.SectionSpellId, spellId)
-                    .SetProperty(d => d.SectionRaidMarker, raidMarker)
-                    .SetProperty(d => d.SectionStaticRole, staticRole),
+                    .SetProperty(d => d.SectionIconSource, icon.IconSource)
+                    .SetProperty(d => d.SectionSpellId, icon.SpellId)
+                    .SetProperty(d => d.SectionRaidMarker, icon.RaidMarker)
+                    .SetProperty(d => d.SectionStaticRole, icon.StaticRole),
                 cancellationToken);
     }
 }

@@ -27,8 +27,8 @@ public class SetAttributionSectionIconCommandHandler(
         if (validation != null)
             return Result<CommandResponse>.Fail(validation, "Invalid section icon fields.");
 
-        var updated = await definitionsRepository.SetSectionIconAsync(
-            command.GuildId, command.RaidBossId, command.Section, command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole, cancellationToken);
+        var icon = new SectionIconFields(command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole);
+        var updated = await definitionsRepository.SetSectionIconAsync(command.GuildId, command.RaidBossId, command.Section, icon, cancellationToken);
         if (updated == 0)
             return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"No row uses section '{command.Section}' in this scope.");
 

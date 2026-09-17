@@ -129,7 +129,7 @@ public class GuildAttributionDefinitionsRepositoryTests(RaidOpsWebApplicationFac
             // Same section name but scoped to a boss — must NOT be touched by the General update below.
             await repo.AddAsync(MakeDefinition(guildId, "Interrupt 1", "Personals", HydrossBossId));
 
-            var updated = await repo.SetSectionIconAsync(guildId, null, "Personals", AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null);
+            var updated = await repo.SetSectionIconAsync(guildId, null, "Personals", new SectionIconFields(AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null));
 
             updated.Should().Be(2);
             // ExecuteUpdateAsync is a raw bulk SQL update — it never refreshes this context's
@@ -152,7 +152,7 @@ public class GuildAttributionDefinitionsRepositoryTests(RaidOpsWebApplicationFac
         {
             var repo = scope.ServiceProvider.GetRequiredService<IGuildAttributionDefinitionsRepository>();
 
-            var updated = await repo.SetSectionIconAsync(guildId, null, "No such section", AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null);
+            var updated = await repo.SetSectionIconAsync(guildId, null, "No such section", new SectionIconFields(AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null));
 
             updated.Should().Be(0);
         }

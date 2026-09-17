@@ -1,4 +1,3 @@
-using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids.Attributions;
 
 namespace RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -37,9 +36,6 @@ public interface IGuildAttributionDefinitionsRepository
         string guildId,
         int? raidBossId,
         string section,
-        AttributionIconSource iconSource,
-        int? spellId,
-        RaidMarkerIcon? raidMarker,
-        SpecRole? staticRole,
+        SectionIconFields icon,
         CancellationToken cancellationToken = default);
 }

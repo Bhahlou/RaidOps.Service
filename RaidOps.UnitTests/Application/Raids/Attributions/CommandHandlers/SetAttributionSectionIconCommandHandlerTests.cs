@@ -50,7 +50,7 @@ public class SetAttributionSectionIconCommandHandlerTests
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.Forbidden);
         _definitions.Verify(
-            d => d.SetSectionIconAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<string>(), It.IsAny<AttributionIconSource>(), It.IsAny<int?>(), It.IsAny<RaidMarkerIcon?>(), It.IsAny<SpecRole?>(), default),
+            d => d.SetSectionIconAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<string>(), It.IsAny<SectionIconFields>(), default),
             Times.Never);
     }
 
@@ -83,7 +83,7 @@ public class SetAttributionSectionIconCommandHandlerTests
     public async Task HandleAsync_NoRowUsesThisSection_ReturnsAttributionDefinitionNotFound()
     {
         SetupOfficer();
-        _definitions.Setup(d => d.SetSectionIconAsync(GuildId, null, "Interrupts", AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null, default)).ReturnsAsync(0);
+        _definitions.Setup(d => d.SetSectionIconAsync(GuildId, null, "Interrupts", new SectionIconFields(AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null), default)).ReturnsAsync(0);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -96,7 +96,7 @@ public class SetAttributionSectionIconCommandHandlerTests
     public async Task HandleAsync_Success_UpdatesAndLogs()
     {
         SetupOfficer();
-        _definitions.Setup(d => d.SetSectionIconAsync(GuildId, null, "Interrupts", AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null, default)).ReturnsAsync(3);
+        _definitions.Setup(d => d.SetSectionIconAsync(GuildId, null, "Interrupts", new SectionIconFields(AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null), default)).ReturnsAsync(3);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -116,11 +116,11 @@ public class SetAttributionSectionIconCommandHandlerTests
             GuildId = GuildId, RequesterDiscordId = RequesterId, RaidBossId = 14, Section = "Interrupts",
             IconSource = AttributionIconSource.RaidMarker, RaidMarker = RaidMarkerIcon.Skull,
         };
-        _definitions.Setup(d => d.SetSectionIconAsync(GuildId, 14, "Interrupts", AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null, default)).ReturnsAsync(1);
+        _definitions.Setup(d => d.SetSectionIconAsync(GuildId, 14, "Interrupts", new SectionIconFields(AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null), default)).ReturnsAsync(1);
 
         var result = await _sut.HandleAsync(command);
 
         result.IsSuccess.Should().BeTrue();
-        _definitions.Verify(d => d.SetSectionIconAsync(GuildId, 14, "Interrupts", AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null, default), Times.Once);
+        _definitions.Verify(d => d.SetSectionIconAsync(GuildId, 14, "Interrupts", new SectionIconFields(AttributionIconSource.RaidMarker, null, RaidMarkerIcon.Skull, null), default), Times.Once);
     }
 }

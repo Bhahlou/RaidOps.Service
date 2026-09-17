@@ -46,7 +46,8 @@ public class GetRaidBossesForZoneQueryHandlerTests
     {
         _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
         var zone = new RaidZone { Id = 4, Name = "Serpentshrine Cavern", ShortCode = "SSC" };
-        _raidBosses.Setup(b => b.GetForZonesAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 4 })), default)).ReturnsAsync(
+        int[] expectedZoneIds = [4];
+        _raidBosses.Setup(b => b.GetForZonesAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(expectedZoneIds)), default)).ReturnsAsync(
         [
             new RaidBoss { Id = 14, RaidZoneId = 4, Name = "Hydross the Unstable", IconUrl = "/hydross.png", SortOrder = 0, RaidZone = zone },
         ]);
