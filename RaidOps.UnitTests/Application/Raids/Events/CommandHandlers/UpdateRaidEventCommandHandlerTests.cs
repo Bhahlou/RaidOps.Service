@@ -35,7 +35,8 @@ public class UpdateRaidEventCommandHandlerTests
 
     private static UpdateRaidEventCommand MakeCommand(
         int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null,
-        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false) => new()
+        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false,
+        int? extendsRaidEventId = null) => new()
     {
         GuildId = GuildId,
         RequesterDiscordId = RequesterId,
@@ -48,6 +49,7 @@ public class UpdateRaidEventCommandHandlerTests
         RaidZoneIds = zoneIds ?? [1],
         DedicatedAnnouncementChannelId = dedicatedAnnouncementChannelId,
         DedicatedAnnouncementChannelIsBotOwned = dedicatedAnnouncementChannelIsBotOwned,
+        ExtendsRaidEventId = extendsRaidEventId,
     };
 
     /// <summary>Wires the successful-update happy path shared by every dedicated-channel test below.</summary>
@@ -323,5 +325,130 @@ public class UpdateRaidEventCommandHandlerTests
         _raidEventRepository.Verify(r => r.UpdateAsync(
             It.Is<RaidEvent>(e => e.DedicatedAnnouncementChannelId == "222" && e.DedicatedAnnouncementChannelIsBotOwned),
             GuildBranchId, It.IsAny<IEnumerable<int>>(), default), Times.Once);
+    }
+
+    // ── ExtendsRaidEventId ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_ExtendsSelf_ReturnsInvalidRequestWithoutPersisting()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: EventId));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.InvalidRequest);
+        _raidEventRepository.Verify(r => r.UpdateAsync(It.IsAny<RaidEvent>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsUnknownEvent_ReturnsRaidEventNotFoundWithoutPersisting()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync((RaidEvent?)null);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.RaidEventNotFound);
+        _raidEventRepository.Verify(r => r.UpdateAsync(It.IsAny<RaidEvent>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsWouldCreateCycle_ReturnsInvalidRequestWithoutPersisting()
+    {
+        // Event 50 already extends this event (5) — picking 50 as a target would loop back to self.
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = EventId });
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.InvalidRequest);
+        _raidEventRepository.Verify(r => r.UpdateAsync(It.IsAny<RaidEvent>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsStandaloneEvent_PersistsThatEventsIdDirectly()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = null });
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.UpdateAsync(It.Is<RaidEvent>(e => e.ExtendsRaidEventId == 50), GuildBranchId, It.IsAny<IEnumerable<int>>(), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsAlreadyExtendingEvent_NormalizesToChainRoot()
+    {
+        // Event 50 already extends root event 10 — must flatten to 10, never the intermediate link.
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = 10 });
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.UpdateAsync(It.Is<RaidEvent>(e => e.ExtendsRaidEventId == 10), GuildBranchId, It.IsAny<IEnumerable<int>>(), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsRaidEventIdUnchanged_DoesNotRepointChain()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, ExtendsRaidEventId = 50, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = null });
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.RepointExtensionChainAsync(It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<int>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsRaidEventIdChanged_RepointsFormerChildrenToNewRoot()
+    {
+        // Event 5 was standalone (a root, potentially with other events pointing at it) and is now
+        // set to extend 50 — anything that pointed at 5 must be re-pointed at 50 too.
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, ExtendsRaidEventId = null, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = null });
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.RepointExtensionChainAsync(EventId, 50, GuildBranchId, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnlinkingExistingLink_RepointsFormerChildrenToNull()
+    {
+        SetupOfficer();
+        _raidEventRepository.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, ExtendsRaidEventId = 50, Assignments = [] });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([new RaidZone { Id = 1 }]);
+        _raidEventRepository.Setup(r => r.UpdateAsync(It.IsAny<RaidEvent>(), GuildBranchId, It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync(true);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: null));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.UpdateAsync(It.Is<RaidEvent>(e => e.ExtendsRaidEventId == null), GuildBranchId, It.IsAny<IEnumerable<int>>(), default), Times.Once);
+        _raidEventRepository.Verify(r => r.RepointExtensionChainAsync(EventId, null, GuildBranchId, default), Times.Once);
     }
 }

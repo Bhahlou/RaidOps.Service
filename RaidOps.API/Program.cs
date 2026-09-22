@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -11,10 +12,12 @@ using NetCord.Hosting.Services.ApplicationCommands;
 using NetCord.Hosting.Services.ComponentInteractions;
 using NetCord.Services.ComponentInteractions;
 using RaidOps.API.Hubs;
+using RaidOps.API.Seeding;
 using RaidOps.Application.Contracts.Configuration;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Implementations.Bot.Commands;
+using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Registry;
 using Serilog;
@@ -92,6 +95,7 @@ namespace RaidOps.API
 
             builder.Services.AddControllers()
                 .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+            builder.Services.Configure<ApiBehaviorOptions>(options => options.SuppressMapClientErrors = true);
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
             builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
@@ -203,6 +207,9 @@ namespace RaidOps.API
             {
                 var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
                 await db.Database.MigrateAsync();
+
+                var spellRepository = scope.ServiceProvider.GetRequiredService<ISpellRepository>();
+                await SpellSeeder.SeedAsync(spellRepository, app.Logger, CancellationToken.None);
             }
 
             var deployNotifier = app.Services.GetRequiredService<IDiscordDeployNotifier>();

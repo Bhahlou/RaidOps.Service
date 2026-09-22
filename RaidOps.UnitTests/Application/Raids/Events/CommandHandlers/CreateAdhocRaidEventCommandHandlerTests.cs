@@ -38,7 +38,8 @@ public class CreateAdhocRaidEventCommandHandlerTests
 
     private static CreateAdhocRaidEventCommand MakeCommand(
         int groupCount = 2, int slotsPerGroup = 5, List<int>? zoneIds = null,
-        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false) => new()
+        string? dedicatedAnnouncementChannelId = null, bool dedicatedAnnouncementChannelIsBotOwned = false,
+        int? extendsRaidEventId = null) => new()
     {
         GuildId = GuildId,
         RequesterDiscordId = RequesterId,
@@ -50,6 +51,7 @@ public class CreateAdhocRaidEventCommandHandlerTests
         RaidZoneIds = zoneIds ?? [1],
         DedicatedAnnouncementChannelId = dedicatedAnnouncementChannelId,
         DedicatedAnnouncementChannelIsBotOwned = dedicatedAnnouncementChannelIsBotOwned,
+        ExtendsRaidEventId = extendsRaidEventId,
     };
 
     [Fact]
@@ -175,5 +177,62 @@ public class CreateAdhocRaidEventCommandHandlerTests
         _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e =>
             e.DedicatedAnnouncementChannelId == null && !e.DedicatedAnnouncementChannelIsBotOwned),
             default), Times.Once);
+    }
+
+    // ── ExtendsRaidEventId ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_NoExtendsRaidEventId_PersistsNull()
+    {
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e => e.ExtendsRaidEventId == null), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsRaidEventIdNotFound_ReturnsRaidEventNotFoundWithoutPersisting()
+    {
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync((RaidEvent?)null);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.RaidEventNotFound);
+        _raidEventRepository.Verify(r => r.AddAsync(It.IsAny<RaidEvent>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsStandaloneEvent_PersistsThatEventsIdDirectly()
+    {
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = null });
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e => e.ExtendsRaidEventId == 50), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExtendsAlreadyExtendingEvent_NormalizesToChainRoot()
+    {
+        // Event 50 already extends root event 10 — the new event must be flattened to point
+        // directly at 10, never at the intermediate link (50).
+        _raidEventRepository.Setup(r => r.GetByIdAsync(50, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = 50, ExtendsRaidEventId = 10 });
+        _raidEventRepository.Setup(r => r.AddAsync(It.IsAny<RaidEvent>(), default))
+            .ReturnsAsync((RaidEvent e, CancellationToken _) => { e.Id = 77; return e; });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(MakeCommand(extendsRaidEventId: 50));
+
+        result.IsSuccess.Should().BeTrue();
+        _raidEventRepository.Verify(r => r.AddAsync(It.Is<RaidEvent>(e => e.ExtendsRaidEventId == 10), default), Times.Once);
     }
 }

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
@@ -41,6 +42,66 @@ public class GuildBranchesRepositoryTests(RaidOpsWebApplicationFactory factory)
 
             var rows = db.GuildBranches.Where(gb => gb.GuildId == guildId).ToList();
             rows.Should().ContainSingle();
+        }
+    }
+
+    [Fact]
+    public async Task ActivateAsync_ConcurrentActivationOfSamePair_SecondCallReactivatesInsteadOfThrowing()
+    {
+        const string guildId = "960000000000000005";
+        const int branchId = 1;
+        await SeedGuildAsync(guildId);
+
+        var (scope1, db1) = CreateDbScope();
+        var (scope2, _) = CreateDbScope();
+        using (scope1)
+        using (scope2)
+        {
+            var repo1 = scope1.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+            var repo2 = scope2.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+
+            // Keep repo1's insert uncommitted so repo2's own "does it exist" check still sees
+            // nothing, forcing repo2 down the same insert path — reproducing the real race between
+            // two concurrent activations of the same (guildId, branchId) pair.
+            await using var tx1 = await db1.Database.BeginTransactionAsync();
+            var winner = await repo1.ActivateAsync(guildId, branchId);
+
+            var loserTask = Task.Run(() => repo2.ActivateAsync(guildId, branchId));
+            // Give repo2's insert time to reach Postgres and block on repo1's still-uncommitted
+            // unique-index entry before releasing it.
+            await Task.Delay(300);
+            await tx1.CommitAsync();
+
+            var loser = await loserTask;
+
+            winner.IsActive.Should().BeTrue();
+            loser.IsActive.Should().BeTrue();
+            loser.Id.Should().Be(winner.Id);
+        }
+
+        var (scope3, db3) = CreateDbScope();
+        using (scope3)
+        {
+            db3.GuildBranches.Count(gb => gb.GuildId == guildId && gb.BranchId == branchId).Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task ActivateAsync_UnrelatedConstraintViolation_IsNotSwallowed()
+    {
+        const string guildId = "960000000000000006";
+        await SeedGuildAsync(guildId);
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+
+            // No Branch with this ID exists — a foreign-key violation, not the unique-constraint
+            // race ActivateAsync's catch is specifically meant to absorb, so it must propagate.
+            var act = () => repo.ActivateAsync(guildId, branchId: 999999);
+
+            await act.Should().ThrowAsync<DbUpdateException>();
         }
     }
 

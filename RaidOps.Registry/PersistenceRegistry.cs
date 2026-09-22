@@ -19,7 +19,9 @@ internal static class PersistenceRegistry
         services.AddScoped<IUserGuildsRepository, UserGuildsRepository>();
         services.AddScoped<IBnetAccountRepository, BnetAccountRepository>();
         services.AddScoped<IBranchRepository, BranchRepository>();
+        services.AddScoped<IExpansionRepository, ExpansionRepository>();
         services.AddScoped<ISpecRepository, SpecRepository>();
+        services.AddScoped<IWowClassRepository, WowClassRepository>();
         services.AddScoped<IRealmRepository, RealmRepository>();
         services.AddScoped<ICharacterRepository, CharacterRepository>();
         services.AddScoped<IGuildMembershipRepository, GuildMembershipRepository>();
@@ -30,11 +32,15 @@ internal static class PersistenceRegistry
         services.AddScoped<IAvailabilityRepository, AvailabilityRepository>();
         services.AddScoped<IGuildNotificationSettingsRepository, GuildNotificationSettingsRepository>();
         services.AddScoped<IRaidZoneRepository, RaidZoneRepository>();
+        services.AddScoped<IRaidBossRepository, RaidBossRepository>();
         services.AddScoped<IWeeklyLockoutScheduleRepository, WeeklyLockoutScheduleRepository>();
         services.AddScoped<IRaidSeriesRepository, RaidSeriesRepository>();
         services.AddScoped<IRaidEventRepository, RaidEventRepository>();
         services.AddScoped<IRaidCompositionRepository, RaidCompositionRepository>();
         services.AddScoped<IRaidSignupRepository, RaidSignupRepository>();
+        services.AddScoped<ISpellRepository, SpellRepository>();
+        services.AddScoped<IGuildAttributionDefinitionsRepository, GuildAttributionDefinitionsRepository>();
+        services.AddScoped<IRaidEventAttributionsRepository, RaidEventAttributionsRepository>();
 
         return services;
     }

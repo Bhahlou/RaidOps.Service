@@ -619,6 +619,153 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.ToTable("UserGuilds");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.AttributionDefinitionCell", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CellIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildAttributionDefinitionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IconSource")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RaidMarker")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<List<int>>("RequiredClassIds")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.PrimitiveCollection<int[]>("RequiredRoles")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.PrimitiveCollection<List<int>>("RequiredSpecIds")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<string>("SlotLabel")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("SpellId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("StaticRole")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpellId");
+
+                    b.HasIndex("GuildAttributionDefinitionId", "CellIndex");
+
+                    b.ToTable("AttributionDefinitionCells");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.GuildAttributionDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("GuildId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsRepeatable")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("RaidBossId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Section")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SectionIconSource")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SectionRaidMarker")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SectionSpellId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SectionStaticRole")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaidBossId");
+
+                    b.HasIndex("SectionSpellId");
+
+                    b.HasIndex("GuildId", "SortOrder");
+
+                    b.ToTable("GuildAttributionDefinitions");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.RaidEventAttribution", b =>
+                {
+                    b.Property<int>("RaidEventId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AttributionDefinitionCellId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InstanceIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssignedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("CharacterId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildAttributionDefinitionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RaidEventId", "AttributionDefinitionCellId", "InstanceIndex");
+
+                    b.HasIndex("AttributionDefinitionCellId");
+
+                    b.HasIndex("CharacterId");
+
+                    b.ToTable("RaidEventAttributions");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.GuildRaidZoneLockout", b =>
                 {
                     b.Property<string>("GuildId")
@@ -638,6 +785,378 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("RaidZoneId");
 
                     b.ToTable("GuildRaidZoneLockouts");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidBoss", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IconUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RaidZoneId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaidZoneId", "SortOrder");
+
+                    b.ToTable("RaidBosses");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Attumen the Huntsman",
+                            RaidZoneId = 1,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Moroes",
+                            RaidZoneId = 1,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Maiden of Virtue",
+                            RaidZoneId = 1,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Name = "The Opera Event",
+                            RaidZoneId = 1,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Name = "The Curator",
+                            RaidZoneId = 1,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Name = "Terestian Illhoof",
+                            RaidZoneId = 1,
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Name = "Shade of Aran",
+                            RaidZoneId = 1,
+                            SortOrder = 7
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Name = "Netherspite",
+                            RaidZoneId = 1,
+                            SortOrder = 8
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Name = "Chess Event",
+                            RaidZoneId = 1,
+                            SortOrder = 9
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Name = "Prince Malchezaar",
+                            RaidZoneId = 1,
+                            SortOrder = 10
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Name = "High King Maulgar",
+                            RaidZoneId = 2,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Name = "Gruul the Dragonkiller",
+                            RaidZoneId = 2,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Name = "Magtheridon",
+                            RaidZoneId = 3,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Name = "Hydross the Unstable",
+                            RaidZoneId = 4,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Name = "The Lurker Below",
+                            RaidZoneId = 4,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Name = "Leotheras the Blind",
+                            RaidZoneId = 4,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Name = "Fathom-Lord Karathress",
+                            RaidZoneId = 4,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Name = "Morogrim Tidewalker",
+                            RaidZoneId = 4,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Name = "Lady Vashj",
+                            RaidZoneId = 4,
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Name = "Al'ar",
+                            RaidZoneId = 5,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Name = "Void Reaver",
+                            RaidZoneId = 5,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Name = "High Astromancer Solarian",
+                            RaidZoneId = 5,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Name = "Kael'thas Sunstrider",
+                            RaidZoneId = 5,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Name = "Rage Winterchill",
+                            RaidZoneId = 6,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Name = "Anetheron",
+                            RaidZoneId = 6,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Name = "Kaz'rogal",
+                            RaidZoneId = 6,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Name = "Azgalor",
+                            RaidZoneId = 6,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 28,
+                            Name = "Archimonde",
+                            RaidZoneId = 6,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 29,
+                            Name = "High Warlord Naj'entus",
+                            RaidZoneId = 7,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 30,
+                            Name = "Supremus",
+                            RaidZoneId = 7,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Name = "Shade of Akama",
+                            RaidZoneId = 7,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Name = "Teron Gorefiend",
+                            RaidZoneId = 7,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 33,
+                            Name = "Gurtogg Bloodboil",
+                            RaidZoneId = 7,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 34,
+                            Name = "Reliquary of Souls",
+                            RaidZoneId = 7,
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 35,
+                            Name = "Mother Shahraz",
+                            RaidZoneId = 7,
+                            SortOrder = 7
+                        },
+                        new
+                        {
+                            Id = 36,
+                            Name = "The Illidari Council",
+                            RaidZoneId = 7,
+                            SortOrder = 8
+                        },
+                        new
+                        {
+                            Id = 37,
+                            Name = "Illidan Stormrage",
+                            RaidZoneId = 7,
+                            SortOrder = 9
+                        },
+                        new
+                        {
+                            Id = 38,
+                            Name = "Kalecgos",
+                            RaidZoneId = 8,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 39,
+                            Name = "Brutallus",
+                            RaidZoneId = 8,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 40,
+                            Name = "Felmyst",
+                            RaidZoneId = 8,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 41,
+                            Name = "Eredar Twins",
+                            RaidZoneId = 8,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 42,
+                            Name = "M'uru",
+                            RaidZoneId = 8,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 43,
+                            Name = "Kil'jaeden",
+                            RaidZoneId = 8,
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 44,
+                            Name = "Akil'zon",
+                            RaidZoneId = 9,
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 45,
+                            Name = "Nalorakk",
+                            RaidZoneId = 9,
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 46,
+                            Name = "Jan'alai",
+                            RaidZoneId = 9,
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 47,
+                            Name = "Halazzi",
+                            RaidZoneId = 9,
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 48,
+                            Name = "Hex Lord Malacrass",
+                            RaidZoneId = 9,
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 49,
+                            Name = "Zul'jin",
+                            RaidZoneId = 9,
+                            SortOrder = 6
+                        });
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
@@ -666,6 +1185,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.Property<bool>("DedicatedAnnouncementChannelIsBotOwned")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("ExtendsRaidEventId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("GroupCount")
                         .HasColumnType("integer");
@@ -716,6 +1238,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExtendsRaidEventId");
 
                     b.HasIndex("RaidSeriesId");
 
@@ -1054,6 +1578,16 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             ShortCode = "SWP",
                             SlotsPerGroup = 5,
                             SortOrder = 8
+                        },
+                        new
+                        {
+                            Id = 9,
+                            ExpansionId = 2,
+                            GroupCount = 2,
+                            Name = "Zul'Aman",
+                            ShortCode = "ZA",
+                            SlotsPerGroup = 5,
+                            SortOrder = 9
                         });
                 });
 
@@ -1101,10 +1635,16 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<int>("CurrentExpansionId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("SyncAvailable")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -1118,34 +1658,54 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             Id = 1,
                             BnetNamespacePrefix = "dynamic",
                             CurrentExpansionId = 11,
-                            Name = "Retail"
+                            IsActive = true,
+                            Name = "Retail",
+                            SyncAvailable = true
                         },
                         new
                         {
                             Id = 2,
                             BnetNamespacePrefix = "dynamic-classic1x",
                             CurrentExpansionId = 1,
-                            Name = "Classic Era"
+                            IsActive = false,
+                            Name = "Classic Era",
+                            SyncAvailable = true
                         },
                         new
                         {
                             Id = 3,
                             BnetNamespacePrefix = "dynamic-classic",
                             CurrentExpansionId = 5,
-                            Name = "Classic"
+                            IsActive = true,
+                            Name = "Classic",
+                            SyncAvailable = true
                         },
                         new
                         {
                             Id = 4,
                             BnetNamespacePrefix = "dynamic-classicann",
                             CurrentExpansionId = 2,
-                            Name = "Classic Anniversary"
+                            IsActive = true,
+                            Name = "Classic Anniversary",
+                            SyncAvailable = true
+                        },
+                        new
+                        {
+                            Id = 5,
+                            BnetNamespacePrefix = "dynamic-forever",
+                            CurrentExpansionId = 12,
+                            IsActive = true,
+                            Name = "Forever",
+                            SyncAvailable = false
                         });
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Expansion", b =>
                 {
                     b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ForkedFromExpansionId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Name")
@@ -1162,6 +1722,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("character varying(16)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ForkedFromExpansionId");
 
                     b.ToTable("Expansions");
 
@@ -1242,6 +1804,14 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             Name = "The War Within",
                             ReleaseOrder = 11,
                             ShortCode = "TWW"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            ForkedFromExpansionId = 1,
+                            Name = "Forever",
+                            ReleaseOrder = 12,
+                            ShortCode = "Forever"
                         });
                 });
 
@@ -1468,6 +2038,20 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             Faction = 2,
                             FirstExpansionId = 11,
                             Name = "Earthen (Horde)"
+                        },
+                        new
+                        {
+                            Id = 90,
+                            Faction = 1,
+                            FirstExpansionId = 12,
+                            Name = "Skyborne (Alliance)"
+                        },
+                        new
+                        {
+                            Id = 91,
+                            Faction = 2,
+                            FirstExpansionId = 12,
+                            Name = "Skyborne (Horde)"
                         });
                 });
 
@@ -1508,7 +2092,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_warrior_savageblow.jpg",
                             Name = "Arms",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1517,7 +2101,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_warrior_innerrage.jpg",
                             Name = "Fury",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1553,7 +2137,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/spell_holy_auraoflight.jpg",
                             Name = "Retribution",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1580,7 +2164,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_hunter_camouflage.jpg",
                             Name = "Survival",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1589,7 +2173,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_rogue_deadlybrew.jpg",
                             Name = "Assassination",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1598,7 +2182,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_rogue_waylay.jpg",
                             Name = "Outlaw",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1607,7 +2191,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_stealth.jpg",
                             Name = "Subtlety",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1652,7 +2236,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 3,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/spell_deathknight_frostpresence.jpg",
                             Name = "Frost",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1661,7 +2245,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 3,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/spell_deathknight_unholypresence.jpg",
                             Name = "Unholy",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1679,7 +2263,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/spell_shaman_improvedstormstrike.jpg",
                             Name = "Enhancement",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1760,7 +2344,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 5,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/spell_monk_windwalker_spec.jpg",
                             Name = "Windwalker",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1787,7 +2371,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 1,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_druid_catform.jpg",
                             Name = "Feral",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1814,7 +2398,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             FirstExpansionId = 7,
                             IconUrl = "https://render.worldofwarcraft.com/eu/icons/56/ability_demonhunter_specdps.jpg",
                             Name = "Havoc",
-                            Role = 3
+                            Role = 4
                         },
                         new
                         {
@@ -1852,6 +2436,41 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             Name = "Augmentation",
                             Role = 3
                         });
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spell", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExpansionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IconUrl")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("NameDe")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("NameFr")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpansionId");
+
+                    b.ToTable("Spells");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.WowClass", b =>
@@ -2266,6 +2885,76 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.AttributionDefinitionCell", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.Attributions.GuildAttributionDefinition", "GuildAttributionDefinition")
+                        .WithMany("Cells")
+                        .HasForeignKey("GuildAttributionDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spell", "Spell")
+                        .WithMany()
+                        .HasForeignKey("SpellId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("GuildAttributionDefinition");
+
+                    b.Navigation("Spell");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.GuildAttributionDefinition", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidBoss", "RaidBoss")
+                        .WithMany()
+                        .HasForeignKey("RaidBossId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spell", "SectionSpell")
+                        .WithMany()
+                        .HasForeignKey("SectionSpellId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Guild");
+
+                    b.Navigation("RaidBoss");
+
+                    b.Navigation("SectionSpell");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.RaidEventAttribution", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.Attributions.AttributionDefinitionCell", "AttributionDefinitionCell")
+                        .WithMany()
+                        .HasForeignKey("AttributionDefinitionCellId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Character.Character", "Character")
+                        .WithMany()
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidEvent", "RaidEvent")
+                        .WithMany()
+                        .HasForeignKey("RaidEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AttributionDefinitionCell");
+
+                    b.Navigation("Character");
+
+                    b.Navigation("RaidEvent");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.GuildRaidZoneLockout", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
@@ -2285,8 +2974,24 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("RaidZone");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidBoss", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidZone", "RaidZone")
+                        .WithMany("Bosses")
+                        .HasForeignKey("RaidZoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RaidZone");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
                 {
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidEvent", "ExtendsRaidEvent")
+                        .WithMany()
+                        .HasForeignKey("ExtendsRaidEventId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
                         .WithMany()
                         .HasForeignKey("GuildBranchId")
@@ -2303,6 +3008,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .WithMany("Events")
                         .HasForeignKey("RaidSeriesId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ExtendsRaidEvent");
 
                     b.Navigation("Guild");
 
@@ -2461,6 +3168,15 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("CurrentExpansion");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.Expansion", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "ForkedFromExpansion")
+                        .WithMany()
+                        .HasForeignKey("ForkedFromExpansionId");
+
+                    b.Navigation("ForkedFromExpansion");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spec", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Reference.WowClass", "Class")
@@ -2470,6 +3186,17 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired();
 
                     b.Navigation("Class");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spell", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "Expansion")
+                        .WithMany()
+                        .HasForeignKey("ExpansionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Expansion");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Calendar.RecurringAvailabilityPattern", b =>
@@ -2515,6 +3242,11 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("UserGuilds");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.GuildAttributionDefinition", b =>
+                {
+                    b.Navigation("Cells");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
                 {
                     b.Navigation("Assignments");
@@ -2533,6 +3265,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidZone", b =>
                 {
+                    b.Navigation("Bosses");
+
                     b.Navigation("LockoutOverrides");
                 });
 

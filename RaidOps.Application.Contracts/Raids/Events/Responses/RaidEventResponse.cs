@@ -12,6 +12,12 @@ public class RaidEventResponse
     /// <summary>FK to the series this occurrence was materialized from, or <c>null</c> for an ad-hoc event.</summary>
     public int? RaidSeriesId { get; set; }
 
+    /// <summary>FK to the raid event this one extends the lockout of, or <c>null</c> for a standalone event.</summary>
+    public int? ExtendsRaidEventId { get; set; }
+
+    /// <summary>Display name of <see cref="ExtendsRaidEventId"/>'s event, or <c>null</c> alongside it.</summary>
+    public string? ExtendsRaidEventName { get; set; }
+
     /// <summary>Display name.</summary>
     public required string Name { get; set; }
 

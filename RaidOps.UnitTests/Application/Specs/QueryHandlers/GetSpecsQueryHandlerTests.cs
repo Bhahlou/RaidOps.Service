@@ -26,7 +26,7 @@ public class GetSpecsQueryHandlerTests
         _specs.Setup(r => r.GetAllAsync(default))
             .ReturnsAsync(
             [
-                new Spec { Id = 71, Name = "Arms", Role = SpecRole.Dps, ClassId = 1, IconUrl = "https://cdn/arms.jpg" },
+                new Spec { Id = 71, Name = "Arms", Role = SpecRole.MeleeDps, ClassId = 1, IconUrl = "https://cdn/arms.jpg" },
                 new Spec { Id = 73, Name = "Protection", Role = SpecRole.Tank, ClassId = 1 },
             ]);
 
@@ -37,7 +37,7 @@ public class GetSpecsQueryHandlerTests
 
         var arms = result.Value.Single(s => s.Id == 71);
         arms.Name.Should().Be("Arms");
-        arms.Role.Should().Be("Dps");
+        arms.Role.Should().Be("MeleeDps");
         arms.ClassId.Should().Be(1);
         arms.IconUrl.Should().Be("https://cdn/arms.jpg");
 

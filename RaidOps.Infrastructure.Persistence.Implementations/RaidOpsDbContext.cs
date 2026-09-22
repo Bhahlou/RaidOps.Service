@@ -4,6 +4,7 @@ using RaidOps.Domain.Models.Calendar;
 using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
+using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
@@ -71,6 +72,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="Spec"/> lookup table, keyed by Blizzard specialisation ID.</summary>
     public DbSet<Spec> Specs => Set<Spec>();
 
+    /// <summary>Gets the <see cref="Spell"/> lookup table, keyed by Blizzard spell ID.</summary>
+    public DbSet<Spell> Spells => Set<Spell>();
+
     // ── Runtime data ──────────────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="Realm"/> table (on-demand BNet realm cache).</summary>
@@ -95,6 +99,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="RaidZone"/> lookup table (Karazhan, SSC, Black Temple, …).</summary>
     public DbSet<RaidZone> RaidZones => Set<RaidZone>();
+
+    /// <summary>Gets the <see cref="RaidBoss"/> lookup table (boss encounters within a <see cref="RaidZone"/>).</summary>
+    public DbSet<RaidBoss> RaidBosses => Set<RaidBoss>();
 
     /// <summary>Gets the <see cref="WeeklyLockoutSchedule"/> lookup table (one row per Blizzard API region).</summary>
     public DbSet<WeeklyLockoutSchedule> WeeklyLockoutSchedules => Set<WeeklyLockoutSchedule>();
@@ -122,6 +129,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="RaidSignup"/> table (member Accepted/Tentative/Declined responses for Signup-mode events).</summary>
     public DbSet<RaidSignup> RaidSignups => Set<RaidSignup>();
+
+    /// <summary>Gets the <see cref="GuildAttributionDefinition"/> table (guild-wide raid-attribution templates).</summary>
+    public DbSet<GuildAttributionDefinition> GuildAttributionDefinitions => Set<GuildAttributionDefinition>();
+
+    /// <summary>Gets the <see cref="AttributionDefinitionCell"/> table (ordered icon/name-slot cells within a row).</summary>
+    public DbSet<AttributionDefinitionCell> AttributionDefinitionCells => Set<AttributionDefinitionCell>();
+
+    /// <summary>Gets the <see cref="RaidEventAttribution"/> table (sparse per-event attribution fills).</summary>
+    public DbSet<RaidEventAttribution> RaidEventAttributions => Set<RaidEventAttribution>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -429,6 +445,16 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(z => z.ExpansionId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // RaidBoss → RaidZone (reference data, removed along with their zone)
+        modelBuilder.Entity<RaidBoss>()
+            .HasOne(b => b.RaidZone)
+            .WithMany(z => z.Bosses)
+            .HasForeignKey(b => b.RaidZoneId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidBoss>()
+            .HasIndex(b => new { b.RaidZoneId, b.SortOrder });
+
         // RaidLockoutCadenceOverride → RaidZone; overrides are removed along with their zone (reference data cleanup only)
         modelBuilder.Entity<RaidLockoutCadenceOverride>()
             .HasOne(o => o.RaidZone)
@@ -508,6 +534,14 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne(e => e.RaidSeries)
             .WithMany(s => s.Events)
             .HasForeignKey(e => e.RaidSeriesId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Self-referencing — deleting the root event of an extension chain just detaches the link
+        // rather than taking the nights that extended it down too.
+        modelBuilder.Entity<RaidEvent>()
+            .HasOne(e => e.ExtendsRaidEvent)
+            .WithMany()
+            .HasForeignKey(e => e.ExtendsRaidEventId)
             .OnDelete(DeleteBehavior.SetNull);
 
         modelBuilder.Entity<RaidEvent>()
@@ -590,6 +624,79 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .WithMany()
             .HasForeignKey(s => s.SpecId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // GuildAttributionDefinition — surrogate PK, guild-wide only (no branch override)
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasOne(d => d.Guild)
+            .WithMany()
+            .HasForeignKey(d => d.GuildId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasIndex(d => new { d.GuildId, d.SortOrder });
+
+        // GuildAttributionDefinition → RaidBoss; null RaidBossId is a "General" row, reference data
+        // so a boss is never deleted while templates reference it
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasOne(d => d.RaidBoss)
+            .WithMany()
+            .HasForeignKey(d => d.RaidBossId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // GuildAttributionDefinition → Spell (section header icon) — same convention as
+        // AttributionDefinitionCell.Spell, denormalized across every row of a section
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasOne(d => d.SectionSpell)
+            .WithMany()
+            .HasForeignKey(d => d.SectionSpellId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // AttributionDefinitionCell — surrogate PK, ordered children of a GuildAttributionDefinition
+        modelBuilder.Entity<AttributionDefinitionCell>()
+            .HasOne(c => c.GuildAttributionDefinition)
+            .WithMany(d => d.Cells)
+            .HasForeignKey(c => c.GuildAttributionDefinitionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AttributionDefinitionCell>()
+            .HasOne(c => c.Spell)
+            .WithMany()
+            .HasForeignKey(c => c.SpellId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AttributionDefinitionCell>()
+            .HasIndex(c => new { c.GuildAttributionDefinitionId, c.CellIndex });
+
+        // RaidEventAttribution uses a composite primary key of event, cell and instance index.
+        // Deleting an event or a template row (which cascades its cells) drops its fills too.
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasKey(a => new { a.RaidEventId, a.AttributionDefinitionCellId, a.InstanceIndex });
+
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasOne(a => a.RaidEvent)
+            .WithMany()
+            .HasForeignKey(a => a.RaidEventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasOne(a => a.AttributionDefinitionCell)
+            .WithMany()
+            .HasForeignKey(a => a.AttributionDefinitionCellId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidEventAttribution>()
+            .HasOne(a => a.Character)
+            .WithMany()
+            .HasForeignKey(a => a.CharacterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Spell — static reference table, seeded via a JSON-driven upsert (see SpellSeeder) rather
+        // than EF HasData: row count per expansion doesn't fit in a generated migration file.
+        modelBuilder.Entity<Spell>()
+            .HasOne(s => s.Expansion)
+            .WithMany()
+            .HasForeignKey(s => s.ExpansionId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     // ── Static seed data ──────────────────────────────────────────────────
@@ -602,6 +709,7 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         SeedClasses(modelBuilder);
         SeedSpecs(modelBuilder);
         SeedRaidZones(modelBuilder);
+        SeedRaidBosses(modelBuilder);
         SeedWeeklyLockoutSchedules(modelBuilder);
     }
 
@@ -618,7 +726,14 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new Expansion { Id = 8,  Name = "Battle for Azeroth",     ShortCode = "BfA",     ReleaseOrder = 8  },
             new Expansion { Id = 9,  Name = "Shadowlands",            ShortCode = "SL",      ReleaseOrder = 9  },
             new Expansion { Id = 10, Name = "Dragonflight",           ShortCode = "DF",      ReleaseOrder = 10 },
-            new Expansion { Id = 11, Name = "The War Within",         ShortCode = "TWW",     ReleaseOrder = 11 }
+            new Expansion { Id = 11, Name = "The War Within",         ShortCode = "TWW",     ReleaseOrder = 11 },
+            // Not a continuation of Retail's expansion line — a standalone new branch of the game
+            // (own raids/dungeons/talent trees) announced at BlizzCon, beta since 2026-09-17.
+            // ForkedFromExpansionId = Classic (1): Forever started from vanilla-era content, not
+            // from TWW — WowClass/Race rows introduced anywhere on the mainline chronology after
+            // Classic (DK/Monk/DH/Evoker, TBC-exclusive races, …) must NOT be considered available
+            // here just because 12 > their FirstExpansionId. See Expansion.IsContentAvailableFrom.
+            new Expansion { Id = 12, Name = "Forever",                 ShortCode = "Forever", ReleaseOrder = 12, ForkedFromExpansionId = 1 }
         );
     }
 
@@ -627,10 +742,19 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         // BnetNamespacePrefix: append "-{region}" at query time to get the full namespace.
         // e.g. "dynamic-classic1x" + "-eu" → "dynamic-classic1x-eu"
         modelBuilder.Entity<Branch>().HasData(
-            new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11 },
-            new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1  },
-            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5  },
-            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2  }
+            new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11, IsActive = true,  SyncAvailable = true  },
+            // Deactivated 2026-09-22: dead branch, ~3 characters total. Existing characters/guild
+            // activations on it keep working untouched — this only hides it from the character-sync
+            // picker and from a guild's "activate a new branch" list.
+            new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1,  IsActive = false, SyncAvailable = true  },
+            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5,  IsActive = true,  SyncAvailable = true  },
+            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2,  IsActive = true,  SyncAvailable = true  },
+            // BnetNamespacePrefix is a placeholder guess (Blizzard's "dynamic-{codename}" convention) —
+            // no BNet API access for this branch yet (beta-only as of 2026-09-22). Verify once the
+            // API ships. SyncAvailable = false in the meantime (temporary, per user request 2026-09-22)
+            // — shown as "coming soon" in the character-sync picker instead of hidden, since guild
+            // activation/roster/raids/recruitment don't need BNet sync and still work.
+            new Branch { Id = 5, Name = "Forever",             BnetNamespacePrefix = "dynamic-forever",    CurrentExpansionId = 12, IsActive = true,  SyncAvailable = false }
         );
     }
 
@@ -676,7 +800,13 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new Race { Id = 70, Name = "Dracthyr (Horde)",    Faction = Faction.Horde,    FirstExpansionId = 10 },
             // ── The War Within ────────────────────────────────────────────
             new Race { Id = 84, Name = "Earthen (Alliance)",  Faction = Faction.Alliance, FirstExpansionId = 11 },
-            new Race { Id = 85, Name = "Earthen (Horde)",     Faction = Faction.Horde,    FirstExpansionId = 11 }
+            new Race { Id = 85, Name = "Earthen (Horde)",     Faction = Faction.Horde,    FirstExpansionId = 11 },
+            // ── Forever ───────────────────────────────────────────────────
+            // IDs are placeholders (no BNet API for this branch yet, see SeedBranches) — verify once
+            // available. Localized names (not modeled here, Race.Name is English-only): fr "Éolide",
+            // de "Himmelsgeborener".
+            new Race { Id = 90, Name = "Skyborne (Alliance)",  Faction = Faction.Alliance, FirstExpansionId = 12 },
+            new Race { Id = 91, Name = "Skyborne (Horde)",     Faction = Faction.Horde,    FirstExpansionId = 12 }
         );
     }
 
@@ -708,57 +838,57 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<Spec>().HasData(
             // ── Warrior ───────────────────────────────────────────────────
-            new Spec { Id = 71,   Name = "Arms",          Role = SpecRole.Dps,    ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_savageblow.jpg" },
-            new Spec { Id = 72,   Name = "Fury",          Role = SpecRole.Dps,    ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_innerrage.jpg" },
-            new Spec { Id = 73,   Name = "Protection",    Role = SpecRole.Tank,   ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_defensivestance.jpg" },
+            new Spec { Id = 71,   Name = "Arms",          Role = SpecRole.MeleeDps,  ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_savageblow.jpg" },
+            new Spec { Id = 72,   Name = "Fury",          Role = SpecRole.MeleeDps,  ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_innerrage.jpg" },
+            new Spec { Id = 73,   Name = "Protection",    Role = SpecRole.Tank,      ClassId = 1,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_warrior_defensivestance.jpg" },
             // ── Paladin ───────────────────────────────────────────────────
-            new Spec { Id = 65,   Name = "Holy",          Role = SpecRole.Healer, ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_holybolt.jpg" },
-            new Spec { Id = 66,   Name = "Protection",    Role = SpecRole.Tank,   ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_paladin_shieldofthetemplar.jpg" },
-            new Spec { Id = 70,   Name = "Retribution",   Role = SpecRole.Dps,    ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_auraoflight.jpg" },
+            new Spec { Id = 65,   Name = "Holy",          Role = SpecRole.Healer,    ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_holybolt.jpg" },
+            new Spec { Id = 66,   Name = "Protection",    Role = SpecRole.Tank,      ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_paladin_shieldofthetemplar.jpg" },
+            new Spec { Id = 70,   Name = "Retribution",   Role = SpecRole.MeleeDps,  ClassId = 2,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_auraoflight.jpg" },
             // ── Hunter ────────────────────────────────────────────────────
-            new Spec { Id = 253,  Name = "Beast Mastery", Role = SpecRole.Dps,    ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_bestialdiscipline.jpg" },
-            new Spec { Id = 254,  Name = "Marksmanship",  Role = SpecRole.Dps,    ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_focusedaim.jpg" },
-            new Spec { Id = 255,  Name = "Survival",      Role = SpecRole.Dps,    ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_camouflage.jpg" },
+            new Spec { Id = 253,  Name = "Beast Mastery", Role = SpecRole.RangedDps, ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_bestialdiscipline.jpg" },
+            new Spec { Id = 254,  Name = "Marksmanship",  Role = SpecRole.RangedDps, ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_focusedaim.jpg" },
+            new Spec { Id = 255,  Name = "Survival",      Role = SpecRole.MeleeDps,  ClassId = 3,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_hunter_camouflage.jpg" },
             // ── Rogue ─────────────────────────────────────────────────────
-            new Spec { Id = 259,  Name = "Assassination", Role = SpecRole.Dps,    ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_deadlybrew.jpg" },
-            new Spec { Id = 260,  Name = "Outlaw",        Role = SpecRole.Dps,    ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_waylay.jpg" },
-            new Spec { Id = 261,  Name = "Subtlety",      Role = SpecRole.Dps,    ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_stealth.jpg" },
+            new Spec { Id = 259,  Name = "Assassination", Role = SpecRole.MeleeDps,  ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_deadlybrew.jpg" },
+            new Spec { Id = 260,  Name = "Outlaw",        Role = SpecRole.MeleeDps,  ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_rogue_waylay.jpg" },
+            new Spec { Id = 261,  Name = "Subtlety",      Role = SpecRole.MeleeDps,  ClassId = 4,  FirstExpansionId = 1,  IconUrl = iconBase + "ability_stealth.jpg" },
             // ── Priest ────────────────────────────────────────────────────
-            new Spec { Id = 256,  Name = "Discipline",    Role = SpecRole.Healer, ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_powerwordshield.jpg" },
-            new Spec { Id = 257,  Name = "Holy",          Role = SpecRole.Healer, ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_guardianspirit.jpg" },
-            new Spec { Id = 258,  Name = "Shadow",        Role = SpecRole.Dps,    ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_shadowwordpain.jpg" },
+            new Spec { Id = 256,  Name = "Discipline",    Role = SpecRole.Healer,    ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_powerwordshield.jpg" },
+            new Spec { Id = 257,  Name = "Holy",          Role = SpecRole.Healer,    ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_guardianspirit.jpg" },
+            new Spec { Id = 258,  Name = "Shadow",        Role = SpecRole.RangedDps, ClassId = 5,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_shadowwordpain.jpg" },
             // ── Death Knight ──────────────────────────────────────────────
-            new Spec { Id = 250,  Name = "Blood",         Role = SpecRole.Tank,   ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_bloodpresence.jpg" },
-            new Spec { Id = 251,  Name = "Frost",         Role = SpecRole.Dps,    ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_frostpresence.jpg" },
-            new Spec { Id = 252,  Name = "Unholy",        Role = SpecRole.Dps,    ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_unholypresence.jpg" },
+            new Spec { Id = 250,  Name = "Blood",         Role = SpecRole.Tank,      ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_bloodpresence.jpg" },
+            new Spec { Id = 251,  Name = "Frost",         Role = SpecRole.MeleeDps,  ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_frostpresence.jpg" },
+            new Spec { Id = 252,  Name = "Unholy",        Role = SpecRole.MeleeDps,  ClassId = 6,  FirstExpansionId = 3,  IconUrl = iconBase + "spell_deathknight_unholypresence.jpg" },
             // ── Shaman ────────────────────────────────────────────────────
-            new Spec { Id = 262,  Name = "Elemental",     Role = SpecRole.Dps,    ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_lightning.jpg" },
-            new Spec { Id = 263,  Name = "Enhancement",   Role = SpecRole.Dps,    ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shaman_improvedstormstrike.jpg" },
-            new Spec { Id = 264,  Name = "Restoration",   Role = SpecRole.Healer, ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_magicimmunity.jpg" },
+            new Spec { Id = 262,  Name = "Elemental",     Role = SpecRole.RangedDps, ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_lightning.jpg" },
+            new Spec { Id = 263,  Name = "Enhancement",   Role = SpecRole.MeleeDps,  ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shaman_improvedstormstrike.jpg" },
+            new Spec { Id = 264,  Name = "Restoration",   Role = SpecRole.Healer,    ClassId = 7,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_magicimmunity.jpg" },
             // ── Mage ──────────────────────────────────────────────────────
-            new Spec { Id = 62,   Name = "Arcane",        Role = SpecRole.Dps,    ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_magicalsentry.jpg" },
-            new Spec { Id = 63,   Name = "Fire",          Role = SpecRole.Dps,    ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_fire_firebolt02.jpg" },
-            new Spec { Id = 64,   Name = "Frost",         Role = SpecRole.Dps,    ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_frost_frostbolt02.jpg" },
+            new Spec { Id = 62,   Name = "Arcane",        Role = SpecRole.RangedDps, ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_holy_magicalsentry.jpg" },
+            new Spec { Id = 63,   Name = "Fire",          Role = SpecRole.RangedDps, ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_fire_firebolt02.jpg" },
+            new Spec { Id = 64,   Name = "Frost",         Role = SpecRole.RangedDps, ClassId = 8,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_frost_frostbolt02.jpg" },
             // ── Warlock ───────────────────────────────────────────────────
-            new Spec { Id = 265,  Name = "Affliction",    Role = SpecRole.Dps,    ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_deathcoil.jpg" },
-            new Spec { Id = 266,  Name = "Demonology",    Role = SpecRole.Dps,    ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_metamorphosis.jpg" },
-            new Spec { Id = 267,  Name = "Destruction",   Role = SpecRole.Dps,    ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_rainoffire.jpg" },
+            new Spec { Id = 265,  Name = "Affliction",    Role = SpecRole.RangedDps, ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_deathcoil.jpg" },
+            new Spec { Id = 266,  Name = "Demonology",    Role = SpecRole.RangedDps, ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_metamorphosis.jpg" },
+            new Spec { Id = 267,  Name = "Destruction",   Role = SpecRole.RangedDps, ClassId = 9,  FirstExpansionId = 1,  IconUrl = iconBase + "spell_shadow_rainoffire.jpg" },
             // ── Monk ──────────────────────────────────────────────────────
-            new Spec { Id = 268,  Name = "Brewmaster",    Role = SpecRole.Tank,   ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_brewmaster_spec.jpg" },
-            new Spec { Id = 269,  Name = "Windwalker",    Role = SpecRole.Dps,    ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_windwalker_spec.jpg" },
-            new Spec { Id = 270,  Name = "Mistweaver",    Role = SpecRole.Healer, ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_mistweaver_spec.jpg" },
+            new Spec { Id = 268,  Name = "Brewmaster",    Role = SpecRole.Tank,      ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_brewmaster_spec.jpg" },
+            new Spec { Id = 269,  Name = "Windwalker",    Role = SpecRole.MeleeDps,  ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_windwalker_spec.jpg" },
+            new Spec { Id = 270,  Name = "Mistweaver",    Role = SpecRole.Healer,    ClassId = 10, FirstExpansionId = 5,  IconUrl = iconBase + "spell_monk_mistweaver_spec.jpg" },
             // ── Druid ─────────────────────────────────────────────────────
-            new Spec { Id = 102,  Name = "Balance",       Role = SpecRole.Dps,    ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_starfall.jpg" },
-            new Spec { Id = 103,  Name = "Feral",         Role = SpecRole.Dps,    ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "ability_druid_catform.jpg" },
-            new Spec { Id = 104,  Name = "Guardian",      Role = SpecRole.Tank,   ClassId = 11, FirstExpansionId = 5,  IconUrl = iconBase + "ability_racial_bearform.jpg" },
-            new Spec { Id = 105,  Name = "Restoration",   Role = SpecRole.Healer, ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_healingtouch.jpg" },
+            new Spec { Id = 102,  Name = "Balance",       Role = SpecRole.RangedDps, ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_starfall.jpg" },
+            new Spec { Id = 103,  Name = "Feral",         Role = SpecRole.MeleeDps,  ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "ability_druid_catform.jpg" },
+            new Spec { Id = 104,  Name = "Guardian",      Role = SpecRole.Tank,      ClassId = 11, FirstExpansionId = 5,  IconUrl = iconBase + "ability_racial_bearform.jpg" },
+            new Spec { Id = 105,  Name = "Restoration",   Role = SpecRole.Healer,    ClassId = 11, FirstExpansionId = 1,  IconUrl = iconBase + "spell_nature_healingtouch.jpg" },
             // ── Demon Hunter ──────────────────────────────────────────────
-            new Spec { Id = 577,  Name = "Havoc",         Role = SpecRole.Dps,    ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_specdps.jpg" },
-            new Spec { Id = 581,  Name = "Vengeance",     Role = SpecRole.Tank,   ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_spectank.jpg" },
+            new Spec { Id = 577,  Name = "Havoc",         Role = SpecRole.MeleeDps,  ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_specdps.jpg" },
+            new Spec { Id = 581,  Name = "Vengeance",     Role = SpecRole.Tank,      ClassId = 12, FirstExpansionId = 7,  IconUrl = iconBase + "ability_demonhunter_spectank.jpg" },
             // ── Evoker ────────────────────────────────────────────────────
-            new Spec { Id = 1467, Name = "Devastation",   Role = SpecRole.Dps,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_devastation.jpg" },
-            new Spec { Id = 1468, Name = "Preservation",  Role = SpecRole.Healer, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_preservation.jpg" },
-            new Spec { Id = 1473, Name = "Augmentation",  Role = SpecRole.Dps,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_augmentation.jpg" }
+            new Spec { Id = 1467, Name = "Devastation",   Role = SpecRole.RangedDps, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_devastation.jpg" },
+            new Spec { Id = 1468, Name = "Preservation",  Role = SpecRole.Healer,    ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_preservation.jpg" },
+            new Spec { Id = 1473, Name = "Augmentation",  Role = SpecRole.RangedDps, ClassId = 13, FirstExpansionId = 10, IconUrl = iconBase + "classicon_evoker_augmentation.jpg" }
         );
     }
 
@@ -777,7 +907,84 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new RaidZone { Id = 5, Name = "The Eye",             ShortCode = "TK", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 5 },
             new RaidZone { Id = 6, Name = "Mount Hyjal",         ShortCode = "Hyjal", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 6 },
             new RaidZone { Id = 7, Name = "Black Temple",        ShortCode = "BT", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 7 },
-            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 8 }
+            new RaidZone { Id = 8, Name = "Sunwell Plateau",     ShortCode = "SWP", ExpansionId = 2, GroupCount = 5, SlotsPerGroup = 5, SortOrder = 8 },
+            // Added later, alongside per-boss attributions — appended (Id 9) rather than
+            // renumbered so the original 8 zones' seeded rows are untouched by this migration.
+            new RaidZone { Id = 9, Name = "Zul'Aman",            ShortCode = "ZA", ExpansionId = 2, GroupCount = 2, SlotsPerGroup = 5, SortOrder = 9 }
+        );
+    }
+
+    private static void SeedRaidBosses(ModelBuilder modelBuilder)
+    {
+        // Ids are sequential across all zones (same convention as RaidZone.Id); SortOrder resets
+        // per zone and reflects the commonly-used pull/attunement order.
+        modelBuilder.Entity<RaidBoss>().HasData(
+            // Karazhan (RaidZoneId = 1)
+            new RaidBoss { Id = 1,  RaidZoneId = 1, Name = "Attumen the Huntsman",     SortOrder = 1 },
+            new RaidBoss { Id = 2,  RaidZoneId = 1, Name = "Moroes",                   SortOrder = 2 },
+            new RaidBoss { Id = 3,  RaidZoneId = 1, Name = "Maiden of Virtue",         SortOrder = 3 },
+            new RaidBoss { Id = 4,  RaidZoneId = 1, Name = "The Opera Event",          SortOrder = 4 },
+            new RaidBoss { Id = 5,  RaidZoneId = 1, Name = "The Curator",              SortOrder = 5 },
+            new RaidBoss { Id = 6,  RaidZoneId = 1, Name = "Terestian Illhoof",        SortOrder = 6 },
+            new RaidBoss { Id = 7,  RaidZoneId = 1, Name = "Shade of Aran",            SortOrder = 7 },
+            new RaidBoss { Id = 8,  RaidZoneId = 1, Name = "Netherspite",              SortOrder = 8 },
+            new RaidBoss { Id = 9,  RaidZoneId = 1, Name = "Chess Event",              SortOrder = 9 },
+            new RaidBoss { Id = 10, RaidZoneId = 1, Name = "Prince Malchezaar",        SortOrder = 10 },
+
+            // Gruul's Lair (RaidZoneId = 2)
+            new RaidBoss { Id = 11, RaidZoneId = 2, Name = "High King Maulgar",        SortOrder = 1 },
+            new RaidBoss { Id = 12, RaidZoneId = 2, Name = "Gruul the Dragonkiller",   SortOrder = 2 },
+
+            // Magtheridon's Lair (RaidZoneId = 3)
+            new RaidBoss { Id = 13, RaidZoneId = 3, Name = "Magtheridon",              SortOrder = 1 },
+
+            // Serpentshrine Cavern (RaidZoneId = 4)
+            new RaidBoss { Id = 14, RaidZoneId = 4, Name = "Hydross the Unstable",     SortOrder = 1 },
+            new RaidBoss { Id = 15, RaidZoneId = 4, Name = "The Lurker Below",         SortOrder = 2 },
+            new RaidBoss { Id = 16, RaidZoneId = 4, Name = "Leotheras the Blind",      SortOrder = 3 },
+            new RaidBoss { Id = 17, RaidZoneId = 4, Name = "Fathom-Lord Karathress",   SortOrder = 4 },
+            new RaidBoss { Id = 18, RaidZoneId = 4, Name = "Morogrim Tidewalker",      SortOrder = 5 },
+            new RaidBoss { Id = 19, RaidZoneId = 4, Name = "Lady Vashj",               SortOrder = 6 },
+
+            // The Eye (RaidZoneId = 5)
+            new RaidBoss { Id = 20, RaidZoneId = 5, Name = "Al'ar",                    SortOrder = 1 },
+            new RaidBoss { Id = 21, RaidZoneId = 5, Name = "Void Reaver",              SortOrder = 2 },
+            new RaidBoss { Id = 22, RaidZoneId = 5, Name = "High Astromancer Solarian",SortOrder = 3 },
+            new RaidBoss { Id = 23, RaidZoneId = 5, Name = "Kael'thas Sunstrider",     SortOrder = 4 },
+
+            // Mount Hyjal (RaidZoneId = 6)
+            new RaidBoss { Id = 24, RaidZoneId = 6, Name = "Rage Winterchill",         SortOrder = 1 },
+            new RaidBoss { Id = 25, RaidZoneId = 6, Name = "Anetheron",                SortOrder = 2 },
+            new RaidBoss { Id = 26, RaidZoneId = 6, Name = "Kaz'rogal",                SortOrder = 3 },
+            new RaidBoss { Id = 27, RaidZoneId = 6, Name = "Azgalor",                  SortOrder = 4 },
+            new RaidBoss { Id = 28, RaidZoneId = 6, Name = "Archimonde",               SortOrder = 5 },
+
+            // Black Temple (RaidZoneId = 7)
+            new RaidBoss { Id = 29, RaidZoneId = 7, Name = "High Warlord Naj'entus",   SortOrder = 1 },
+            new RaidBoss { Id = 30, RaidZoneId = 7, Name = "Supremus",                 SortOrder = 2 },
+            new RaidBoss { Id = 31, RaidZoneId = 7, Name = "Shade of Akama",           SortOrder = 3 },
+            new RaidBoss { Id = 32, RaidZoneId = 7, Name = "Teron Gorefiend",          SortOrder = 4 },
+            new RaidBoss { Id = 33, RaidZoneId = 7, Name = "Gurtogg Bloodboil",        SortOrder = 5 },
+            new RaidBoss { Id = 34, RaidZoneId = 7, Name = "Reliquary of Souls",       SortOrder = 6 },
+            new RaidBoss { Id = 35, RaidZoneId = 7, Name = "Mother Shahraz",           SortOrder = 7 },
+            new RaidBoss { Id = 36, RaidZoneId = 7, Name = "The Illidari Council",     SortOrder = 8 },
+            new RaidBoss { Id = 37, RaidZoneId = 7, Name = "Illidan Stormrage",        SortOrder = 9 },
+
+            // Sunwell Plateau (RaidZoneId = 8)
+            new RaidBoss { Id = 38, RaidZoneId = 8, Name = "Kalecgos",                 SortOrder = 1 },
+            new RaidBoss { Id = 39, RaidZoneId = 8, Name = "Brutallus",                SortOrder = 2 },
+            new RaidBoss { Id = 40, RaidZoneId = 8, Name = "Felmyst",                  SortOrder = 3 },
+            new RaidBoss { Id = 41, RaidZoneId = 8, Name = "Eredar Twins",             SortOrder = 4 },
+            new RaidBoss { Id = 42, RaidZoneId = 8, Name = "M'uru",                    SortOrder = 5 },
+            new RaidBoss { Id = 43, RaidZoneId = 8, Name = "Kil'jaeden",               SortOrder = 6 },
+
+            // Zul'Aman (RaidZoneId = 9)
+            new RaidBoss { Id = 44, RaidZoneId = 9, Name = "Akil'zon",                 SortOrder = 1 },
+            new RaidBoss { Id = 45, RaidZoneId = 9, Name = "Nalorakk",                 SortOrder = 2 },
+            new RaidBoss { Id = 46, RaidZoneId = 9, Name = "Jan'alai",                 SortOrder = 3 },
+            new RaidBoss { Id = 47, RaidZoneId = 9, Name = "Halazzi",                  SortOrder = 4 },
+            new RaidBoss { Id = 48, RaidZoneId = 9, Name = "Hex Lord Malacrass",       SortOrder = 5 },
+            new RaidBoss { Id = 49, RaidZoneId = 9, Name = "Zul'jin",                  SortOrder = 6 }
         );
     }
 
