@@ -726,7 +726,14 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new Expansion { Id = 8,  Name = "Battle for Azeroth",     ShortCode = "BfA",     ReleaseOrder = 8  },
             new Expansion { Id = 9,  Name = "Shadowlands",            ShortCode = "SL",      ReleaseOrder = 9  },
             new Expansion { Id = 10, Name = "Dragonflight",           ShortCode = "DF",      ReleaseOrder = 10 },
-            new Expansion { Id = 11, Name = "The War Within",         ShortCode = "TWW",     ReleaseOrder = 11 }
+            new Expansion { Id = 11, Name = "The War Within",         ShortCode = "TWW",     ReleaseOrder = 11 },
+            // Not a continuation of Retail's expansion line — a standalone new branch of the game
+            // (own raids/dungeons/talent trees) announced at BlizzCon, beta since 2026-09-17.
+            // ForkedFromExpansionId = Classic (1): Forever started from vanilla-era content, not
+            // from TWW — WowClass/Race rows introduced anywhere on the mainline chronology after
+            // Classic (DK/Monk/DH/Evoker, TBC-exclusive races, …) must NOT be considered available
+            // here just because 12 > their FirstExpansionId. See Expansion.IsContentAvailableFrom.
+            new Expansion { Id = 12, Name = "Forever",                 ShortCode = "Forever", ReleaseOrder = 12, ForkedFromExpansionId = 1 }
         );
     }
 
@@ -735,10 +742,19 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
         // BnetNamespacePrefix: append "-{region}" at query time to get the full namespace.
         // e.g. "dynamic-classic1x" + "-eu" → "dynamic-classic1x-eu"
         modelBuilder.Entity<Branch>().HasData(
-            new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11 },
-            new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1  },
-            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5  },
-            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2  }
+            new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11, IsActive = true,  SyncAvailable = true  },
+            // Deactivated 2026-09-22: dead branch, ~3 characters total. Existing characters/guild
+            // activations on it keep working untouched — this only hides it from the character-sync
+            // picker and from a guild's "activate a new branch" list.
+            new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1,  IsActive = false, SyncAvailable = true  },
+            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5,  IsActive = true,  SyncAvailable = true  },
+            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2,  IsActive = true,  SyncAvailable = true  },
+            // BnetNamespacePrefix is a placeholder guess (Blizzard's "dynamic-{codename}" convention) —
+            // no BNet API access for this branch yet (beta-only as of 2026-09-22). Verify once the
+            // API ships. SyncAvailable = false in the meantime (temporary, per user request 2026-09-22)
+            // — shown as "coming soon" in the character-sync picker instead of hidden, since guild
+            // activation/roster/raids/recruitment don't need BNet sync and still work.
+            new Branch { Id = 5, Name = "Forever",             BnetNamespacePrefix = "dynamic-forever",    CurrentExpansionId = 12, IsActive = true,  SyncAvailable = false }
         );
     }
 
@@ -784,7 +800,13 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             new Race { Id = 70, Name = "Dracthyr (Horde)",    Faction = Faction.Horde,    FirstExpansionId = 10 },
             // ── The War Within ────────────────────────────────────────────
             new Race { Id = 84, Name = "Earthen (Alliance)",  Faction = Faction.Alliance, FirstExpansionId = 11 },
-            new Race { Id = 85, Name = "Earthen (Horde)",     Faction = Faction.Horde,    FirstExpansionId = 11 }
+            new Race { Id = 85, Name = "Earthen (Horde)",     Faction = Faction.Horde,    FirstExpansionId = 11 },
+            // ── Forever ───────────────────────────────────────────────────
+            // IDs are placeholders (no BNet API for this branch yet, see SeedBranches) — verify once
+            // available. Localized names (not modeled here, Race.Name is English-only): fr "Éolide",
+            // de "Himmelsgeborener".
+            new Race { Id = 90, Name = "Skyborne (Alliance)",  Faction = Faction.Alliance, FirstExpansionId = 12 },
+            new Race { Id = 91, Name = "Skyborne (Horde)",     Faction = Faction.Horde,    FirstExpansionId = 12 }
         );
     }
 

@@ -30,10 +30,22 @@ public class WowClassesControllerTests
         _queries.Setup(q => q.DispatchAsync<GetWowClassesQuery, IEnumerable<WowClassDto>>(It.IsAny<GetWowClassesQuery>(), default))
             .ReturnsAsync(Result<IEnumerable<WowClassDto>>.Ok(classes));
 
-        var result = await _sut.GetAll(default);
+        var result = await _sut.GetAll(null, default);
 
         result.Should().BeOfType<OkObjectResult>()
             .Which.Value.Should().BeSameAs(classes);
+    }
+
+    [Fact]
+    public async Task GetAll_AvailableForExpansionIdGiven_ForwardsItOnTheQuery()
+    {
+        _queries.Setup(q => q.DispatchAsync<GetWowClassesQuery, IEnumerable<WowClassDto>>(
+                It.Is<GetWowClassesQuery>(query => query.AvailableForExpansionId == 12), default))
+            .ReturnsAsync(Result<IEnumerable<WowClassDto>>.Ok([]));
+
+        var result = await _sut.GetAll(12, default);
+
+        result.Should().BeOfType<OkObjectResult>();
     }
 
     [Fact]
@@ -42,7 +54,7 @@ public class WowClassesControllerTests
         _queries.Setup(q => q.DispatchAsync<GetWowClassesQuery, IEnumerable<WowClassDto>>(It.IsAny<GetWowClassesQuery>(), default))
             .ReturnsAsync(Result<IEnumerable<WowClassDto>>.Fail("some-error"));
 
-        var result = await _sut.GetAll(default);
+        var result = await _sut.GetAll(null, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

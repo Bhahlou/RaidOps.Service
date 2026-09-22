@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RaidOps.Infrastructure.Persistence.Implementations;
@@ -12,9 +13,11 @@ using RaidOps.Infrastructure.Persistence.Implementations;
 namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 {
     [DbContext(typeof(RaidOpsDbContext))]
-    partial class RaidOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260922113942_AddBranchSyncAvailableFlag")]
+    partial class AddBranchSyncAvailableFlag
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -785,6 +788,149 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("RaidZoneId");
 
                     b.ToTable("GuildRaidZoneLockouts");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("GuildId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("RaidBossId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaidBossId");
+
+                    b.HasIndex("GuildId", "RaidBossId");
+
+                    b.ToTable("RaidPlans");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlanElement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FillColor")
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)");
+
+                    b.Property<double?>("FontSizeRatio")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Height")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("IconSource")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RaidMarker")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RaidPlanPageId")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("RotationDegrees")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("SpellId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("StaticRole")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StrokeColor")
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)");
+
+                    b.Property<double?>("StrokeWidthRatio")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("X")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("X2")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Y")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Y2")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("ZIndex")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpellId");
+
+                    b.HasIndex("RaidPlanPageId", "ZIndex");
+
+                    b.ToTable("RaidPlanElements");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlanPage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BackgroundImageKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RaidPlanId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaidPlanId", "SortOrder");
+
+                    b.ToTable("RaidPlanPages");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidBoss", b =>
@@ -1705,9 +1851,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ForkedFromExpansionId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -1722,8 +1865,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasColumnType("character varying(16)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ForkedFromExpansionId");
 
                     b.ToTable("Expansions");
 
@@ -1808,7 +1949,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         new
                         {
                             Id = 12,
-                            ForkedFromExpansionId = 1,
                             Name = "Forever",
                             ReleaseOrder = 12,
                             ShortCode = "Forever"
@@ -2974,6 +3114,54 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("RaidZone");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlan", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Raids.RaidBoss", "RaidBoss")
+                        .WithMany()
+                        .HasForeignKey("RaidBossId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Guild");
+
+                    b.Navigation("RaidBoss");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlanElement", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.Plans.RaidPlanPage", "RaidPlanPage")
+                        .WithMany("Elements")
+                        .HasForeignKey("RaidPlanPageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spell", "Spell")
+                        .WithMany()
+                        .HasForeignKey("SpellId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RaidPlanPage");
+
+                    b.Navigation("Spell");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlanPage", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.Plans.RaidPlan", "RaidPlan")
+                        .WithMany("Pages")
+                        .HasForeignKey("RaidPlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RaidPlan");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidBoss", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Raids.RaidZone", "RaidZone")
@@ -3168,15 +3356,6 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("CurrentExpansion");
                 });
 
-            modelBuilder.Entity("RaidOps.Domain.Models.Reference.Expansion", b =>
-                {
-                    b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "ForkedFromExpansion")
-                        .WithMany()
-                        .HasForeignKey("ForkedFromExpansionId");
-
-                    b.Navigation("ForkedFromExpansion");
-                });
-
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spec", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Reference.WowClass", "Class")
@@ -3245,6 +3424,16 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.GuildAttributionDefinition", b =>
                 {
                     b.Navigation("Cells");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlan", b =>
+                {
+                    b.Navigation("Pages");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.Plans.RaidPlanPage", b =>
+                {
+                    b.Navigation("Elements");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
