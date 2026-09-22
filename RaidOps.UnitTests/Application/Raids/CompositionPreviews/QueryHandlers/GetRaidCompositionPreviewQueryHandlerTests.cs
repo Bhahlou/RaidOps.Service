@@ -5,6 +5,7 @@ using RaidOps.Application.Contracts.Raids.CompositionPreviews.Queries;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.Application.Implementations.Raids.CompositionPreviews.QueryHandlers;
 using RaidOps.Domain.Enums;
+using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids.CompositionPreviews;
 using RaidOps.Domain.Models.Reference;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -68,20 +69,21 @@ public class GetRaidCompositionPreviewQueryHandlerTests
             Name = "40-man",
             GroupCount = 8,
             SlotsPerGroup = 5,
-            Slots =
-            [
-                new RaidCompositionPreviewSlot
-                {
-                    GroupNumber = 1,
-                    SlotNumber = 1,
-                    WowClassId = 1,
-                    WowClass = new WowClass { Id = 1, Name = "Warrior", Color = "C79C6E" },
-                    SpecId = 71,
-                    Spec = new Spec { Id = 71, Name = "Arms", ClassId = 1, IconUrl = "https://cdn/arms.jpg" },
-                    Note = "Bob",
-                },
-            ],
+            GuildBranch = new GuildBranch { Id = GuildBranchId },
         };
+        var slotEntity = new RaidCompositionPreviewSlot
+        {
+            Id = 1,
+            GroupNumber = 1,
+            SlotNumber = 1,
+            WowClassId = 1,
+            WowClass = new WowClass { Id = 1, Name = "Warrior", Color = "C79C6E" },
+            SpecId = 71,
+            Spec = new Spec { Id = 71, Name = "Arms", ClassId = 1, IconUrl = "https://cdn/arms.jpg" },
+            Note = "Bob",
+            RaidCompositionPreview = preview,
+        };
+        preview.Slots = [slotEntity];
         _previews.Setup(r => r.GetByIdAsync(PreviewId, GuildBranchId, default)).ReturnsAsync(preview);
 
         var result = await _sut.HandleAsync(MakeQuery(), default);
