@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.7.0...v2.0.0) (2026-09-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* Add the WoW Forever game branch and deprecate Classic Era ([#83](https://github.com/Bhahlou/RaidOps.Service/issues/83))
+
+### 🚀 Features
+
+* Add a guild-wide raid attribution template, filled in per raid event ([#81](https://github.com/Bhahlou/RaidOps.Service/issues/81)) ([b22c07d](https://github.com/Bhahlou/RaidOps.Service/commit/b22c07d6a5eef441c39ef4a7149b2b1e8e5cc6e3))
+* Add the WoW Forever game branch and deprecate Classic Era ([#83](https://github.com/Bhahlou/RaidOps.Service/issues/83)) ([a7f37ae](https://github.com/Bhahlou/RaidOps.Service/commit/a7f37ae65a64c88a048015ca1ab7475c56b664a3))
+* Let a raid event extend another raid event's lockout across multiple nights ([#79](https://github.com/Bhahlou/RaidOps.Service/issues/79)) ([4fa5cf4](https://github.com/Bhahlou/RaidOps.Service/commit/4fa5cf4307a52f91d310aba047ea6e2f51955193))
+* Scope raid attribution rows to a specific boss, with section icons ([#82](https://github.com/Bhahlou/RaidOps.Service/issues/82)) ([8971c33](https://github.com/Bhahlou/RaidOps.Service/commit/8971c33c9785b3de6c53e963a38479d63a30f6ff))
+
 ## [1.7.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.6.0...v1.7.0) (2026-08-20)
 
 

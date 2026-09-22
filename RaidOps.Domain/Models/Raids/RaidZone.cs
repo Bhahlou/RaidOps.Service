@@ -65,4 +65,7 @@ public class RaidZone
 
     /// <summary>Time-bound cadence corrections for this zone (e.g. a temporary anomaly period).</summary>
     public virtual ICollection<RaidLockoutCadenceOverride> LockoutOverrides { get; set; } = [];
+
+    /// <summary>This zone's boss encounters, in pull order.</summary>
+    public virtual ICollection<RaidBoss> Bosses { get; set; } = [];
 }

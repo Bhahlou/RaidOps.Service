@@ -188,6 +188,21 @@ public class RaidsController(
         return ToActionResult(result);
     }
 
+    /// <summary>Officer-only — lists the branch's raid events (draft and published) within the lockout window around the given date, for the "extends the lockout of" picker in the create/edit dialogs.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/raids/events/choices")]
+    public async Task<IActionResult> GetEventChoices(string guildId, int guildBranchId, [FromQuery] DateTime aroundStartsAtUtc, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetRaidEventChoicesForBranchQuery, List<RaidEventChoiceResponse>>(
+            new GetRaidEventChoicesForBranchQuery { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, AroundStartsAtUtc = aroundStartsAtUtc },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
     /// <summary>Creates a standalone raid event, not tied to any recurring series.</summary>
     [HttpPost("{guildId}/branches/{guildBranchId:int}/raids/events")]
     public async Task<IActionResult> CreateEvent(string guildId, int guildBranchId, [FromBody] CreateAdhocRaidEventCommand command, CancellationToken cancellationToken)

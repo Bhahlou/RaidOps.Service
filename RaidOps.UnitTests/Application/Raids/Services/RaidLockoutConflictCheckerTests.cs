@@ -216,4 +216,97 @@ public class RaidLockoutConflictCheckerTests
         // Override's cadence (10) must be the one passed through, not the zone's own (3).
         _raidLockoutService.Verify(s => s.GetLockoutWindowStart(LockoutAnchor, 10, It.IsAny<IReadOnlyCollection<RaidLockoutCadenceOverride>>(), targetEvent.StartsAtUtc), Times.Once);
     }
+
+    // ── Extension chain exemption ────────────────────────────────────────────
+
+    [Fact]
+    public async Task FindConflictingZoneNameAsync_OtherEventExtendsTargetEvent_SameWindow_ReturnsNull()
+    {
+        var targetEvent = MakeEvent(EventId, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(5));
+        var zone = new RaidZone { Id = 7, LockoutCadenceDays = 3, LockoutAnchorUtc = LockoutAnchor };
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, GuildId = GuildId });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([zone]);
+
+        // Other event extends the target event directly — same lockout window, but that's intentional.
+        var otherEvent = MakeEvent(EventId + 1, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(4));
+        otherEvent.ExtendsRaidEventId = targetEvent.Id;
+        _raidCompositionRepository.Setup(r => r.GetActiveAssignmentsForCharacterInGuildBranchAsync(CharacterId, GuildBranchId, default))
+            .ReturnsAsync([new RaidSlotAssignment { RaidEventId = otherEvent.Id, RaidEvent = otherEvent }]);
+
+        _raidLockoutService.Setup(s => s.GetLockoutWindowStart(LockoutAnchor, 3, It.IsAny<IReadOnlyCollection<RaidLockoutCadenceOverride>>(), It.IsAny<DateTime>()))
+            .Returns(LockoutAnchor.AddDays(3));
+
+        var result = await _sut.FindConflictingZoneNameAsync(targetEvent, CharacterId, GuildId, GuildBranchId);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task FindConflictingZoneNameAsync_TargetEventExtendsOtherEvent_SameWindow_ReturnsNull()
+    {
+        // Same relationship, reversed direction: the event being checked is the one that extends
+        // the other, not the other way around.
+        var targetEvent = MakeEvent(EventId, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(5));
+        targetEvent.ExtendsRaidEventId = EventId + 1;
+        var zone = new RaidZone { Id = 7, LockoutCadenceDays = 3, LockoutAnchorUtc = LockoutAnchor };
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, GuildId = GuildId });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([zone]);
+
+        var otherEvent = MakeEvent(EventId + 1, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(4));
+        _raidCompositionRepository.Setup(r => r.GetActiveAssignmentsForCharacterInGuildBranchAsync(CharacterId, GuildBranchId, default))
+            .ReturnsAsync([new RaidSlotAssignment { RaidEventId = otherEvent.Id, RaidEvent = otherEvent }]);
+
+        _raidLockoutService.Setup(s => s.GetLockoutWindowStart(LockoutAnchor, 3, It.IsAny<IReadOnlyCollection<RaidLockoutCadenceOverride>>(), It.IsAny<DateTime>()))
+            .Returns(LockoutAnchor.AddDays(3));
+
+        var result = await _sut.FindConflictingZoneNameAsync(targetEvent, CharacterId, GuildId, GuildBranchId);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task FindConflictingZoneNameAsync_BothEventsExtendSameRoot_SameWindow_ReturnsNull()
+    {
+        // Siblings in a 3-night chain, both flattened to point at the same root — neither is the
+        // other's direct target, but they still share a chain and must not conflict.
+        var targetEvent = MakeEvent(EventId, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(5));
+        targetEvent.ExtendsRaidEventId = 1;
+        var zone = new RaidZone { Id = 7, LockoutCadenceDays = 3, LockoutAnchorUtc = LockoutAnchor };
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, GuildId = GuildId });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([zone]);
+
+        var otherEvent = MakeEvent(EventId + 1, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(4));
+        otherEvent.ExtendsRaidEventId = 1;
+        _raidCompositionRepository.Setup(r => r.GetActiveAssignmentsForCharacterInGuildBranchAsync(CharacterId, GuildBranchId, default))
+            .ReturnsAsync([new RaidSlotAssignment { RaidEventId = otherEvent.Id, RaidEvent = otherEvent }]);
+
+        _raidLockoutService.Setup(s => s.GetLockoutWindowStart(LockoutAnchor, 3, It.IsAny<IReadOnlyCollection<RaidLockoutCadenceOverride>>(), It.IsAny<DateTime>()))
+            .Returns(LockoutAnchor.AddDays(3));
+
+        var result = await _sut.FindConflictingZoneNameAsync(targetEvent, CharacterId, GuildId, GuildBranchId);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task FindConflictingZoneNameAsync_UnrelatedEvents_SameWindow_StillReturnsZoneName()
+    {
+        // Regression guard: the extension-chain exemption must not accidentally swallow genuine
+        // conflicts between two events that have nothing to do with each other.
+        var targetEvent = MakeEvent(EventId, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(5));
+        var zone = new RaidZone { Id = 7, Name = "Zul'Gurub", LockoutCadenceDays = 3, LockoutAnchorUtc = LockoutAnchor };
+        _guildBranchesRepository.Setup(r => r.GetByIdAsync(GuildBranchId, default)).ReturnsAsync(new GuildBranch { Id = GuildBranchId, GuildId = GuildId });
+        _raidZoneRepository.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), default)).ReturnsAsync([zone]);
+
+        var otherEvent = MakeEvent(EventId + 1, [new RaidEventZone { RaidZoneId = 7 }], LockoutAnchor.AddDays(4));
+        _raidCompositionRepository.Setup(r => r.GetActiveAssignmentsForCharacterInGuildBranchAsync(CharacterId, GuildBranchId, default))
+            .ReturnsAsync([new RaidSlotAssignment { RaidEventId = otherEvent.Id, RaidEvent = otherEvent }]);
+
+        _raidLockoutService.Setup(s => s.GetLockoutWindowStart(LockoutAnchor, 3, It.IsAny<IReadOnlyCollection<RaidLockoutCadenceOverride>>(), It.IsAny<DateTime>()))
+            .Returns(LockoutAnchor.AddDays(3));
+
+        var result = await _sut.FindConflictingZoneNameAsync(targetEvent, CharacterId, GuildId, GuildBranchId);
+
+        result.Should().Be("Zul'Gurub");
+    }
 }

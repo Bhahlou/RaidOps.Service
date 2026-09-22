@@ -24,4 +24,12 @@ public class RaidEventChoiceResponse
 
     /// <summary>Display name of the WoW game-version branch this event belongs to (e.g. "Classic Era").</summary>
     public required string BranchName { get; set; }
+
+    /// <summary>
+    /// FK to the raid event this one extends the lockout of, or <c>null</c> for a standalone event —
+    /// lets the create/edit dialogs' picker filter out an event already in the same extension chain
+    /// as the one being edited. Always <c>null</c> for <see cref="Queries.GetUpcomingPublishedRaidEventChoicesQuery"/>'s
+    /// callers (the Discord bot doesn't care), only populated by <see cref="Queries.GetRaidEventChoicesForBranchQuery"/>.
+    /// </summary>
+    public int? ExtendsRaidEventId { get; set; }
 }
