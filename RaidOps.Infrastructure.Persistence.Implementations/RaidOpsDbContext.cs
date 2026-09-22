@@ -5,6 +5,7 @@ using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Raids.Attributions;
+using RaidOps.Domain.Models.Raids.Plans;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
@@ -135,6 +136,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="AttributionDefinitionCell"/> table (ordered icon/name-slot cells within a row).</summary>
     public DbSet<AttributionDefinitionCell> AttributionDefinitionCells => Set<AttributionDefinitionCell>();
+
+    /// <summary>Gets the <see cref="RaidPlan"/> table (per-boss visual strategy boards).</summary>
+    public DbSet<RaidPlan> RaidPlans => Set<RaidPlan>();
+
+    /// <summary>Gets the <see cref="RaidPlanPage"/> table (named pages of a strategy board, e.g. phases).</summary>
+    public DbSet<RaidPlanPage> RaidPlanPages => Set<RaidPlanPage>();
+
+    /// <summary>Gets the <see cref="RaidPlanElement"/> table (canvas objects on a strategy board page).</summary>
+    public DbSet<RaidPlanElement> RaidPlanElements => Set<RaidPlanElement>();
 
     /// <summary>Gets the <see cref="RaidEventAttribution"/> table (sparse per-event attribution fills).</summary>
     public DbSet<RaidEventAttribution> RaidEventAttributions => Set<RaidEventAttribution>();
@@ -666,6 +676,49 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<AttributionDefinitionCell>()
             .HasIndex(c => new { c.GuildAttributionDefinitionId, c.CellIndex });
+
+        // RaidPlan — surrogate PK, always boss-specific (no "General" scope, unlike attributions)
+        modelBuilder.Entity<RaidPlan>()
+            .HasOne(p => p.Guild)
+            .WithMany()
+            .HasForeignKey(p => p.GuildId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidPlan>()
+            .HasIndex(p => new { p.GuildId, p.RaidBossId });
+
+        // RaidPlan → RaidBoss; reference data, never deleted while a board references it
+        modelBuilder.Entity<RaidPlan>()
+            .HasOne(p => p.RaidBoss)
+            .WithMany()
+            .HasForeignKey(p => p.RaidBossId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RaidPlanPage — surrogate PK, ordered children of a RaidPlan
+        modelBuilder.Entity<RaidPlanPage>()
+            .HasOne(p => p.RaidPlan)
+            .WithMany(b => b.Pages)
+            .HasForeignKey(p => p.RaidPlanId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidPlanPage>()
+            .HasIndex(p => new { p.RaidPlanId, p.SortOrder });
+
+        // RaidPlanElement — surrogate PK, canvas objects of a RaidPlanPage, stacked by ZIndex
+        modelBuilder.Entity<RaidPlanElement>()
+            .HasOne(e => e.RaidPlanPage)
+            .WithMany(p => p.Elements)
+            .HasForeignKey(e => e.RaidPlanPageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidPlanElement>()
+            .HasOne(e => e.Spell)
+            .WithMany()
+            .HasForeignKey(e => e.SpellId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidPlanElement>()
+            .HasIndex(e => new { e.RaidPlanPageId, e.ZIndex });
 
         // RaidEventAttribution uses a composite primary key of event, cell and instance index.
         // Deleting an event or a template row (which cascades its cells) drops its fills too.

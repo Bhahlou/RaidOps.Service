@@ -92,4 +92,8 @@ public static class ResponseDetail
     public const string RaidBossNotFound = nameof(RaidBossNotFound);
     public const string BossNotTargetedByEvent = nameof(BossNotTargetedByEvent);
     public const string DefinitionBossMismatch = nameof(DefinitionBossMismatch);
+
+    // ── Raid plans ────────────────────────────────────────────────────────
+    public const string RaidPlanNotFound = nameof(RaidPlanNotFound);
+    public const string RaidPlanPageNotFound = nameof(RaidPlanPageNotFound);
 }

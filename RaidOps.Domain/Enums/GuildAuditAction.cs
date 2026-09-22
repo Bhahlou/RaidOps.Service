@@ -103,4 +103,7 @@ public enum GuildAuditAction
 
     /// <summary>A raid event's attribution slot was filled or cleared.</summary>
     RaidEventAttributionUpdated = 33,
+
+    /// <summary>A raid strategy board, one of its pages, or its canvas elements were created, renamed, saved, or deleted.</summary>
+    RaidPlanUpdated = 34,
 }
