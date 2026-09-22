@@ -73,4 +73,16 @@ public class ExpansionTests
 
         forever.IsContentAvailableFrom(otherBranch).Should().BeFalse();
     }
+
+    [Fact]
+    public void ForkedFromExpansion_SetThenGet_ReturnsTheAssignedExpansion()
+    {
+        // Never read by application code — IsContentAvailableFrom only compares the raw FK
+        // (ForkedFromExpansionId) — this nav property exists solely for EF's Fluent API
+        // self-referencing relationship config. Same rationale as GuildBranchTests.Guild.
+        var classic = Mainline(1, 1);
+        var forever = new Expansion { Id = 12, Name = "Forever", ShortCode = "Forever", ForkedFromExpansion = classic };
+
+        forever.ForkedFromExpansion.Should().BeSameAs(classic);
+    }
 }
