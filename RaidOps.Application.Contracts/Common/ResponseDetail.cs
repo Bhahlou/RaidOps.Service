@@ -92,4 +92,9 @@ public static class ResponseDetail
     public const string RaidBossNotFound = nameof(RaidBossNotFound);
     public const string BossNotTargetedByEvent = nameof(BossNotTargetedByEvent);
     public const string DefinitionBossMismatch = nameof(DefinitionBossMismatch);
+
+    // ── Raid composition previews ────────────────────────────────────────
+    public const string RaidCompositionPreviewNotFound = nameof(RaidCompositionPreviewNotFound);
+    public const string SpecClassMismatch = nameof(SpecClassMismatch);
+    public const string InvalidGroupCount = nameof(InvalidGroupCount);
 }

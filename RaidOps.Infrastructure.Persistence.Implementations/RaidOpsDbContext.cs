@@ -5,6 +5,7 @@ using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Raids.Attributions;
+using RaidOps.Domain.Models.Raids.CompositionPreviews;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
@@ -138,6 +139,12 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="RaidEventAttribution"/> table (sparse per-event attribution fills).</summary>
     public DbSet<RaidEventAttribution> RaidEventAttributions => Set<RaidEventAttribution>();
+
+    /// <summary>Gets the <see cref="RaidCompositionPreview"/> table (officer-authored theoretical raid comps).</summary>
+    public DbSet<RaidCompositionPreview> RaidCompositionPreviews => Set<RaidCompositionPreview>();
+
+    /// <summary>Gets the <see cref="RaidCompositionPreviewSlot"/> table (sparse group/slot grid placeholders).</summary>
+    public DbSet<RaidCompositionPreviewSlot> RaidCompositionPreviewSlots => Set<RaidCompositionPreviewSlot>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -688,6 +695,43 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasOne(a => a.Character)
             .WithMany()
             .HasForeignKey(a => a.CharacterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RaidCompositionPreview — surrogate PK, branch-scoped. Deleting the branch takes its
+        // previews down with it (unlike RaidEvent → GuildBranch, which is Restrict — a preview has
+        // no historical/audit value worth preserving independently of its branch).
+        modelBuilder.Entity<RaidCompositionPreview>()
+            .HasOne(p => p.GuildBranch)
+            .WithMany()
+            .HasForeignKey(p => p.GuildBranchId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidCompositionPreview>()
+            .HasIndex(p => p.GuildBranchId);
+
+        // RaidCompositionPreviewSlot — surrogate PK (not composite like RaidSlotAssignment) since
+        // WowClassId/SpecId/Note are all independently nullable and easiest to upsert by row
+        // identity. Sparse: a coordinate with no row is an empty slot.
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasOne(s => s.RaidCompositionPreview)
+            .WithMany(p => p.Slots)
+            .HasForeignKey(s => s.RaidCompositionPreviewId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasIndex(s => new { s.RaidCompositionPreviewId, s.GroupNumber, s.SlotNumber })
+            .IsUnique();
+
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasOne(s => s.WowClass)
+            .WithMany()
+            .HasForeignKey(s => s.WowClassId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasOne(s => s.Spec)
+            .WithMany()
+            .HasForeignKey(s => s.SpecId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Spell — static reference table, seeded via a JSON-driven upsert (see SpellSeeder) rather
