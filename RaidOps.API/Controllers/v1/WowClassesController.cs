@@ -18,13 +18,13 @@ public class WowClassesController(
     ICommandDispatcher commandDispatcher,
     IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
 {
-    /// <summary>Returns all WoW classes ordered by Blizzard ID.</summary>
+    /// <summary>Returns all WoW classes ordered by Blizzard ID, optionally filtered to those actually available on a given expansion.</summary>
     /// <returns>200 with a list of <see cref="WowClassDto"/>.</returns>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll([FromQuery] int? availableForExpansionId, CancellationToken cancellationToken)
     {
         var result = await QueryDispatcher.DispatchAsync<GetWowClassesQuery, IEnumerable<WowClassDto>>(
-            new GetWowClassesQuery(), cancellationToken);
+            new GetWowClassesQuery { AvailableForExpansionId = availableForExpansionId }, cancellationToken);
 
         return ToActionResult(result);
     }

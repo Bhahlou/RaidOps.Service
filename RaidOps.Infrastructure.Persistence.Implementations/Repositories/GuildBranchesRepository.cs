@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
@@ -55,8 +56,25 @@ public class GuildBranchesRepository(RaidOpsDbContext context) : IGuildBranchesR
         };
 
         context.GuildBranches.Add(branch);
-        await context.SaveChangesAsync(cancellationToken);
-        return branch;
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            return branch;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Lost a race against a concurrent activation of the same guild+branch pair (e.g. a
+            // double-fired UI toggle) — our insert failed, fall back to reactivating the row the
+            // other request just committed instead of surfacing a 500.
+            context.Entry(branch).State = EntityState.Detached;
+
+            existing = await context.GuildBranches
+                .FirstAsync(gb => gb.GuildId == guildId && gb.BranchId == branchId, cancellationToken);
+            existing.IsActive = true;
+            await context.SaveChangesAsync(cancellationToken);
+            return existing;
+        }
     }
 
     /// <inheritdoc/>

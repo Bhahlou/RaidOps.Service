@@ -19,6 +19,7 @@ internal static class PersistenceRegistry
         services.AddScoped<IUserGuildsRepository, UserGuildsRepository>();
         services.AddScoped<IBnetAccountRepository, BnetAccountRepository>();
         services.AddScoped<IBranchRepository, BranchRepository>();
+        services.AddScoped<IExpansionRepository, ExpansionRepository>();
         services.AddScoped<ISpecRepository, SpecRepository>();
         services.AddScoped<IWowClassRepository, WowClassRepository>();
         services.AddScoped<IRealmRepository, RealmRepository>();

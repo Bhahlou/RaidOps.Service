@@ -30,6 +30,23 @@ public class Branch
     /// <summary>FK to the expansion that is currently active / end-game on this branch.</summary>
     public int CurrentExpansionId { get; set; }
 
+    /// <summary>
+    /// Whether this branch is offered for new activity — hidden from the character-sync branch
+    /// picker and from a guild's "activate a new branch" list once false. Existing data referencing
+    /// this branch (characters, GuildBranch activations) is never affected; only new sign-up surfaces
+    /// stop showing it.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Whether BNet character sync actually works for this branch yet. False for a branch that's
+    /// been announced/seeded ahead of Blizzard shipping its BNet API support (e.g. a brand-new game
+    /// branch in beta) — shown in the character-sync picker as "coming soon" rather than hidden
+    /// outright, since the branch itself can still be activated on a guild and used for
+    /// recruitment/planning in the meantime.
+    /// </summary>
+    public bool SyncAvailable { get; set; } = true;
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The expansion currently active on this branch.</summary>
