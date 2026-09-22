@@ -11,8 +11,9 @@ namespace RaidOps.IntegrationTests.Controllers;
 
 /// <summary>
 /// Integration tests for <see cref="RaidOps.API.Controllers.v1.RaidCompositionPreviewsController"/>.
-/// All Discord IDs and guild IDs are in the 970… range to avoid primary-key conflicts with other
-/// test classes. Warrior (class 1) / Arms (spec 71) are used as the valid class/spec pair
+/// All Discord IDs and guild IDs are in the 985… range to avoid primary-key conflicts with other
+/// test classes (970… is already claimed by <see cref="GuildBranchesControllerTests"/> and
+/// <see cref="GuildRosterControllerTests"/>). Warrior (class 1) / Arms (spec 71) are used as the valid class/spec pair
 /// throughout — reference data, seeded regardless of branch/expansion.
 /// </summary>
 [Collection("Integration")]
@@ -28,49 +29,49 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task GetPreviews_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews");
+        var response = await Client.GetAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task GetPreview_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1");
+        var response = await Client.GetAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task CreatePreview_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews", new { name = "x", groupCount = 8 });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews", new { name = "x", groupCount = 8 });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task RenamePreview_WithoutToken_Returns401()
     {
-        var response = await Client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1", JsonContent.Create(new { name = "x" }));
+        var response = await Client.PatchAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1", JsonContent.Create(new { name = "x" }));
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task DuplicatePreview_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1/duplicate", new { newName = "x" });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1/duplicate", new { newName = "x" });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task DeletePreview_WithoutToken_Returns401()
     {
-        var response = await Client.DeleteAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1");
+        var response = await Client.DeleteAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task UpdateSlot_WithoutToken_Returns401()
     {
-        var response = await Client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1/slots", JsonContent.Create(new { groupNumber = 1, slotNumber = 1 }));
+        var response = await Client.PatchAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1/slots", JsonContent.Create(new { groupNumber = 1, slotNumber = 1 }));
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -79,7 +80,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.GetAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews");
+        var response = await client.GetAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -89,7 +90,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.GetAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1");
+        var response = await client.GetAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -99,7 +100,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.PostAsJsonAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews", new { name = "x", groupCount = 8 });
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews", new { name = "x", groupCount = 8 });
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -109,7 +110,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1", JsonContent.Create(new { name = "x" }));
+        var response = await client.PatchAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1", JsonContent.Create(new { name = "x" }));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -119,7 +120,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.PostAsJsonAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1/duplicate", new { newName = "x" });
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1/duplicate", new { newName = "x" });
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -129,7 +130,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.DeleteAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1");
+        var response = await client.DeleteAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -139,7 +140,7 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.PatchAsync("/api/v1/guilds/970000000000000001/branches/1/composition-previews/1/slots", JsonContent.Create(new { groupNumber = 1, slotNumber = 1 }));
+        var response = await client.PatchAsync("/api/v1/guilds/985000000000000001/branches/1/composition-previews/1/slots", JsonContent.Create(new { groupNumber = 1, slotNumber = 1 }));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -149,8 +150,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task GetPreviews_WhenNotOfficer_Returns400()
     {
-        const string id = "970000000000000002";
-        const string guildId = "970000000000000002";
+        const string id = "985000000000000002";
+        const string guildId = "985000000000000002";
         var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -162,8 +163,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task GetPreviews_WhenOfficer_ReturnsSeededSummaries()
     {
-        const string id = "970000000000000003";
-        const string guildId = "970000000000000003";
+        const string id = "985000000000000003";
+        const string guildId = "985000000000000003";
         var branchId = await SeedGuildAndBranch(id, guildId);
         await SeedPreview(branchId, id, "40-man target", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -180,8 +181,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task GetPreview_NotFound_Returns400()
     {
-        const string id = "970000000000000004";
-        const string guildId = "970000000000000004";
+        const string id = "985000000000000004";
+        const string guildId = "985000000000000004";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -193,8 +194,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task GetPreview_WhenOfficer_ReturnsPreviewWithSlots()
     {
-        const string id = "970000000000000005";
-        const string guildId = "970000000000000005";
+        const string id = "985000000000000005";
+        const string guildId = "985000000000000005";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "40-man target", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -220,8 +221,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task CreatePreview_WhenOfficer_Returns200AndPersists()
     {
-        const string id = "970000000000000006";
-        const string guildId = "970000000000000006";
+        const string id = "985000000000000006";
+        const string guildId = "985000000000000006";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -242,8 +243,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task CreatePreview_GroupCountOutOfRange_Returns400WithInvalidGroupCountError()
     {
-        const string id = "970000000000000007";
-        const string guildId = "970000000000000007";
+        const string id = "985000000000000007";
+        const string guildId = "985000000000000007";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -257,8 +258,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task CreatePreview_WhenNotOfficer_Returns400()
     {
-        const string id = "970000000000000008";
-        const string guildId = "970000000000000008";
+        const string id = "985000000000000008";
+        const string guildId = "985000000000000008";
         var branchId = await SeedGuildAndBranch(id, guildId, isAdmin: false);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -272,8 +273,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task RenamePreview_WhenOfficer_Returns200AndPersists()
     {
-        const string id = "970000000000000009";
-        const string guildId = "970000000000000009";
+        const string id = "985000000000000009";
+        const string guildId = "985000000000000009";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "Old name", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -293,8 +294,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task RenamePreview_NotFound_Returns400()
     {
-        const string id = "970000000000000010";
-        const string guildId = "970000000000000010";
+        const string id = "985000000000000010";
+        const string guildId = "985000000000000010";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -310,8 +311,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task DuplicatePreview_WhenOfficer_Returns200AndClonesSlots()
     {
-        const string id = "970000000000000011";
-        const string guildId = "970000000000000011";
+        const string id = "985000000000000011";
+        const string guildId = "985000000000000011";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "Original", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -335,8 +336,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task DuplicatePreview_SourceNotFound_Returns400()
     {
-        const string id = "970000000000000012";
-        const string guildId = "970000000000000012";
+        const string id = "985000000000000012";
+        const string guildId = "985000000000000012";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -350,8 +351,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task DeletePreview_WhenOfficer_Returns200AndDeletes()
     {
-        const string id = "970000000000000013";
-        const string guildId = "970000000000000013";
+        const string id = "985000000000000013";
+        const string guildId = "985000000000000013";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "To delete", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -369,8 +370,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task DeletePreview_NotFound_Returns400()
     {
-        const string id = "970000000000000014";
-        const string guildId = "970000000000000014";
+        const string id = "985000000000000014";
+        const string guildId = "985000000000000014";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
@@ -384,8 +385,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task UpdateSlot_WhenOfficer_Returns200AndPersistsPlaceholder()
     {
-        const string id = "970000000000000015";
-        const string guildId = "970000000000000015";
+        const string id = "985000000000000015";
+        const string guildId = "985000000000000015";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "40-man", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -408,8 +409,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task UpdateSlot_ReplacingPlaceholder_KeepsExistingNote()
     {
-        const string id = "970000000000000016";
-        const string guildId = "970000000000000016";
+        const string id = "985000000000000016";
+        const string guildId = "985000000000000016";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "40-man", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -435,8 +436,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task UpdateSlot_ClearingEverything_DeletesTheSlotRow()
     {
-        const string id = "970000000000000017";
-        const string guildId = "970000000000000017";
+        const string id = "985000000000000017";
+        const string guildId = "985000000000000017";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "40-man", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -459,8 +460,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task UpdateSlot_OutOfBounds_Returns400WithInvalidGroupOrSlotNumberError()
     {
-        const string id = "970000000000000018";
-        const string guildId = "970000000000000018";
+        const string id = "985000000000000018";
+        const string guildId = "985000000000000018";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "10-man", groupCount: 2);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -477,8 +478,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task UpdateSlot_SpecClassMismatch_Returns400WithSpecClassMismatchError()
     {
-        const string id = "970000000000000019";
-        const string guildId = "970000000000000019";
+        const string id = "985000000000000019";
+        const string guildId = "985000000000000019";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var previewId = await SeedPreview(branchId, id, "40-man", groupCount: 8);
         var client = CreateAuthenticatedClient(discordId: id);
@@ -495,8 +496,8 @@ public class RaidCompositionPreviewsControllerTests(RaidOpsWebApplicationFactory
     [Fact]
     public async Task UpdateSlot_PreviewNotFound_Returns400()
     {
-        const string id = "970000000000000020";
-        const string guildId = "970000000000000020";
+        const string id = "985000000000000020";
+        const string guildId = "985000000000000020";
         var branchId = await SeedGuildAndBranch(id, guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
