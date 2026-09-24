@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.0.0...v2.1.0) (2026-09-24)
+
+
+### 🚀 Features
+
+* Add raid composition preview tool for theoretical raid planning ([#85](https://github.com/Bhahlou/RaidOps.Service/issues/85)) ([cf87561](https://github.com/Bhahlou/RaidOps.Service/commit/cf875612352592bcd05f88c61a3c0310a68dc01c))
+* Sync WoW spell data from wago.tools per expansion and scope raid attribution templates to a guild branch ([#87](https://github.com/Bhahlou/RaidOps.Service/issues/87)) ([f9fab03](https://github.com/Bhahlou/RaidOps.Service/commit/f9fab0390acc167182b9af16d0061f56953d79a1))
+
 ## [2.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.7.0...v2.0.0) (2026-09-22)
 
 
