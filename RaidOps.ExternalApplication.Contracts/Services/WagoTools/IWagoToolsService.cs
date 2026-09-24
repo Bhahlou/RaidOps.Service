@@ -37,4 +37,12 @@ public interface IWagoToolsService
     /// wago.tools returns 400 without it, since it otherwise has no build to resolve the FDID against.
     /// </summary>
     Task<string> GetFileNameAsync(int fileDataId, string build, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Downloads the community WoW listfile (the URL comes from <c>Wago:ListfileUrl</c>, streamed — it
+    /// is ~150 MB) and returns only the icon entries: FileDataID → bare icon name (e.g.
+    /// <c>"inv_misc_food_59"</c>). One request replaces tens of thousands of per-icon
+    /// <see cref="GetFileNameAsync"/> lookups; icons too new to be in it are looked up individually.
+    /// </summary>
+    Task<Dictionary<int, string>> GetIconFileNamesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using RaidOps.ExternalApplication.Implementations.Services;
 using RaidOps.UnitTests.Helpers;
 
@@ -9,10 +10,15 @@ namespace RaidOps.UnitTests.ExternalApplication.Services;
 /// <summary>Unit tests for <see cref="WagoToolsService"/> — a fake HTTP handler, never the real network.</summary>
 public class WagoToolsServiceTests
 {
-    private static (WagoToolsService Sut, FakeHttpMessageHandler Handler) MakeSut(HttpStatusCode status, string? content)
+    private const string ListfileUrl = "https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv";
+
+    private static (WagoToolsService Sut, FakeHttpMessageHandler Handler) MakeSut(HttpStatusCode status, string? content, string? listfileUrl = ListfileUrl)
     {
         var handler = new FakeHttpMessageHandler(status, content);
-        return (new WagoToolsService(new HttpClient(handler) { BaseAddress = new Uri("https://wago.tools") }), handler);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Wago:ListfileUrl"] = listfileUrl })
+            .Build();
+        return (new WagoToolsService(new HttpClient(handler) { BaseAddress = new Uri("https://wago.tools") }, configuration), handler);
     }
 
     // ── GetLatestBuildsAsync ─────────────────────────────────────────────────
@@ -121,6 +127,20 @@ public class WagoToolsServiceTests
     }
 
     [Fact]
+    public async Task GetSpellNamesAsync_ManyRowsLargerThanTheReaderBuffer_AreAllParsed()
+    {
+        // ~200 KB of CSV, far beyond StreamReader's internal buffer, so rows straddle buffer refills.
+        var csv = "ID,Name_lang\n" + string.Concat(Enumerable.Range(1, 10_000).Select(i => $"{i},\"Spell, number {i}\"\n"));
+        var (sut, _) = MakeSut(HttpStatusCode.OK, csv);
+
+        var result = await sut.GetSpellNamesAsync("b", "enUS");
+
+        result.Should().HaveCount(10_000);
+        result[0].Should().BeEquivalentTo(new { Id = 1, Name = "Spell, number 1" });
+        result[^1].Should().BeEquivalentTo(new { Id = 10_000, Name = "Spell, number 10000" });
+    }
+
+    [Fact]
     public async Task GetSpellNamesAsync_EmptyBody_ReturnsEmptyList()
     {
         var (sut, _) = MakeSut(HttpStatusCode.OK, string.Empty);
@@ -153,6 +173,26 @@ public class WagoToolsServiceTests
 
         result.Should().BeEquivalentTo(new Dictionary<int, int> { [133] = 136243, [116] = 135810 });
         handler.LastRequest!.RequestUri!.ToString().Should().Be("https://wago.tools/db2/SpellMisc/csv?build=1.60.1.69977");
+    }
+
+    [Fact]
+    public async Task GetSpellIconFileDataIdsAsync_Crlf_ParsesRows()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.OK, "ID,SpellID,SpellIconFileDataID\r\n1,133,111\r\n2,116,222\r\n");
+
+        var result = await sut.GetSpellIconFileDataIdsAsync("b");
+
+        result.Should().BeEquivalentTo(new Dictionary<int, int> { [133] = 111, [116] = 222 });
+    }
+
+    [Fact]
+    public async Task GetSpellIconFileDataIdsAsync_HeaderOnly_ReturnsEmpty()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.OK, "ID,SpellID,SpellIconFileDataID\n");
+
+        var result = await sut.GetSpellIconFileDataIdsAsync("b");
+
+        result.Should().BeEmpty();
     }
 
     [Fact]
@@ -231,5 +271,102 @@ public class WagoToolsServiceTests
         var act = () => sut.GetFileNameAsync(42, "b");
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*42*");
+    }
+
+    // ── GetIconFileNamesAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_IconLine_YieldsIdToNameWithoutPathOrExtension()
+    {
+        var (sut, handler) = MakeSut(HttpStatusCode.OK, "134015;interface/icons/inv_misc_food_59.blp\n");
+
+        var result = await sut.GetIconFileNamesAsync();
+
+        result.Should().BeEquivalentTo(new Dictionary<int, string> { [134015] = "inv_misc_food_59" });
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.ToString().Should().Be(ListfileUrl);
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_MixedListfile_KeepsOnlyIconEntries()
+    {
+        const string listfile = "134015;interface/icons/inv_misc_food_59.blp\n"
+            + "53183;sound/music/citymusic/orgrimmar/orgrimmar01.mp3\n"
+            + "\n"
+            + "no-separator-on-this-line\n"
+            + ";interface/icons/leading_separator.blp\n"
+            + "abc;interface/icons/non_numeric_id.blp\n"
+            + "136243;interface/icons/spell_fire_flamebolt.blp\n"
+            + "999;interface/iconsx/not_the_icons_folder.blp\n";
+        var (sut, _) = MakeSut(HttpStatusCode.OK, listfile);
+
+        var result = await sut.GetIconFileNamesAsync();
+
+        result.Should().BeEquivalentTo(new Dictionary<int, string>
+        {
+            [134015] = "inv_misc_food_59",
+            [136243] = "spell_fire_flamebolt",
+        });
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_PathPrefixIsMatchedCaseInsensitively()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.OK, "1;Interface/Icons/INV_Misc_Food_59.blp\r\n2;INTERFACE/ICONS/Spell_Fire.BLP\r\n");
+
+        var result = await sut.GetIconFileNamesAsync();
+
+        result.Should().BeEquivalentTo(new Dictionary<int, string> { [1] = "INV_Misc_Food_59", [2] = "Spell_Fire" });
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_IconInASubfolder_KeepsTheBareFileName()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.OK, "7;interface/icons/achievement/ach_boss_x.blp\n");
+
+        var result = await sut.GetIconFileNamesAsync();
+
+        result.Should().ContainSingle().Which.Should().Be(new KeyValuePair<int, string>(7, "ach_boss_x"));
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_DuplicateId_LastLineWins()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.OK, "5;interface/icons/first.blp\n5;interface/icons/second.blp\n");
+
+        var result = await sut.GetIconFileNamesAsync();
+
+        result[5].Should().Be("second");
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_EmptyBody_ReturnsEmptyMap()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.OK, string.Empty);
+
+        var result = await sut.GetIconFileNamesAsync();
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_ListfileUrlNotConfigured_ThrowsInvalidOperationExceptionWithoutAnyRequest()
+    {
+        var (sut, handler) = MakeSut(HttpStatusCode.OK, "1;interface/icons/x.blp\n", listfileUrl: null);
+
+        var act = () => sut.GetIconFileNamesAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Wago:ListfileUrl*");
+        handler.LastRequest.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetIconFileNamesAsync_NonSuccessStatus_ThrowsHttpRequestException()
+    {
+        var (sut, _) = MakeSut(HttpStatusCode.ServiceUnavailable, "down");
+
+        var act = () => sut.GetIconFileNamesAsync();
+
+        await act.Should().ThrowAsync<HttpRequestException>();
     }
 }

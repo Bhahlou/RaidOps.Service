@@ -25,6 +25,7 @@ public class AdminControllerTests(RaidOpsWebApplicationFactory factory)
     private const int AnniversaryExpansionId = 2;
     private const string AnniversaryProduct = "wow_anniversary";
     private const int SyncedSpellId = 9870001;
+    private const int ListfileSpellId = 9870002;
     private const string Build = "9.9.9.98765";
 
     private static readonly DateTime BuildDate = new(2026, 9, 24, 8, 30, 0, DateTimeKind.Utc);
@@ -86,8 +87,11 @@ public class AdminControllerTests(RaidOpsWebApplicationFactory factory)
             ["frFR"] = [new WagoSpellName { Id = SyncedSpellId, Name = "Sonde admin" }],
             ["deDE"] = [new WagoSpellName { Id = SyncedSpellId, Name = "Admin-Sonde" }],
         };
-        stub.IconFileDataIds = new() { [SyncedSpellId] = 9870100 };
+        stub.SpellNamesByLocale["enUS"].Add(new WagoSpellName { Id = ListfileSpellId, Name = "Listfile Probe" });
+        // One icon is too new for the community listfile (resolved by an individual lookup), the other is in it.
+        stub.IconFileDataIds = new() { [SyncedSpellId] = 9870100, [ListfileSpellId] = 9870101 };
         stub.FileNames = new() { [9870100] = "interface/icons/inv_admin_probe.blp" };
+        stub.IconFileNames = new() { [9870101] = "inv_listfile_probe" };
         var client = CreateAuthenticatedClient(discordId: RaidOpsWebApplicationFactory.OwnerDiscordId);
 
         try
@@ -100,7 +104,7 @@ public class AdminControllerTests(RaidOpsWebApplicationFactory factory)
             firstResult.GetProperty("branchId").GetInt32().Should().Be(AnniversaryBranchId);
             firstResult.GetProperty("skipped").GetBoolean().Should().BeFalse();
             firstResult.GetProperty("latestBuild").GetString().Should().Be(Build);
-            firstResult.GetProperty("addedCount").GetInt32().Should().Be(1);
+            firstResult.GetProperty("addedCount").GetInt32().Should().Be(2);
             firstResult.GetProperty("renamedCount").GetInt32().Should().Be(0);
 
             var (scope, db) = CreateDbScope();
@@ -112,6 +116,9 @@ public class AdminControllerTests(RaidOpsWebApplicationFactory factory)
                 availability.NameFr.Should().Be("Sonde admin");
                 availability.NameDe.Should().Be("Admin-Sonde");
                 availability.IconUrl.Should().Be("https://render.worldofwarcraft.com/us/icons/56/inv_admin_probe.jpg");
+
+                var fromListfile = await db.SpellAvailabilities.AsNoTracking().SingleAsync(a => a.SpellId == ListfileSpellId);
+                fromListfile.IconUrl.Should().Be("https://render.worldofwarcraft.com/us/icons/56/inv_listfile_probe.jpg");
 
                 var branch = await db.Branches.AsNoTracking().SingleAsync(b => b.Id == AnniversaryBranchId);
                 branch.LastSyncedBuildVersion.Should().Be(Build);
@@ -143,7 +150,7 @@ public class AdminControllerTests(RaidOpsWebApplicationFactory factory)
             stub.Reset();
             await SeedAsync(async db =>
             {
-                await db.Spells.Where(s => s.Id == SyncedSpellId).ExecuteDeleteAsync();
+                await db.Spells.Where(s => s.Id == SyncedSpellId || s.Id == ListfileSpellId).ExecuteDeleteAsync();
                 await db.Branches.Where(b => b.Id == AnniversaryBranchId)
                     .ExecuteUpdateAsync(s => s.SetProperty(b => b.LastSyncedBuildVersion, (string?)null).SetProperty(b => b.LastSyncedBuildDate, (DateTime?)null));
             });

@@ -7,6 +7,10 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 /// <summary>EF Core implementation of <see cref="ISpellRepository"/>.</summary>
 public class SpellRepository(RaidOpsDbContext context) : ISpellRepository
 {
+    // Bounds memory and per-statement size: a Retail sync upserts ~400k rows, which must never sit in
+    // the change tracker (or one giant transaction) all at once.
+    private const int UpsertChunkSize = 5_000;
+
     /// <inheritdoc/>
     public async Task<SpellAvailability?> GetAvailabilityAsync(int spellId, int expansionId, CancellationToken cancellationToken = default)
         => await context.SpellAvailabilities
@@ -35,7 +39,19 @@ public class SpellRepository(RaidOpsDbContext context) : ISpellRepository
     /// <inheritdoc/>
     public async Task<SpellSyncDiff> UpsertAsync(IEnumerable<SpellAvailability> rows, CancellationToken cancellationToken = default)
     {
-        var incoming = rows.ToList();
+        var diff = new SpellSyncDiff();
+
+        foreach (var chunk in rows.Chunk(UpsertChunkSize))
+        {
+            await UpsertChunkAsync(chunk, diff, cancellationToken);
+            context.ChangeTracker.Clear();
+        }
+
+        return diff;
+    }
+
+    private async Task UpsertChunkAsync(SpellAvailability[] incoming, SpellSyncDiff diff, CancellationToken cancellationToken)
+    {
         var incomingIds = incoming.Select(r => r.SpellId).Distinct().ToList();
         var incomingExpansionIds = incoming.Select(r => r.ExpansionId).Distinct().ToList();
 
@@ -48,7 +64,6 @@ public class SpellRepository(RaidOpsDbContext context) : ISpellRepository
             .Where(a => incomingIds.Contains(a.SpellId) && incomingExpansionIds.Contains(a.ExpansionId))
             .ToDictionaryAsync(a => (a.SpellId, a.ExpansionId), cancellationToken);
 
-        var diff = new SpellSyncDiff();
         var newSpells = new List<Spell>();
         var newRows = new List<SpellAvailability>();
 
@@ -81,6 +96,5 @@ public class SpellRepository(RaidOpsDbContext context) : ISpellRepository
         context.SpellAvailabilities.AddRange(newRows);
 
         await context.SaveChangesAsync(cancellationToken);
-        return diff;
     }
 }
