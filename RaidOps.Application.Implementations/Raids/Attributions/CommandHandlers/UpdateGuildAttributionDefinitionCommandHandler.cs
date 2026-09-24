@@ -12,6 +12,7 @@ namespace RaidOps.Application.Implementations.Raids.Attributions.CommandHandlers
 /// <summary>Handles <see cref="UpdateGuildAttributionDefinitionCommand"/> by validating the officer's access and the icon-source fields, then updating the template row.</summary>
 public class UpdateGuildAttributionDefinitionCommandHandler(
     IGuildAccessService guildAccessService,
+    IGuildBranchesRepository guildBranchesRepository,
     IGuildAttributionDefinitionsRepository definitionsRepository,
     ISpellRepository spellRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateGuildAttributionDefinitionCommand>
@@ -19,11 +20,15 @@ public class UpdateGuildAttributionDefinitionCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateGuildAttributionDefinitionCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var validation = await AttributionDefinitionValidator.ValidateAsync(command.Cells, spellRepository, cancellationToken);
+        var expansionId = await guildBranchesRepository.GetCurrentExpansionIdAsync(command.GuildId, command.GuildBranchId, cancellationToken);
+        if (expansionId is null)
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildBranchNotFound, "Guild branch not found.");
+
+        var validation = await AttributionDefinitionValidator.ValidateAsync(command.Cells, expansionId.Value, spellRepository, cancellationToken);
         if (validation != null)
             return Result<CommandResponse>.Fail(validation, "Invalid attribution definition fields.");
 
@@ -31,14 +36,15 @@ public class UpdateGuildAttributionDefinitionCommandHandler(
         {
             Id = command.DefinitionId,
             GuildId = command.GuildId,
+            GuildBranchId = command.GuildBranchId,
             Label = command.Label,
             Section = command.Section,
             IsRepeatable = command.IsRepeatable,
             Cells = AttributionCellMapper.ToEntities(command.Cells),
-        }, command.GuildId, cancellationToken);
+        }, command.GuildId, command.GuildBranchId, cancellationToken);
 
         if (!updated)
-            return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild branch.");
 
         await auditLogService.LogAsync(
             command.GuildId,

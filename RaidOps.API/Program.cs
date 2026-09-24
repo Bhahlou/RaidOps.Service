@@ -11,8 +11,8 @@ using Microsoft.IdentityModel.Tokens;
 using NetCord.Hosting.Services.ApplicationCommands;
 using NetCord.Hosting.Services.ComponentInteractions;
 using NetCord.Services.ComponentInteractions;
+using RaidOps.API.BackgroundServices;
 using RaidOps.API.Hubs;
-using RaidOps.API.Seeding;
 using RaidOps.Application.Contracts.Configuration;
 using RaidOps.Application.Contracts.Services;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
@@ -187,6 +187,7 @@ namespace RaidOps.API
             builder.Services.AddSingleton<IUserIdProvider, JwtSubUserIdProvider>();
             builder.Services.AddSingleton<IAuthNotifier, AuthNotifier>();
             builder.Services.AddSingleton<IRaidSignupNotifier, RaidSignupNotifier>();
+            builder.Services.AddHostedService<SpellSyncBackgroundService>();
 
             builder.Services.AddRaidOps(builder.Configuration);
 
@@ -206,10 +207,11 @@ namespace RaidOps.API
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
-                await db.Database.MigrateAsync();
 
-                var spellRepository = scope.ServiceProvider.GetRequiredService<ISpellRepository>();
-                await SpellSeeder.SeedAsync(spellRepository, app.Logger, CancellationToken.None);
+                // Data-heavy migrations (e.g. backfilling the ~570k-row SpellAvailabilities table) blow
+                // through Npgsql's default 30s command timeout — give startup migrations room to finish.
+                db.Database.SetCommandTimeout(TimeSpan.FromMinutes(15));
+                await db.Database.MigrateAsync();
             }
 
             var deployNotifier = app.Services.GetRequiredService<IDiscordDeployNotifier>();

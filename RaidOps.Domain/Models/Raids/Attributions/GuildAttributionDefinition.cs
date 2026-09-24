@@ -11,10 +11,12 @@ namespace RaidOps.Domain.Models.Raids.Attributions;
 /// needs assigning" (a buff, a curse, a tank swap, an interrupt rotation), independent of any
 /// specific <see cref="RaidEvent"/>. Officers add/edit/reorder these as their raid content
 /// changes; each row is later filled in per event via <see cref="RaidEventAttribution"/>.
-/// Guild-wide only (no per-branch override) — unlike <c>GuildNotificationSetting</c>, this isn't
-/// branch-specific config. <see cref="RaidBossId"/> <c>null</c> means a "General" row (shown on
-/// every raid event regardless of boss, the original shape of this template); non-null scopes the
-/// row to one specific boss encounter, only shown/fillable on events targeting that boss's zone.
+/// Scoped to one <see cref="GuildBranch"/> (<see cref="GuildBranchId"/>): everything a template row
+/// references — spells, allowed classes/specs, raid zones — depends on the branch's expansion, so a
+/// guild running several branches keeps one independent template per branch. <see cref="RaidBossId"/>
+/// <c>null</c> means a "General" row (shown on every raid event of the branch regardless of boss, the
+/// original shape of this template); non-null scopes the row to one specific boss encounter, only
+/// shown/fillable on events targeting that boss's zone.
 /// </summary>
 [Table("GuildAttributionDefinitions")]
 public class GuildAttributionDefinition
@@ -26,6 +28,9 @@ public class GuildAttributionDefinition
     /// <summary>Discord snowflake ID of the guild this definition belongs to.</summary>
     [Required]
     public string GuildId { get; set; } = string.Empty;
+
+    /// <summary>FK to the guild branch (per-guild activation of a game branch) this template row belongs to.</summary>
+    public int GuildBranchId { get; set; }
 
     /// <summary>
     /// Display label — pre-filled from the linked spell's localized name when one is picked, but
@@ -91,6 +96,9 @@ public class GuildAttributionDefinition
 
     /// <summary>The guild this definition belongs to.</summary>
     public virtual Guild Guild { get; set; } = null!;
+
+    /// <summary>The guild branch this definition belongs to.</summary>
+    public virtual GuildBranch GuildBranch { get; set; } = null!;
 
     /// <summary>The boss this row is scoped to, or <c>null</c> for a "General" row.</summary>
     public virtual RaidBoss? RaidBoss { get; set; }

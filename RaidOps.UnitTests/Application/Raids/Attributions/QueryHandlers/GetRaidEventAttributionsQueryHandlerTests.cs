@@ -1,3 +1,4 @@
+using RaidOps.Domain.Models.Reference;
 using FluentAssertions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
@@ -18,6 +19,7 @@ namespace RaidOps.UnitTests.Application.Raids.Attributions.QueryHandlers;
 public class GetRaidEventAttributionsQueryHandlerTests
 {
     private readonly Mock<IGuildAccessService> _access = new();
+    private readonly Mock<IGuildBranchesRepository> _branches = new();
     private readonly Mock<IRaidEventRepository> _raidEvents = new();
     private readonly Mock<IGuildAttributionDefinitionsRepository> _definitions = new();
     private readonly Mock<IRaidEventAttributionsRepository> _attributions = new();
@@ -33,8 +35,9 @@ public class GetRaidEventAttributionsQueryHandlerTests
 
     public GetRaidEventAttributionsQueryHandlerTests()
     {
-        _sut = new GetRaidEventAttributionsQueryHandler(_access.Object, _raidEvents.Object, _definitions.Object, _attributions.Object, _raidBosses.Object);
-        _definitions.Setup(d => d.GetForGuildAsync(GuildId, null, default)).ReturnsAsync([]);
+        _sut = new GetRaidEventAttributionsQueryHandler(_access.Object, _branches.Object, _raidEvents.Object, _definitions.Object, _attributions.Object, _raidBosses.Object);
+        _branches.Setup(b => b.GetCurrentExpansionIdAsync(GuildId, GuildBranchId, default)).ReturnsAsync(2);
+        _definitions.Setup(d => d.GetForBranchAsync(GuildId, GuildBranchId, null, default)).ReturnsAsync([]);
         _attributions.Setup(a => a.GetForEventAsync(EventId, default)).ReturnsAsync([]);
     }
 
@@ -119,7 +122,7 @@ public class GetRaidEventAttributionsQueryHandlerTests
                 new RaidSlotAssignment { CharacterId = 100, SpecId = 265, Character = new Character { Id = 100, Name = "Aphrodisia", ClassId = 9 } },
             ],
         });
-        _definitions.Setup(d => d.GetForGuildAsync(GuildId, default)).ReturnsAsync(
+        _definitions.Setup(d => d.GetForBranchAsync(GuildId, GuildBranchId, null, default)).ReturnsAsync(
         [
             new GuildAttributionDefinition { Id = 1, GuildId = GuildId, Label = "Innervate", SortOrder = 0, Cells = [] },
         ]);
@@ -235,7 +238,7 @@ public class GetRaidEventAttributionsQueryHandlerTests
             Assignments = [new RaidSlotAssignment { CharacterId = 100, SpecId = 265, Character = new Character { Id = 100, Name = "Aphrodisia", ClassId = 9 } }],
         });
         _raidBosses.Setup(b => b.GetByIdAsync(14, default)).ReturnsAsync(new RaidBoss { Id = 14, Name = "Hydross the Unstable", RaidZoneId = 4 });
-        _definitions.Setup(d => d.GetForGuildAsync(GuildId, 14, default)).ReturnsAsync(
+        _definitions.Setup(d => d.GetForBranchAsync(GuildId, GuildBranchId, 14, default)).ReturnsAsync(
         [
             new GuildAttributionDefinition { Id = 2, GuildId = GuildId, RaidBossId = 14, Label = "Interrupt", SortOrder = 0, Cells = [] },
         ]);
@@ -254,5 +257,66 @@ public class GetRaidEventAttributionsQueryHandlerTests
         var fill = result.Value!.Fills.Should().ContainSingle().Subject;
         fill.DefinitionId.Should().Be(2);
         fill.CellId.Should().Be(20);
+    }
+
+    // ── Guild-branch scoping ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_RosterMemberOfAnotherBranchOnly_ReturnsForbiddenUsingTheBranchAwareOverload()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, 99, default)).ReturnsAsync(GuildAccessLevel.Officer);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _access.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_GuildBranchNotFound_ReturnsGuildBranchNotFound()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId, PublicationStatus = RaidPublicationStatus.Published, Assignments = [],
+        });
+        _branches.Setup(b => b.GetCurrentExpansionIdAsync(GuildId, GuildBranchId, default)).ReturnsAsync((int?)null);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.GuildBranchNotFound);
+        _definitions.Verify(d => d.GetForBranchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int?>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SpellIconsAreResolvedOnTheEventsBranchExpansion()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, GuildBranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent
+        {
+            Id = EventId, PublicationStatus = RaidPublicationStatus.Published, Assignments = [],
+        });
+        _definitions.Setup(d => d.GetForBranchAsync(GuildId, GuildBranchId, null, default)).ReturnsAsync(
+        [
+            new GuildAttributionDefinition
+            {
+                Id = 1, GuildId = GuildId, GuildBranchId = GuildBranchId, Label = "Bloodlust",
+                SectionSpell = new Spell
+                {
+                    Id = 2825,
+                    Availabilities =
+                    [
+                        new SpellAvailability { SpellId = 2825, ExpansionId = 12, IconUrl = "https://cdn/forever.jpg" },
+                        new SpellAvailability { SpellId = 2825, ExpansionId = 2, IconUrl = "https://cdn/tbc.jpg" },
+                    ],
+                },
+                Cells = [],
+            },
+        ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.Definitions.Single().SectionSpellIconUrl.Should().Be("https://cdn/tbc.jpg");
     }
 }

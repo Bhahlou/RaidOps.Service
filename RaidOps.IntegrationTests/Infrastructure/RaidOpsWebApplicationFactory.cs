@@ -14,6 +14,7 @@ using RaidOps.API;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
+using RaidOps.ExternalApplication.Contracts.Services.WagoTools;
 using RaidOps.IntegrationTests.Infrastructure.Stubs;
 using System.Text;
 using Testcontainers.PostgreSql;
@@ -32,6 +33,16 @@ public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPo
         .WithUsername("postgres")
         .WithPassword("postgres")
         .Build();
+
+    /// <summary>Discord ID listed in <c>Admin:OwnerDiscordIds</c> — the only user the owner-only admin endpoints accept.</summary>
+    public const string OwnerDiscordId = "987000000000000001";
+
+    /// <summary>
+    /// The wago.tools stand-in registered in the test host. Reports no builds by default, so the spell sync
+    /// that fires on startup (and every other sync) does nothing; tests that need it to sync configure it
+    /// and must <see cref="StubWagoToolsService.Reset"/> it afterwards.
+    /// </summary>
+    internal StubWagoToolsService WagoStub { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -55,6 +66,7 @@ public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPo
                 ["BattleNet:ClientId"] = "test-bnet-client-id",
                 ["BattleNet:ClientSecret"] = "test-bnet-secret",
                 ["BattleNet:CallbackUrl"] = "http://localhost/bnet/callback",
+                ["Admin:OwnerDiscordIds"] = OwnerDiscordId,
             });
         });
 
@@ -100,13 +112,16 @@ public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPo
         });
     }
 
-    private static void ReplaceExternalApiServices(IServiceCollection services)
+    private void ReplaceExternalApiServices(IServiceCollection services)
     {
         services.RemoveAll<IDiscordApiService>();
         services.AddScoped<IDiscordApiService, NoOpDiscordApiService>();
 
         services.RemoveAll<IBnetApiService>();
         services.AddScoped<IBnetApiService, NoOpBnetApiService>();
+
+        services.RemoveAll<IWagoToolsService>();
+        services.AddSingleton<IWagoToolsService>(WagoStub);
     }
 
     private static void RemoveNetcordServices(IServiceCollection services)

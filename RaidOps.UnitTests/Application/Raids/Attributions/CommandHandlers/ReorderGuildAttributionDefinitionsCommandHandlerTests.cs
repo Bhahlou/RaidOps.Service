@@ -20,10 +20,11 @@ public class ReorderGuildAttributionDefinitionsCommandHandlerTests
 
     private const string GuildId = "guild-1";
     private const string RequesterId = "officer-1";
+    private const int BranchId = 5;
 
     private static readonly ReorderGuildAttributionDefinitionsCommand Command = new()
     {
-        GuildId = GuildId, RequesterDiscordId = RequesterId, OrderedIds = [3, 1, 2],
+        GuildId = GuildId, GuildBranchId = BranchId, RequesterDiscordId = RequesterId, OrderedIds = [3, 1, 2],
     };
 
     public ReorderGuildAttributionDefinitionsCommandHandlerTests()
@@ -34,23 +35,35 @@ public class ReorderGuildAttributionDefinitionsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NotOfficer_ReturnsForbidden()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, BranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.Forbidden);
-        _definitions.Verify(d => d.ReorderAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<int>>(), default), Times.Never);
+        _definitions.Verify(d => d.ReorderAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyList<int>>(), default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_Success_ReordersDefinitions()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, BranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsSuccess.Should().BeTrue();
-        _definitions.Verify(d => d.ReorderAsync(GuildId, Command.OrderedIds, default), Times.Once);
+        _definitions.Verify(d => d.ReorderAsync(GuildId, BranchId, Command.OrderedIds, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OfficerOfAnotherBranchOnly_ReturnsForbiddenUsingTheBranchAwareOverload()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, 99, default)).ReturnsAsync(GuildAccessLevel.Officer);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _access.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _definitions.Verify(d => d.ReorderAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyList<int>>(), default), Times.Never);
     }
 }
