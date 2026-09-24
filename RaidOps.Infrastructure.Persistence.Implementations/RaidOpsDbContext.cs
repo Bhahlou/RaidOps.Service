@@ -5,6 +5,7 @@ using RaidOps.Domain.Models.Character;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Domain.Models.Raids;
 using RaidOps.Domain.Models.Raids.Attributions;
+using RaidOps.Domain.Models.Raids.CompositionPreviews;
 using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Infrastructure.Persistence.Implementations;
@@ -75,6 +76,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="Spell"/> lookup table, keyed by Blizzard spell ID.</summary>
     public DbSet<Spell> Spells => Set<Spell>();
 
+    /// <summary>Gets the <see cref="SpellAvailability"/> join table (which expansions a spell has been observed on).</summary>
+    public DbSet<SpellAvailability> SpellAvailabilities => Set<SpellAvailability>();
+
     // ── Runtime data ──────────────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="Realm"/> table (on-demand BNet realm cache).</summary>
@@ -138,6 +142,12 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
     /// <summary>Gets the <see cref="RaidEventAttribution"/> table (sparse per-event attribution fills).</summary>
     public DbSet<RaidEventAttribution> RaidEventAttributions => Set<RaidEventAttribution>();
+
+    /// <summary>Gets the <see cref="RaidCompositionPreview"/> table (officer-authored theoretical raid comps).</summary>
+    public DbSet<RaidCompositionPreview> RaidCompositionPreviews => Set<RaidCompositionPreview>();
+
+    /// <summary>Gets the <see cref="RaidCompositionPreviewSlot"/> table (sparse group/slot grid placeholders).</summary>
+    public DbSet<RaidCompositionPreviewSlot> RaidCompositionPreviewSlots => Set<RaidCompositionPreviewSlot>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -625,7 +635,10 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(s => s.SpecId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // GuildAttributionDefinition — surrogate PK, guild-wide only (no branch override)
+        // GuildAttributionDefinition — surrogate PK, scoped to one GuildBranch (a guild running several
+        // branches keeps one independent template per branch). Cascades from both the guild and the
+        // guild branch: branches are only ever soft-deactivated, so the branch cascade only fires as
+        // part of a guild deletion, where it must not race the guild cascade into a restrict failure.
         modelBuilder.Entity<GuildAttributionDefinition>()
             .HasOne(d => d.Guild)
             .WithMany()
@@ -633,7 +646,13 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<GuildAttributionDefinition>()
-            .HasIndex(d => new { d.GuildId, d.SortOrder });
+            .HasOne(d => d.GuildBranch)
+            .WithMany()
+            .HasForeignKey(d => d.GuildBranchId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GuildAttributionDefinition>()
+            .HasIndex(d => new { d.GuildBranchId, d.SortOrder });
 
         // GuildAttributionDefinition → RaidBoss; null RaidBossId is a "General" row, reference data
         // so a boss is never deleted while templates reference it
@@ -690,13 +709,66 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasForeignKey(a => a.CharacterId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Spell — static reference table, seeded via a JSON-driven upsert (see SpellSeeder) rather
-        // than EF HasData: row count per expansion doesn't fit in a generated migration file.
-        modelBuilder.Entity<Spell>()
-            .HasOne(s => s.Expansion)
+        // RaidCompositionPreview — surrogate PK, branch-scoped. Deleting the branch takes its
+        // previews down with it (unlike RaidEvent → GuildBranch, which is Restrict — a preview has
+        // no historical/audit value worth preserving independently of its branch).
+        modelBuilder.Entity<RaidCompositionPreview>()
+            .HasOne(p => p.GuildBranch)
             .WithMany()
-            .HasForeignKey(s => s.ExpansionId)
+            .HasForeignKey(p => p.GuildBranchId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidCompositionPreview>()
+            .HasIndex(p => p.GuildBranchId);
+
+        // RaidCompositionPreviewSlot — surrogate PK (not composite like RaidSlotAssignment) since
+        // WowClassId/SpecId/Note are all independently nullable and easiest to upsert by row
+        // identity. Sparse: a coordinate with no row is an empty slot.
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasOne(s => s.RaidCompositionPreview)
+            .WithMany(p => p.Slots)
+            .HasForeignKey(s => s.RaidCompositionPreviewId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasIndex(s => new { s.RaidCompositionPreviewId, s.GroupNumber, s.SlotNumber })
+            .IsUnique();
+
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasOne(s => s.WowClass)
+            .WithMany()
+            .HasForeignKey(s => s.WowClassId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidCompositionPreviewSlot>()
+            .HasOne(s => s.Spec)
+            .WithMany()
+            .HasForeignKey(s => s.SpecId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Spell — reference table populated by the periodic wago.tools sync (SyncSpellsCommandHandler)
+        // via idempotent upsert rather than EF HasData: row count doesn't fit in a generated migration file.
+
+        // SpellAvailability — composite key, no surrogate ID: the (SpellId, ExpansionId) pair is the
+        // whole fact. Cascades from Spell (its availability rows are meaningless without it) but
+        // restricts from Expansion (reference data, never deleted).
+        modelBuilder.Entity<SpellAvailability>()
+            .HasKey(a => new { a.SpellId, a.ExpansionId });
+
+        modelBuilder.Entity<SpellAvailability>()
+            .HasOne(a => a.Spell)
+            .WithMany(s => s.Availabilities)
+            .HasForeignKey(a => a.SpellId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SpellAvailability>()
+            .HasOne(a => a.Expansion)
+            .WithMany()
+            .HasForeignKey(a => a.ExpansionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SpellAvailability>()
+            .HasIndex(a => a.ExpansionId);
     }
 
     // ── Static seed data ──────────────────────────────────────────────────
@@ -741,20 +813,24 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     {
         // BnetNamespacePrefix: append "-{region}" at query time to get the full namespace.
         // e.g. "dynamic-classic1x" + "-eu" → "dynamic-classic1x-eu"
+        // WagoProductCode: this branch's product on wago.tools, polled by the spell-sync background
+        // service (see SyncSpellsCommandHandler) to pull DB2 exports for the right build. Null for
+        // Classic Era (deactivated, never polled).
         modelBuilder.Entity<Branch>().HasData(
-            new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11, IsActive = true,  SyncAvailable = true  },
+            new Branch { Id = 1, Name = "Retail",              BnetNamespacePrefix = "dynamic",            CurrentExpansionId = 11, IsActive = true,  SyncAvailable = true,  WagoProductCode = "wow" },
             // Deactivated 2026-09-22: dead branch, ~3 characters total. Existing characters/guild
             // activations on it keep working untouched — this only hides it from the character-sync
             // picker and from a guild's "activate a new branch" list.
-            new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1,  IsActive = false, SyncAvailable = true  },
-            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5,  IsActive = true,  SyncAvailable = true  },
-            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2,  IsActive = true,  SyncAvailable = true  },
+            new Branch { Id = 2, Name = "Classic Era",         BnetNamespacePrefix = "dynamic-classic1x",  CurrentExpansionId = 1,  IsActive = false, SyncAvailable = true,  WagoProductCode = null },
+            new Branch { Id = 3, Name = "Classic",             BnetNamespacePrefix = "dynamic-classic",    CurrentExpansionId = 5,  IsActive = true,  SyncAvailable = true,  WagoProductCode = "wow_classic" },
+            new Branch { Id = 4, Name = "Classic Anniversary", BnetNamespacePrefix = "dynamic-classicann", CurrentExpansionId = 2,  IsActive = true,  SyncAvailable = true,  WagoProductCode = "wow_anniversary" },
             // BnetNamespacePrefix is a placeholder guess (Blizzard's "dynamic-{codename}" convention) —
             // no BNet API access for this branch yet (beta-only as of 2026-09-22). Verify once the
             // API ships. SyncAvailable = false in the meantime (temporary, per user request 2026-09-22)
             // — shown as "coming soon" in the character-sync picker instead of hidden, since guild
-            // activation/roster/raids/recruitment don't need BNet sync and still work.
-            new Branch { Id = 5, Name = "Forever",             BnetNamespacePrefix = "dynamic-forever",    CurrentExpansionId = 12, IsActive = true,  SyncAvailable = false }
+            // activation/roster/raids/recruitment don't need BNet sync and still work. WagoProductCode
+            // will likely change at Forever's live release (currently the beta product) — revisit then.
+            new Branch { Id = 5, Name = "Forever",             BnetNamespacePrefix = "dynamic-forever",    CurrentExpansionId = 12, IsActive = true,  SyncAvailable = false, WagoProductCode = "wow_classic_beta" }
         );
     }
 

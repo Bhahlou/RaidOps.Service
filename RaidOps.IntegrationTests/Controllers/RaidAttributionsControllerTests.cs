@@ -89,6 +89,7 @@ public class RaidAttributionsControllerTests(RaidOpsWebApplicationFactory factor
             var definition = new GuildAttributionDefinition
             {
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 Label = "Tank",
                 SortOrder = 0,
                 CreatedAt = DateTime.UtcNow,
@@ -180,6 +181,7 @@ public class RaidAttributionsControllerTests(RaidOpsWebApplicationFactory factor
             var definition = new GuildAttributionDefinition
             {
                 GuildId = guildId,
+                GuildBranchId = guildBranchId,
                 RaidBossId = HydrossBossId,
                 Label = "Interrupt",
                 SortOrder = 0,
@@ -450,5 +452,71 @@ public class RaidAttributionsControllerTests(RaidOpsWebApplicationFactory factor
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         json.GetProperty("error").GetString().Should().Be("SlotEmpty");
+    }
+
+    // ── Branch-scoped templates ──────────────────────────────────────────────
+
+    /// <summary>Adds a second guild branch (wow branch 3) to the guild, with its own one-cell template row, and returns the row's IDs.</summary>
+    private async Task<(int DefinitionId, int CellId)> SeedOtherBranchDefinitionAsync(string guildId, string discordId)
+    {
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var otherBranch = TestDataBuilder.CreateGuildBranch(guildId, branchId: 3);
+            db.GuildBranches.Add(otherBranch);
+            await db.SaveChangesAsync();
+
+            var definition = new GuildAttributionDefinition
+            {
+                GuildId = guildId,
+                GuildBranchId = otherBranch.Id,
+                Label = "Other branch row",
+                SortOrder = 0,
+                CreatedAt = DateTime.UtcNow,
+                CreatedByDiscordId = discordId,
+                Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot, SlotLabel = "Other" }],
+            };
+            db.GuildAttributionDefinitions.Add(definition);
+            await db.SaveChangesAsync();
+            return (definition.Id, definition.Cells.Single().Id);
+        }
+    }
+
+    [Fact]
+    public async Task GetAttributions_OnlyReturnsTheEventsOwnBranchTemplate()
+    {
+        const string id = "981000000000000015";
+        const string guildId = "981000000000000015";
+        var (guildBranchId, eventId, definitionId, _, _) = await SeedRaidWithSeatedCharacterAsync(id, guildId, isOfficer: true);
+        var (otherDefinitionId, _) = await SeedOtherBranchDefinitionAsync(guildId, id);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events/{eventId}/attributions");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<RaidEventAttributionsResponse>(ApiJsonOptions);
+        body!.Definitions.Select(d => d.Id).Should().Equal(definitionId);
+        body.Definitions.Select(d => d.Id).Should().NotContain(otherDefinitionId);
+    }
+
+    [Fact]
+    public async Task SetAttribution_DefinitionOfAnotherBranchOfTheSameGuild_Returns400WithAttributionDefinitionNotFoundError()
+    {
+        const string id = "981000000000000016";
+        const string guildId = "981000000000000016";
+        var (guildBranchId, eventId, _, _, characterId) = await SeedRaidWithSeatedCharacterAsync(id, guildId, isOfficer: true);
+        var (otherDefinitionId, otherCellId) = await SeedOtherBranchDefinitionAsync(guildId, id);
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/guilds/{guildId}/branches/{guildBranchId}/raids/events/{eventId}/attributions/set",
+            new { definitionId = otherDefinitionId, cellId = otherCellId, instanceIndex = 0, characterId });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        json.GetProperty("error").GetString().Should().Be("AttributionDefinitionNotFound");
+        var (scope, db) = CreateDbScope();
+        using (scope)
+            (await db.RaidEventAttributions.CountAsync(f => f.RaidEventId == eventId)).Should().Be(0);
     }
 }

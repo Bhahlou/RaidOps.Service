@@ -8,11 +8,11 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : IGuildAttributionDefinitionsRepository
 {
     /// <inheritdoc/>
-    public async Task<List<GuildAttributionDefinition>> GetForGuildAsync(string guildId, int? raidBossId, CancellationToken cancellationToken = default)
+    public async Task<List<GuildAttributionDefinition>> GetForBranchAsync(string guildId, int guildBranchId, int? raidBossId, CancellationToken cancellationToken = default)
         => await context.GuildAttributionDefinitions
-            .Where(d => d.GuildId == guildId && d.RaidBossId == raidBossId)
-            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell)
-            .Include(d => d.SectionSpell)
+            .Where(d => d.GuildId == guildId && d.GuildBranchId == guildBranchId && d.RaidBossId == raidBossId)
+            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell).ThenInclude(s => s!.Availabilities) // NOSONAR S9129 — Cells is a collection (filtered include), it cannot be folded into one Include lambda
+            .Include(d => d.SectionSpell!.Availabilities)
             .OrderBy(d => d.SortOrder)
             .AsSplitQuery()
             .AsNoTracking()
@@ -21,8 +21,8 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     /// <inheritdoc/>
     public async Task<GuildAttributionDefinition?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
         => await context.GuildAttributionDefinitions
-            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell)
-            .Include(d => d.SectionSpell)
+            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell).ThenInclude(s => s!.Availabilities) // NOSONAR S9129 — Cells is a collection (filtered include), it cannot be folded into one Include lambda
+            .Include(d => d.SectionSpell!.Availabilities)
             .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
@@ -30,10 +30,10 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     /// <inheritdoc/>
     public async Task<GuildAttributionDefinition> AddAsync(GuildAttributionDefinition definition, CancellationToken cancellationToken = default)
     {
-        // Scoped by (GuildId, RaidBossId) — "General" rows and each boss's rows are independently
-        // numbered, so a boss's own list never gets pushed to a huge SortOrder by unrelated rows.
+        // Scoped by (GuildBranchId, RaidBossId) — each branch's "General" rows and each boss's rows
+        // are independently numbered, so one list never gets pushed to a huge SortOrder by unrelated rows.
         var siblings = await context.GuildAttributionDefinitions
-            .Where(d => d.GuildId == definition.GuildId && d.RaidBossId == definition.RaidBossId)
+            .Where(d => d.GuildBranchId == definition.GuildBranchId && d.RaidBossId == definition.RaidBossId)
             .OrderBy(d => d.SortOrder)
             .ToListAsync(cancellationToken);
 
@@ -60,11 +60,11 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     }
 
     /// <inheritdoc/>
-    public async Task<bool> UpdateAsync(GuildAttributionDefinition definition, string guildId, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateAsync(GuildAttributionDefinition definition, string guildId, int guildBranchId, CancellationToken cancellationToken = default)
     {
         var existing = await context.GuildAttributionDefinitions
             .Include(d => d.Cells)
-            .FirstOrDefaultAsync(d => d.Id == definition.Id && d.GuildId == guildId, cancellationToken);
+            .FirstOrDefaultAsync(d => d.Id == definition.Id && d.GuildId == guildId && d.GuildBranchId == guildBranchId, cancellationToken);
         if (existing == null)
             return false;
 
@@ -81,19 +81,19 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(int id, string guildId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(int id, string guildId, int guildBranchId, CancellationToken cancellationToken = default)
     {
         var deleted = await context.GuildAttributionDefinitions
-            .Where(d => d.Id == id && d.GuildId == guildId)
+            .Where(d => d.Id == id && d.GuildId == guildId && d.GuildBranchId == guildBranchId)
             .ExecuteDeleteAsync(cancellationToken);
         return deleted > 0;
     }
 
     /// <inheritdoc/>
-    public async Task ReorderAsync(string guildId, IReadOnlyList<int> orderedIds, CancellationToken cancellationToken = default)
+    public async Task ReorderAsync(string guildId, int guildBranchId, IReadOnlyList<int> orderedIds, CancellationToken cancellationToken = default)
     {
         var definitions = await context.GuildAttributionDefinitions
-            .Where(d => d.GuildId == guildId && orderedIds.Contains(d.Id))
+            .Where(d => d.GuildId == guildId && d.GuildBranchId == guildBranchId && orderedIds.Contains(d.Id))
             .ToDictionaryAsync(d => d.Id, cancellationToken);
 
         for (var i = 0; i < orderedIds.Count; i++)
@@ -106,12 +106,12 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     }
 
     /// <inheritdoc/>
-    public async Task<int> SetSectionIconAsync(string guildId, int? raidBossId, string section, SectionIconFields icon, CancellationToken cancellationToken = default)
+    public async Task<int> SetSectionIconAsync(string guildId, int guildBranchId, int? raidBossId, string section, SectionIconFields icon, CancellationToken cancellationToken = default)
     {
         var trimmedSection = section.Trim();
 
         return await context.GuildAttributionDefinitions
-            .Where(d => d.GuildId == guildId && d.RaidBossId == raidBossId && d.Section != null && d.Section.Trim() == trimmedSection)
+            .Where(d => d.GuildId == guildId && d.GuildBranchId == guildBranchId && d.RaidBossId == raidBossId && d.Section != null && d.Section.Trim() == trimmedSection)
             .ExecuteUpdateAsync(
                 s => s
                     .SetProperty(d => d.SectionIconSource, icon.IconSource)

@@ -4,13 +4,16 @@ using RaidOps.Domain.Enums;
 namespace RaidOps.Application.Contracts.Raids.Attributions.Commands;
 
 /// <summary>
-/// Sets the section-header icon shown above every row sharing one (guild, boss scope, section)
+/// Sets the section-header icon shown above every row sharing one (guild branch, boss scope, section)
 /// tuple — independent of any cell icon on the rows themselves.
 /// </summary>
 public class SetAttributionSectionIconCommand : ICommandRequest
 {
     /// <summary>Discord snowflake ID of the guild. Set by the controller, not from the request body.</summary>
     public string GuildId { get; set; } = string.Empty;
+
+    /// <summary>Surrogate ID of the guild branch the section belongs to. Set by the controller from the route.</summary>
+    public int GuildBranchId { get; set; }
 
     /// <summary>Discord snowflake ID of the requesting user. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;

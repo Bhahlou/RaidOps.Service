@@ -1,6 +1,7 @@
 using RaidOps.Application.Contracts.Raids.Attributions.Commands;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
 using RaidOps.Domain.Models.Raids.Attributions;
+using RaidOps.Domain.Models.Reference;
 
 namespace RaidOps.Application.Implementations.Raids.Attributions.Services;
 
@@ -26,14 +27,14 @@ internal static class AttributionCellMapper
     public static List<AttributionDefinitionCell> ToEntities(IEnumerable<AttributionCellRequest> requests) =>
         requests.Select(ToEntity).ToList();
 
-    /// <summary>Maps a persisted entity to its response DTO.</summary>
-    public static AttributionCellResponse ToResponse(AttributionDefinitionCell cell) => new()
+    /// <summary>Maps a persisted entity to its response DTO, resolving its spell icon on <paramref name="expansionId"/>.</summary>
+    public static AttributionCellResponse ToResponse(AttributionDefinitionCell cell, int expansionId) => new()
     {
         Id = cell.Id,
         Kind = cell.Kind,
         IconSource = cell.IconSource,
         SpellId = cell.SpellId,
-        SpellIconUrl = cell.Spell?.IconUrl,
+        SpellIconUrl = ResolveIconUrl(cell.Spell, expansionId),
         RaidMarker = cell.RaidMarker,
         StaticRole = cell.StaticRole,
         SlotLabel = cell.SlotLabel,
@@ -42,8 +43,12 @@ internal static class AttributionCellMapper
         RequiredSpecIds = cell.RequiredSpecIds,
     };
 
-    /// <summary>Maps a persisted row (with its cells) to its response DTO — shared by every query handler that returns definitions.</summary>
-    public static GuildAttributionDefinitionResponse ToDefinitionResponse(GuildAttributionDefinition definition) => new()
+    /// <summary>
+    /// Maps a persisted row (with its cells) to its response DTO — shared by every query handler that
+    /// returns definitions. Spell icons are resolved on <paramref name="expansionId"/>, the expansion
+    /// of the guild branch the definition belongs to.
+    /// </summary>
+    public static GuildAttributionDefinitionResponse ToDefinitionResponse(GuildAttributionDefinition definition, int expansionId) => new()
     {
         Id = definition.Id,
         Label = definition.Label,
@@ -52,10 +57,22 @@ internal static class AttributionCellMapper
         RaidBossId = definition.RaidBossId,
         SectionIconSource = definition.SectionIconSource,
         SectionSpellId = definition.SectionSpellId,
-        SectionSpellIconUrl = definition.SectionSpell?.IconUrl,
+        SectionSpellIconUrl = ResolveIconUrl(definition.SectionSpell, expansionId),
         SectionRaidMarker = definition.SectionRaidMarker,
         SectionStaticRole = definition.SectionStaticRole,
-        Cells = definition.Cells.Select(ToResponse).ToList(),
+        Cells = definition.Cells.Select(c => ToResponse(c, expansionId)).ToList(),
         SortOrder = definition.SortOrder,
     };
+
+    // Prefers the spell's icon on the branch's own expansion; falls back to any expansion's icon so a
+    // row never loses its icon outright if the spell hasn't (yet) been synced on that expansion.
+    private static string? ResolveIconUrl(Spell? spell, int expansionId)
+    {
+        if (spell is null)
+            return null;
+
+        var availability = spell.Availabilities.FirstOrDefault(a => a.ExpansionId == expansionId)
+            ?? spell.Availabilities.FirstOrDefault();
+        return availability?.IconUrl;
+    }
 }

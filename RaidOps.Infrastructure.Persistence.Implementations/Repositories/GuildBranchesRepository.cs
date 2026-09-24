@@ -21,6 +21,14 @@ public class GuildBranchesRepository(RaidOpsDbContext context) : IGuildBranchesR
             .FirstOrDefaultAsync(gb => gb.GuildId == guildId && gb.BranchId == branchId, cancellationToken);
 
     /// <inheritdoc/>
+    public async Task<int?> GetCurrentExpansionIdAsync(string guildId, int guildBranchId, CancellationToken cancellationToken = default)
+        => await context.GuildBranches
+            .AsNoTracking()
+            .Where(gb => gb.Id == guildBranchId && gb.GuildId == guildId)
+            .Select(gb => (int?)gb.Branch.CurrentExpansionId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <inheritdoc/>
     public async Task<List<GuildBranch>> GetAllForGuildAsync(string guildId, CancellationToken cancellationToken = default)
         => await context.GuildBranches
             .Where(gb => gb.GuildId == guildId)

@@ -16,13 +16,13 @@ public class DeleteGuildAttributionDefinitionCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(DeleteGuildAttributionDefinitionCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        var deleted = await definitionsRepository.DeleteAsync(command.DefinitionId, command.GuildId, cancellationToken);
+        var deleted = await definitionsRepository.DeleteAsync(command.DefinitionId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (!deleted)
-            return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild branch.");
 
         await auditLogService.LogAsync(
             command.GuildId,

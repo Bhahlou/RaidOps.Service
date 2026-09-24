@@ -51,7 +51,7 @@ public class SetRaidEventAttributionCommandHandlerTests
 
     private static GuildAttributionDefinition MakeDefinition(bool isRepeatable = false, AttributionDefinitionCell? cell = null, int? raidBossId = null) => new()
     {
-        Id = DefinitionId, GuildId = GuildId, IsRepeatable = isRepeatable, Cells = [cell ?? MakeCell()], RaidBossId = raidBossId,
+        Id = DefinitionId, GuildId = GuildId, GuildBranchId = GuildBranchId, IsRepeatable = isRepeatable, Cells = [cell ?? MakeCell()], RaidBossId = raidBossId,
     };
 
     private static RaidSlotAssignment MakeAssignment(int characterId = CharacterId, int classId = 1, SpecRole role = SpecRole.MeleeDps, int specId = 71) => new()
@@ -110,7 +110,7 @@ public class SetRaidEventAttributionCommandHandlerTests
     {
         SetupOfficer();
         _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
-        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(new GuildAttributionDefinition { Id = DefinitionId, GuildId = "other-guild", Cells = [MakeCell()] });
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(new GuildAttributionDefinition { Id = DefinitionId, GuildId = "other-guild", GuildBranchId = GuildBranchId, Cells = [MakeCell()] });
 
         var result = await _sut.HandleAsync(MakeCommand());
 
@@ -123,7 +123,7 @@ public class SetRaidEventAttributionCommandHandlerTests
     {
         SetupOfficer();
         _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId, Assignments = [] });
-        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(new GuildAttributionDefinition { Id = DefinitionId, GuildId = GuildId, Cells = [] });
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(new GuildAttributionDefinition { Id = DefinitionId, GuildId = GuildId, GuildBranchId = GuildBranchId, Cells = [] });
 
         var result = await _sut.HandleAsync(MakeCommand());
 
@@ -312,5 +312,34 @@ public class SetRaidEventAttributionCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _attributions.Verify(a => a.SetAsync(EventId, CellId, DefinitionId, 0, CharacterId, RequesterId, default), Times.Once);
+    }
+
+    // ── Guild-branch scoping ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_OfficerOfAnotherBranchOnly_ReturnsForbiddenUsingTheBranchAwareOverload()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, 99, default)).ReturnsAsync(GuildAccessLevel.Officer);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _access.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DefinitionBelongsToDifferentGuildBranch_ReturnsAttributionDefinitionNotFound()
+    {
+        SetupOfficer();
+        _raidEvents.Setup(r => r.GetByIdAsync(EventId, GuildBranchId, default)).ReturnsAsync(new RaidEvent { Id = EventId });
+        var definition = MakeDefinition();
+        definition.GuildBranchId = GuildBranchId + 1;
+        _definitions.Setup(d => d.GetByIdAsync(DefinitionId, default)).ReturnsAsync(definition);
+
+        var result = await _sut.HandleAsync(MakeCommand());
+
+        result.IsFailed.Should().BeTrue();
+        result.Error.Should().Be(ResponseDetail.AttributionDefinitionNotFound);
+        _attributions.Verify(a => a.SetAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), default), Times.Never);
     }
 }

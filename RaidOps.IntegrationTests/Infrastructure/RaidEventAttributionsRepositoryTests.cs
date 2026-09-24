@@ -66,6 +66,7 @@ public class RaidEventAttributionsRepositoryTests(RaidOpsWebApplicationFactory f
             var definition = new GuildAttributionDefinition
             {
                 GuildId = guildId,
+                GuildBranchId = guildBranch.Id,
                 Label = "Slot",
                 SortOrder = 0,
                 CreatedAt = DateTime.UtcNow,

@@ -18,6 +18,14 @@ public interface IGuildBranchesRepository
     /// </summary>
     Task<GuildBranch?> GetByGuildAndBranchAsync(string guildId, int branchId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns the current expansion ID of the game branch behind <paramref name="guildBranchId"/>
+    /// (<c>Branch.CurrentExpansionId</c>) — the expansion everything scoped to that guild branch
+    /// (spells, raid zones, allowed classes) is resolved against — or <c>null</c> if the guild
+    /// branch doesn't exist or doesn't belong to <paramref name="guildId"/>.
+    /// </summary>
+    Task<int?> GetCurrentExpansionIdAsync(string guildId, int guildBranchId, CancellationToken cancellationToken = default);
+
     /// <summary>Returns every guild branch (active and deactivated) activated on the given guild.</summary>
     Task<List<GuildBranch>> GetAllForGuildAsync(string guildId, CancellationToken cancellationToken = default);
 

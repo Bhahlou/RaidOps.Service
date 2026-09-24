@@ -8,46 +8,79 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Repositories;
 public class SpellRepository(RaidOpsDbContext context) : ISpellRepository
 {
     /// <inheritdoc/>
-    public async Task<Spell?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
-        => await context.Spells.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    public async Task<SpellAvailability?> GetAvailabilityAsync(int spellId, int expansionId, CancellationToken cancellationToken = default)
+        => await context.SpellAvailabilities
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.SpellId == spellId && a.ExpansionId == expansionId, cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<List<Spell>> SearchAsync(int expansionId, string searchTerm, string locale, int limit, CancellationToken cancellationToken = default)
+    public async Task<List<SpellAvailability>> SearchAsync(int expansionId, string searchTerm, string locale, int limit, CancellationToken cancellationToken = default)
     {
-        var query = context.Spells.Where(s => s.ExpansionId == expansionId);
+        var query = context.SpellAvailabilities.Where(a => a.ExpansionId == expansionId);
 
         query = locale switch
         {
-            "fr" => query.Where(s => EF.Functions.ILike(s.NameFr, $"%{searchTerm}%")),
-            "de" => query.Where(s => EF.Functions.ILike(s.NameDe, $"%{searchTerm}%")),
-            _ => query.Where(s => EF.Functions.ILike(s.NameEn, $"%{searchTerm}%")),
+            "fr" => query.Where(a => EF.Functions.ILike(a.NameFr, $"%{searchTerm}%")),
+            "de" => query.Where(a => EF.Functions.ILike(a.NameDe, $"%{searchTerm}%")),
+            _ => query.Where(a => EF.Functions.ILike(a.NameEn, $"%{searchTerm}%")),
         };
 
         return await query
-            .OrderBy(s => locale == "fr" ? s.NameFr : locale == "de" ? s.NameDe : s.NameEn)
+            .OrderBy(a => locale == "fr" ? a.NameFr : locale == "de" ? a.NameDe : a.NameEn)
             .Take(limit)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
-    public async Task<int> InsertMissingAsync(IEnumerable<Spell> spells, CancellationToken cancellationToken = default)
+    public async Task<SpellSyncDiff> UpsertAsync(IEnumerable<SpellAvailability> rows, CancellationToken cancellationToken = default)
     {
-        var incoming = spells.ToList();
-        var incomingIds = incoming.Select(s => s.Id).ToList();
+        var incoming = rows.ToList();
+        var incomingIds = incoming.Select(r => r.SpellId).Distinct().ToList();
+        var incomingExpansionIds = incoming.Select(r => r.ExpansionId).Distinct().ToList();
 
-        var existingIds = await context.Spells
+        var existingSpellIds = (await context.Spells
             .Where(s => incomingIds.Contains(s.Id))
             .Select(s => s.Id)
-            .ToListAsync(cancellationToken);
-        var existingIdSet = existingIds.ToHashSet();
+            .ToListAsync(cancellationToken)).ToHashSet();
 
-        var missing = incoming.Where(s => !existingIdSet.Contains(s.Id)).ToList();
-        if (missing.Count == 0)
-            return 0;
+        var existingRows = await context.SpellAvailabilities
+            .Where(a => incomingIds.Contains(a.SpellId) && incomingExpansionIds.Contains(a.ExpansionId))
+            .ToDictionaryAsync(a => (a.SpellId, a.ExpansionId), cancellationToken);
 
-        context.Spells.AddRange(missing);
+        var diff = new SpellSyncDiff();
+        var newSpells = new List<Spell>();
+        var newRows = new List<SpellAvailability>();
+
+        foreach (var row in incoming)
+        {
+            if (existingSpellIds.Add(row.SpellId))
+                newSpells.Add(new Spell { Id = row.SpellId });
+
+            if (!existingRows.TryGetValue((row.SpellId, row.ExpansionId), out var existing))
+            {
+                newRows.Add(row);
+                diff.Added.Add(new SpellSyncEntry { SpellId = row.SpellId, NameEn = row.NameEn });
+                continue;
+            }
+
+            if (existing.NameEn != row.NameEn)
+                diff.Renamed.Add(new SpellSyncEntry { SpellId = row.SpellId, NameEn = row.NameEn, PreviousNameEn = existing.NameEn });
+
+            existing.NameEn = row.NameEn;
+            existing.NameFr = row.NameFr;
+            existing.NameDe = row.NameDe;
+
+            // An empty incoming icon means the icon couldn't be resolved this run (e.g. a transient
+            // wago.tools failure) — never let that blank out a previously resolved icon.
+            if (row.IconUrl.Length > 0)
+                existing.IconUrl = row.IconUrl;
+        }
+
+        context.Spells.AddRange(newSpells);
+        context.SpellAvailabilities.AddRange(newRows);
+
         await context.SaveChangesAsync(cancellationToken);
-        return missing.Count;
+        return diff;
     }
 }

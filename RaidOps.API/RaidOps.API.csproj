@@ -30,8 +30,4 @@
     <ProjectReference Include="..\RaidOps.Registry\RaidOps.Registry.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="SeedData\**\*.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>

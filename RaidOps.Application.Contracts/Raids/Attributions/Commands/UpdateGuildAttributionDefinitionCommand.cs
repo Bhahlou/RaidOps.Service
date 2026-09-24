@@ -2,11 +2,14 @@ using RaidOps.Application.Contracts.CQRS;
 
 namespace RaidOps.Application.Contracts.Raids.Attributions.Commands;
 
-/// <summary>Updates an existing row of the guild's raid-attribution template.</summary>
+/// <summary>Updates an existing row of a guild branch's raid-attribution template.</summary>
 public class UpdateGuildAttributionDefinitionCommand : ICommandRequest
 {
     /// <summary>Discord snowflake ID of the guild. Set by the controller, not from the request body.</summary>
     public string GuildId { get; set; } = string.Empty;
+
+    /// <summary>Surrogate ID of the guild branch the row belongs to. Set by the controller from the route.</summary>
+    public int GuildBranchId { get; set; }
 
     /// <summary>Discord snowflake ID of the requesting user. Set by the controller, not from the request body.</summary>
     public string RequesterDiscordId { get; set; } = string.Empty;
