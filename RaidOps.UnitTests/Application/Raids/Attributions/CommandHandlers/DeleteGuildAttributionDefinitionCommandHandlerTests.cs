@@ -22,10 +22,11 @@ public class DeleteGuildAttributionDefinitionCommandHandlerTests
     private const string GuildId = "guild-1";
     private const string RequesterId = "officer-1";
     private const int DefinitionId = 7;
+    private const int BranchId = 5;
 
     private static readonly DeleteGuildAttributionDefinitionCommand Command = new()
     {
-        GuildId = GuildId, RequesterDiscordId = RequesterId, DefinitionId = DefinitionId,
+        GuildId = GuildId, GuildBranchId = BranchId, RequesterDiscordId = RequesterId, DefinitionId = DefinitionId,
     };
 
     public DeleteGuildAttributionDefinitionCommandHandlerTests()
@@ -36,20 +37,20 @@ public class DeleteGuildAttributionDefinitionCommandHandlerTests
     [Fact]
     public async Task HandleAsync_NotOfficer_ReturnsForbidden()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Roster);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, BranchId, default)).ReturnsAsync(GuildAccessLevel.Roster);
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsFailed.Should().BeTrue();
         result.Error.Should().Be(ResponseDetail.Forbidden);
-        _definitions.Verify(d => d.DeleteAsync(It.IsAny<int>(), It.IsAny<string>(), default), Times.Never);
+        _definitions.Verify(d => d.DeleteAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
     }
 
     [Fact]
     public async Task HandleAsync_NotFound_ReturnsAttributionDefinitionNotFound()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _definitions.Setup(d => d.DeleteAsync(DefinitionId, GuildId, default)).ReturnsAsync(false);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, BranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _definitions.Setup(d => d.DeleteAsync(DefinitionId, GuildId, BranchId, default)).ReturnsAsync(false);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -60,8 +61,8 @@ public class DeleteGuildAttributionDefinitionCommandHandlerTests
     [Fact]
     public async Task HandleAsync_Success_DeletesAndLogs()
     {
-        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, default)).ReturnsAsync(GuildAccessLevel.Officer);
-        _definitions.Setup(d => d.DeleteAsync(DefinitionId, GuildId, default)).ReturnsAsync(true);
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, BranchId, default)).ReturnsAsync(GuildAccessLevel.Officer);
+        _definitions.Setup(d => d.DeleteAsync(DefinitionId, GuildId, BranchId, default)).ReturnsAsync(true);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -70,5 +71,17 @@ public class DeleteGuildAttributionDefinitionCommandHandlerTests
             GuildId, RequesterId, GuildAuditAction.AttributionTemplateUpdated,
             It.Is<Dictionary<string, string>>(v => v["definitionId"] == DefinitionId.ToString()),
             default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OfficerOfAnotherBranchOnly_ReturnsForbiddenUsingTheBranchAwareOverload()
+    {
+        _access.Setup(a => a.GetAccessLevelAsync(RequesterId, GuildId, 99, default)).ReturnsAsync(GuildAccessLevel.Officer);
+
+        var result = await _sut.HandleAsync(Command);
+
+        result.Error.Should().Be(ResponseDetail.Forbidden);
+        _access.Verify(a => a.GetAccessLevelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _definitions.Verify(d => d.DeleteAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), default), Times.Never);
     }
 }

@@ -35,8 +35,8 @@ public class SetRaidEventAttributionCommandHandler(
             return Result<CommandResponse>.Fail(ResponseDetail.RaidEventNotFound, $"Raid event '{command.EventId}' does not exist.");
 
         var definition = await definitionsRepository.GetByIdAsync(command.DefinitionId, cancellationToken);
-        if (definition == null || definition.GuildId != command.GuildId)
-            return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild.");
+        if (definition == null || definition.GuildId != command.GuildId || definition.GuildBranchId != command.GuildBranchId)
+            return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"Definition '{command.DefinitionId}' does not exist on this guild branch.");
 
         var bossScopeFailure = await ValidateBossScopeAsync(definition, raidEvent, command, cancellationToken);
         if (bossScopeFailure != null)

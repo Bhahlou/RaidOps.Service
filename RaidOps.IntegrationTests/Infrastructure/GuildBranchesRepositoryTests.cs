@@ -235,4 +235,68 @@ public class GuildBranchesRepositoryTests(RaidOpsWebApplicationFactory factory)
             updated!.SignupMode.Should().Be(SignupMode.Signup);
         }
     }
+
+    // ── GetCurrentExpansionIdAsync ───────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCurrentExpansionIdAsync_KnownGuildBranch_ReturnsTheBranchsCurrentExpansion()
+    {
+        const string guildId = "986000000000000001";
+        await SeedGuildAsync(guildId);
+        // Branch 4 = Classic Anniversary (expansion 2), branch 5 = Forever (expansion 12): one guild, two branches.
+        var anniversary = TestDataBuilder.CreateGuildBranch(guildId, branchId: 4);
+        var forever = TestDataBuilder.CreateGuildBranch(guildId, branchId: 5);
+        await SeedAsync(db =>
+        {
+            db.GuildBranches.AddRange(anniversary, forever);
+            return Task.CompletedTask;
+        });
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+
+            (await repo.GetCurrentExpansionIdAsync(guildId, anniversary.Id)).Should().Be(2);
+            (await repo.GetCurrentExpansionIdAsync(guildId, forever.Id)).Should().Be(12);
+        }
+    }
+
+    [Fact]
+    public async Task GetCurrentExpansionIdAsync_GuildBranchOfAnotherGuild_ReturnsNull()
+    {
+        const string ownerGuildId = "986000000000000002";
+        const string otherGuildId = "986000000000000003";
+        await SeedGuildAsync(ownerGuildId);
+        await SeedGuildAsync(otherGuildId);
+        var branch = TestDataBuilder.CreateGuildBranch(ownerGuildId, branchId: 4);
+        await SeedAsync(db =>
+        {
+            db.GuildBranches.Add(branch);
+            return Task.CompletedTask;
+        });
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+
+            (await repo.GetCurrentExpansionIdAsync(otherGuildId, branch.Id)).Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public async Task GetCurrentExpansionIdAsync_UnknownGuildBranchId_ReturnsNull()
+    {
+        const string guildId = "986000000000000004";
+        await SeedGuildAsync(guildId);
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildBranchesRepository>();
+
+            (await repo.GetCurrentExpansionIdAsync(guildId, 999999999)).Should().BeNull();
+        }
+    }
 }

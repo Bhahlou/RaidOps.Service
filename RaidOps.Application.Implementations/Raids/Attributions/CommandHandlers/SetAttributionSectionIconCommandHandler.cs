@@ -11,6 +11,7 @@ namespace RaidOps.Application.Implementations.Raids.Attributions.CommandHandlers
 /// <summary>Handles <see cref="SetAttributionSectionIconCommand"/> by validating the officer's access and the icon fields, then applying it to every row sharing that section.</summary>
 public class SetAttributionSectionIconCommandHandler(
     IGuildAccessService guildAccessService,
+    IGuildBranchesRepository guildBranchesRepository,
     IGuildAttributionDefinitionsRepository definitionsRepository,
     ISpellRepository spellRepository,
     IAuditLogService auditLogService) : ICommandHandlerAsync<SetAttributionSectionIconCommand>
@@ -18,17 +19,21 @@ public class SetAttributionSectionIconCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(SetAttributionSectionIconCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
+
+        var expansionId = await guildBranchesRepository.GetCurrentExpansionIdAsync(command.GuildId, command.GuildBranchId, cancellationToken);
+        if (expansionId is null)
+            return Result<CommandResponse>.Fail(ResponseDetail.GuildBranchNotFound, "Guild branch not found.");
 
         var validation = await AttributionDefinitionValidator.ValidateIconAsync(
-            command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole, spellRepository, cancellationToken, allowNone: true);
+            command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole, expansionId.Value, spellRepository, cancellationToken, allowNone: true);
         if (validation != null)
             return Result<CommandResponse>.Fail(validation, "Invalid section icon fields.");
 
         var icon = new SectionIconFields(command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole);
-        var updated = await definitionsRepository.SetSectionIconAsync(command.GuildId, command.RaidBossId, command.Section, icon, cancellationToken);
+        var updated = await definitionsRepository.SetSectionIconAsync(command.GuildId, command.GuildBranchId, command.RaidBossId, command.Section, icon, cancellationToken);
         if (updated == 0)
             return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"No row uses section '{command.Section}' in this scope.");
 

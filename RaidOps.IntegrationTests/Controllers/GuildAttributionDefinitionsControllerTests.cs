@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
 using RaidOps.Application.Contracts.Raids.Bosses.Responses;
 using RaidOps.Application.Contracts.Raids.Spells.Responses;
-using RaidOps.Application.Contracts.Raids.Zones.Responses;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids.Attributions;
 using RaidOps.Domain.Models.Reference;
@@ -29,54 +28,63 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
 
     private static readonly int[] SingleOrderedId = [1];
 
+    // Branch 4 = "BC Classic (Anniv.)", CurrentExpansionId 2 — the expansion the seeded TBC spells/raid zones belong to.
+    private const int BcClassicBranchId = 4;
+
+    /// <summary>Seeds an active guild branch for an already-seeded guild and returns its surrogate ID (the route's <c>guildBranchId</c>).</summary>
+    private async Task<int> SeedBranchAsync(string guildId)
+    {
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var guildBranch = TestDataBuilder.CreateGuildBranch(guildId, branchId: BcClassicBranchId);
+            db.GuildBranches.Add(guildBranch);
+            await db.SaveChangesAsync();
+            return guildBranch.Id;
+        }
+    }
+
     // ── Auth enforcement ─────────────────────────────────────────────────────
 
     [Fact]
     public async Task GetDefinitions_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/attribution-definitions");
+        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task CreateDefinition_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions", new { label = "x", cells = NameSlotCells });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions", new { label = "x", cells = NameSlotCells });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task UpdateDefinition_WithoutToken_Returns401()
     {
-        var response = await Client.PatchAsync("/api/v1/guilds/982000000000000001/attribution-definitions/1", JsonContent.Create(new { label = "x", cells = NameSlotCells }));
+        var response = await Client.PatchAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/1", JsonContent.Create(new { label = "x", cells = NameSlotCells }));
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task DeleteDefinition_WithoutToken_Returns401()
     {
-        var response = await Client.DeleteAsync("/api/v1/guilds/982000000000000001/attribution-definitions/1");
+        var response = await Client.DeleteAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task ReorderDefinitions_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions/reorder", new { orderedIds = SingleOrderedId });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/reorder", new { orderedIds = SingleOrderedId });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task SearchSpells_WithoutToken_Returns401()
     {
-        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/spells/search?expansionId=2&searchTerm=inn&locale=en");
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetRaidZonesForGuild_WithoutToken_Returns401()
-    {
-        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/raid-zones");
+        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/branches/1/spells/search?searchTerm=inn&locale=en");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -90,7 +98,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     [Fact]
     public async Task SetSectionIcon_WithoutToken_Returns401()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/attribution-definitions/sections/icon", new { section = "Interrupts", iconSource = "RaidMarker", raidMarker = "Skull" });
+        var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/sections/icon", new { section = "Interrupts", iconSource = "RaidMarker", raidMarker = "Skull" });
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -99,7 +107,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     {
         var client = CreateClientWithoutSubClaim();
 
-        var response = await client.GetAsync("/api/v1/guilds/982000000000000001/attribution-definitions");
+        var response = await client.GetAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -118,9 +126,10 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/attribution-definitions");
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -135,9 +144,15 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var branchId = await SeedBranchAsync(guildId);
+        await SeedAsync(db =>
+        {
             db.GuildAttributionDefinitions.Add(new GuildAttributionDefinition
             {
                 GuildId = guildId,
+                GuildBranchId = branchId,
                 Label = "Innervate",
                 Section = "Personals",
                 IsRepeatable = true,
@@ -153,7 +168,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         });
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/attribution-definitions");
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var definitions = await response.Content.ReadFromJsonAsync<List<GuildAttributionDefinitionResponse>>(ApiJsonOptions);
@@ -163,50 +178,6 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         definition.Section.Should().Be("Personals");
         definition.IsRepeatable.Should().BeTrue();
         definition.Cells.Should().ContainSingle(c => c.Kind == AttributionCellKind.NameSlot && c.SlotLabel == "De");
-    }
-
-    // ── GetRaidZonesForGuild ─────────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetRaidZonesForGuild_WhenOfficer_ReturnsZonesOfTheGuildsActiveBranchExpansion()
-    {
-        const string id = "982000000000000012";
-        const string guildId = "982000000000000012";
-        await SeedAsync(db =>
-        {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
-            // Branch 4 = "BC Classic (Anniv.)", CurrentExpansionId 2 — the expansion the seeded TBC raid zones belong to.
-            db.GuildBranches.Add(TestDataBuilder.CreateGuildBranch(guildId, branchId: 4));
-            return Task.CompletedTask;
-        });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var zones = await response.Content.ReadFromJsonAsync<List<RaidZoneResponse>>(ApiJsonOptions);
-        zones.Should().Contain(z => z.ShortCode == "SSC");
-    }
-
-    [Fact]
-    public async Task GetRaidZonesForGuild_WhenNotOfficer_Returns400()
-    {
-        const string id = "982000000000000013";
-        const string guildId = "982000000000000013";
-        await SeedAsync(db =>
-        {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: false));
-            return Task.CompletedTask;
-        });
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones");
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ── GetBossesForZone ─────────────────────────────────────────────────────
@@ -265,10 +236,11 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var body = new { label = "Innervate", section = "Personals", isRepeatable = true, cells = NameSlotCells };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions", body);
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -293,10 +265,11 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var body = new { label = "Empty", cells = Array.Empty<object>() };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions", body);
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -318,12 +291,13 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var (seedScope, seedDb) = CreateDbScope();
         using (seedScope)
         {
             var definition = new GuildAttributionDefinition
             {
-                GuildId = guildId, Label = "Old label", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id,
+                GuildId = guildId, GuildBranchId = branchId, Label = "Old label", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id,
                 Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }],
             };
             seedDb.GuildAttributionDefinitions.Add(definition);
@@ -333,7 +307,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         var client = CreateAuthenticatedClient(discordId: id);
         var body = new { label = "New label", isRepeatable = true, cells = NameSlotCells };
 
-        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/attribution-definitions/{definitionId}", JsonContent.Create(body));
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/{definitionId}", JsonContent.Create(body));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -357,10 +331,11 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var body = new { label = "x", cells = NameSlotCells };
 
-        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/attribution-definitions/999999", JsonContent.Create(body));
+        var response = await client.PatchAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/999999", JsonContent.Create(body));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -380,12 +355,13 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var (seedScope, seedDb) = CreateDbScope();
         using (seedScope)
         {
             var definition = new GuildAttributionDefinition
             {
-                GuildId = guildId, Label = "To delete", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id,
+                GuildId = guildId, GuildBranchId = branchId, Label = "To delete", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id,
                 Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }],
             };
             seedDb.GuildAttributionDefinitions.Add(definition);
@@ -394,7 +370,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         }
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/attribution-definitions/{definitionId}");
+        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/{definitionId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -416,9 +392,10 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/attribution-definitions/999999");
+        var response = await client.DeleteAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/999999");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -438,11 +415,12 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var (seedScope, seedDb) = CreateDbScope();
         using (seedScope)
         {
-            var first = new GuildAttributionDefinition { GuildId = guildId, Label = "First", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
-            var second = new GuildAttributionDefinition { GuildId = guildId, Label = "Second", SortOrder = 1, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
+            var first = new GuildAttributionDefinition { GuildId = guildId, GuildBranchId = branchId, Label = "First", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
+            var second = new GuildAttributionDefinition { GuildId = guildId, GuildBranchId = branchId, Label = "Second", SortOrder = 1, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
             seedDb.GuildAttributionDefinitions.AddRange(first, second);
             await seedDb.SaveChangesAsync();
             firstId = first.Id;
@@ -450,7 +428,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         }
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions/reorder", new { orderedIds = new[] { secondId, firstId } });
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/reorder", new { orderedIds = new[] { secondId, firstId } });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -476,11 +454,12 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var (seedScope, seedDb) = CreateDbScope();
         using (seedScope)
         {
-            var first = new GuildAttributionDefinition { GuildId = guildId, Label = "Innervate", Section = "Personals", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
-            var second = new GuildAttributionDefinition { GuildId = guildId, Label = "PW: Shield", Section = "Personals", SortOrder = 1, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
+            var first = new GuildAttributionDefinition { GuildId = guildId, GuildBranchId = branchId, Label = "Innervate", Section = "Personals", SortOrder = 0, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
+            var second = new GuildAttributionDefinition { GuildId = guildId, GuildBranchId = branchId, Label = "PW: Shield", Section = "Personals", SortOrder = 1, CreatedAt = DateTime.UtcNow, CreatedByDiscordId = id, Cells = [new AttributionDefinitionCell { CellIndex = 0, Kind = AttributionCellKind.NameSlot }] };
             seedDb.GuildAttributionDefinitions.AddRange(first, second);
             await seedDb.SaveChangesAsync();
             firstId = first.Id;
@@ -489,7 +468,7 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         var client = CreateAuthenticatedClient(discordId: id);
         var body = new { section = "Personals", iconSource = "RaidMarker", raidMarker = "Skull" };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions/sections/icon", body);
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/sections/icon", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var (scope, db) = CreateDbScope();
@@ -512,10 +491,11 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
         var body = new { section = "No such section", iconSource = "RaidMarker", raidMarker = "Skull" };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/attribution-definitions/sections/icon", body);
+        var response = await client.PostAsJsonAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/attribution-definitions/sections/icon", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -534,15 +514,129 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
             db.Users.Add(TestDataBuilder.CreateUser(id));
             db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
             db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
-            db.Spells.Add(new Spell { Id = 9980001, ExpansionId = 2, NameEn = "Innervate", NameFr = "Vigueur naturelle", NameDe = "Winterschlaf", IconUrl = "https://cdn/innervate.jpg" });
+            db.Spells.Add(new Spell { Id = 9980001 });
+            db.SpellAvailabilities.Add(new SpellAvailability { SpellId = 9980001, ExpansionId = 2, NameEn = "Innervate", NameFr = "Vigueur naturelle", NameDe = "Winterschlaf", IconUrl = "https://cdn/innervate.jpg" });
             return Task.CompletedTask;
         });
+        var branchId = await SeedBranchAsync(guildId);
         var client = CreateAuthenticatedClient(discordId: id);
 
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/spells/search?expansionId=2&searchTerm=vigueur&locale=fr");
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/spells/search?searchTerm=vigueur&locale=fr");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var spells = await response.Content.ReadFromJsonAsync<List<SpellResponse>>();
         spells.Should().ContainSingle(s => s.Id == 9980001 && s.Name == "Vigueur naturelle");
+    }
+
+    // ── Token without a sub claim (every remaining action) ───────────────────
+
+    [Fact]
+    public async Task CreateDefinition_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions", new { label = "x", cells = NameSlotCells });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateDefinition_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PatchAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/1", JsonContent.Create(new { label = "x", cells = NameSlotCells }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task DeleteDefinition_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.DeleteAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/1");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ReorderDefinitions_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/reorder", new { orderedIds = SingleOrderedId });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SetSectionIcon_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/sections/icon", new { section = "Interrupts", iconSource = "RaidMarker", raidMarker = "Skull" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SearchSpells_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/982000000000000001/branches/1/spells/search?searchTerm=inn&locale=en");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetBossesForZone_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.GetAsync("/api/v1/guilds/982000000000000001/raid-zones/4/bosses");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // ── Removed / unknown branch ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetRaidZonesForGuild_RouteWasRemoved_Returns404()
+    {
+        const string id = "982000000000000030";
+        const string guildId = "982000000000000030";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/raid-zones");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetDefinitions_GuildBranchThatDoesNotExist_Returns400()
+    {
+        const string id = "982000000000000031";
+        const string guildId = "982000000000000031";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
+            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/999999999/attribution-definitions");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 }

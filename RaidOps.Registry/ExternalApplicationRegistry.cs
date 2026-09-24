@@ -10,6 +10,7 @@ using NetCord.Services.ComponentInteractions;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
+using RaidOps.ExternalApplication.Contracts.Services.WagoTools;
 using RaidOps.ExternalApplication.Implementations.BNet;
 using RaidOps.ExternalApplication.Implementations.Bot.Services;
 using RaidOps.ExternalApplication.Implementations.Services;
@@ -30,6 +31,10 @@ internal static class ExternalApplicationsRegistry
 
         // Battle.net API (OAuth2 + character data)
         services.AddHttpClient<IBnetApiService, BnetApiService>();
+
+        // wago.tools API (public, unauthenticated) — keeps the Spell reference table in sync with
+        // live WoW branches (e.g. Forever) instead of a one-time checked-in JSON dump.
+        services.AddHttpClient<IWagoToolsService, WagoToolsService>();
 
         // Plain HttpClientFactory (no typed client) so IEmojiService can fetch manifest image
         // bytes without tying its own lifetime to the transient default of a typed client.
