@@ -173,6 +173,21 @@ public class SyncSpellsCommandHandlerTests
     // ── Sync of a changed build ──────────────────────────────────────────────
 
     [Fact]
+    public async Task HandleAsync_IconBaseUrlNotConfigured_ThrowsBeforeTouchingTheDatabase()
+    {
+        _config = new Dictionary<string, string?> { ["Discord:SpellSyncChannelId"] = ChannelId };
+        SetupBranches(MakeBranch(5, "Forever", ForeverProduct, ForeverExpansionId));
+        SetupLatestBuilds((ForeverProduct, "1.60.1.69977"));
+        SetupEmptyBuildContent("1.60.1.69977");
+
+        var act = () => MakeSut().HandleAsync(new SyncSpellsCommand());
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Blizzard:SpellIconBaseUrl*");
+        _spells.Verify(s => s.UpsertAsync(It.IsAny<IEnumerable<SpellAvailability>>(), It.IsAny<CancellationToken>()), Times.Never);
+        _branches.Verify(b => b.UpdateSyncStateAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task HandleAsync_ChangedBuild_FetchesThreeLocalesAndSpellMiscAndUpsertsThenUpdatesSyncState()
     {
         SetupBranches(MakeBranch(5, "Forever", ForeverProduct, ForeverExpansionId, lastBuild: "1.60.0.1"));

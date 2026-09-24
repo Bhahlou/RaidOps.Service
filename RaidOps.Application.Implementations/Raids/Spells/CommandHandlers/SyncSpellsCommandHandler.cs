@@ -86,22 +86,7 @@ public class SyncSpellsCommandHandler(
                 changesByBranch.Add(new BranchChange(branch.Name, buildInfo.Version, branch.LastSyncedBuildVersion, diff));
         }
 
-        if (changesByBranch.Count > 0)
-        {
-            // The sync itself (everything above) already succeeded and is saved — a bad Discord
-            // channel config/permission shouldn't turn that into a reported failure.
-            try
-            {
-                await NotifyDiscordAsync(changesByBranch, cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Deliberately broad: IDiscordBotService/IMessageService are SDK-agnostic on
-                // purpose (see DiscordEmbedContent's doc comment) specifically so this layer
-                // never needs a NetCord package reference just to catch its exception type.
-                logger.LogWarning(ex, "Spell sync succeeded but the Discord notification failed to send.");
-            }
-        }
+        await TryNotifyDiscordAsync(changesByBranch, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse($"{results.Count} branch(es) checked.", results));
     }
@@ -167,6 +152,26 @@ public class SyncSpellsCommandHandler(
     {
         var iconName = Path.GetFileNameWithoutExtension(fileName.Replace('\\', '/'));
         return $"{iconBaseUrl}{iconName}.jpg";
+    }
+
+    // The sync itself already succeeded and is saved — a bad Discord channel config/permission
+    // shouldn't turn that into a reported failure.
+    private async Task TryNotifyDiscordAsync(List<BranchChange> changesByBranch, CancellationToken cancellationToken)
+    {
+        if (changesByBranch.Count == 0)
+            return;
+
+        try
+        {
+            await NotifyDiscordAsync(changesByBranch, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Deliberately broad: IDiscordBotService/IMessageService are SDK-agnostic on purpose (see
+            // DiscordEmbedContent's doc comment) specifically so this layer never needs a NetCord
+            // package reference just to catch its exception type.
+            logger.LogWarning(ex, "Spell sync succeeded but the Discord notification failed to send.");
+        }
     }
 
     private async Task NotifyDiscordAsync(List<BranchChange> changesByBranch, CancellationToken cancellationToken)
