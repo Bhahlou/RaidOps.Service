@@ -26,6 +26,9 @@ internal class StubWagoToolsService : IWagoToolsService
     /// <summary>FileDataID → client file name, as <c>/api/info/{id}</c> would return it.</summary>
     public Dictionary<int, string> FileNames { get; set; } = [];
 
+    /// <summary>FileDataID → icon name (no path/extension), as the community listfile would yield it. Empty by default.</summary>
+    public Dictionary<int, string> IconFileNames { get; set; } = [];
+
     /// <inheritdoc/>
     public Task<Dictionary<string, WagoBuildInfo>> GetLatestBuildsAsync(CancellationToken cancellationToken = default)
     {
@@ -56,6 +59,13 @@ internal class StubWagoToolsService : IWagoToolsService
                 : throw new HttpRequestException($"No file for FileDataID {fileDataId}."));
     }
 
+    /// <inheritdoc/>
+    public Task<Dictionary<int, string>> GetIconFileNamesAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+            return Task.FromResult(new Dictionary<int, string>(IconFileNames));
+    }
+
     /// <summary>Makes every sync a no-op again.</summary>
     public void Reset()
     {
@@ -65,6 +75,7 @@ internal class StubWagoToolsService : IWagoToolsService
             SpellNamesByLocale = [];
             IconFileDataIds = [];
             FileNames = [];
+            IconFileNames = [];
         }
     }
 }

@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Configuration;
 using RaidOps.ExternalApplication.Contracts.Services.WagoTools;
 using RaidOps.ExternalApplication.Contracts.Services.WagoTools.Responses;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
@@ -8,10 +10,14 @@ namespace RaidOps.ExternalApplication.Implementations.Services;
 /// <summary>
 /// HTTP client implementation of <see cref="IWagoToolsService"/> that calls the public,
 /// unauthenticated wago.tools API and DB2 CSV exports. The base address comes from the
-/// <c>Wago:BaseUrl</c> setting, applied when the typed client is registered.
+/// <c>Wago:BaseUrl</c> setting, applied when the typed client is registered. The large CSV exports
+/// (hundreds of thousands of rows for Retail) are streamed line by line rather than buffered whole, so
+/// a sync stays light enough for a small container.
 /// </summary>
-public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
+public class WagoToolsService(HttpClient httpClient, IConfiguration configuration) : IWagoToolsService
 {
+    private const string IconPathPrefix = "interface/icons/";
+
     /// <inheritdoc/>
     public async Task<Dictionary<string, WagoBuildInfo>> GetLatestBuildsAsync(CancellationToken cancellationToken = default)
     {
@@ -26,31 +32,47 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
     /// <inheritdoc/>
     public async Task<List<WagoSpellName>> GetSpellNamesAsync(string build, string locale, CancellationToken cancellationToken = default)
     {
-        var rows = await GetCsvRowsAsync($"db2/SpellName/csv?build={build}&locale={locale}", cancellationToken);
+        var names = new List<WagoSpellName>();
+        var isHeader = true;
 
-        return rows.Skip(1)
-            .Where(row => row.Length >= 2)
-            .Select(row => new WagoSpellName { Id = int.Parse(row[0]), Name = row[1] })
-            .ToList();
+        await foreach (var row in ReadCsvRowsAsync($"db2/SpellName/csv?build={build}&locale={locale}", cancellationToken))
+        {
+            if (isHeader)
+            {
+                isHeader = false;
+                continue;
+            }
+
+            if (row.Length >= 2)
+                names.Add(new WagoSpellName { Id = int.Parse(row[0]), Name = row[1] });
+        }
+
+        return names;
     }
 
     /// <inheritdoc/>
     public async Task<Dictionary<int, int>> GetSpellIconFileDataIdsAsync(string build, CancellationToken cancellationToken = default)
     {
-        var rows = await GetCsvRowsAsync($"db2/SpellMisc/csv?build={build}", cancellationToken);
-        var header = rows[0];
-        var spellIdIndex = Array.IndexOf(header, "SpellID");
-        var iconIndex = Array.IndexOf(header, "SpellIconFileDataID");
-        if (spellIdIndex < 0 || iconIndex < 0)
-            throw new InvalidOperationException("wago.tools SpellMisc export is missing the SpellID/SpellIconFileDataID columns.");
-
         var result = new Dictionary<int, int>();
-        foreach (var row in rows.Skip(1))
+        var spellIdIndex = -1;
+        var iconIndex = -1;
+        var isHeader = true;
+
+        await foreach (var row in ReadCsvRowsAsync($"db2/SpellMisc/csv?build={build}", cancellationToken))
         {
-            var spellId = int.Parse(row[spellIdIndex]);
+            if (isHeader)
+            {
+                isHeader = false;
+                spellIdIndex = Array.IndexOf(row, "SpellID");
+                iconIndex = Array.IndexOf(row, "SpellIconFileDataID");
+                if (spellIdIndex < 0 || iconIndex < 0)
+                    throw new InvalidOperationException("wago.tools SpellMisc export is missing the SpellID/SpellIconFileDataID columns.");
+                continue;
+            }
+
             var fileDataId = int.Parse(row[iconIndex]);
             if (fileDataId > 0)
-                result[spellId] = fileDataId;
+                result[int.Parse(row[spellIdIndex])] = fileDataId;
         }
 
         return result;
@@ -68,18 +90,51 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
         return info.Filename;
     }
 
-    private async Task<string[][]> GetCsvRowsAsync(string url, CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public async Task<Dictionary<int, string>> GetIconFileNamesAsync(CancellationToken cancellationToken = default)
     {
-        var response = await httpClient.GetAsync(url, cancellationToken);
+        var listfileUrl = configuration["Wago:ListfileUrl"]
+            ?? throw new InvalidOperationException("Wago:ListfileUrl is not configured.");
+
+        var icons = new Dictionary<int, string>();
+
+        using var response = await httpClient.GetAsync(listfileUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return content
-            .Split('\n')
-            .Select(line => line.TrimEnd('\r'))
-            .Where(line => line.Length > 0)
-            .Select(ParseCsvLine)
-            .ToArray();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        // Lines look like "134015;interface/icons/inv_misc_food_59.blp" — only icons are kept, out of
+        // ~2M entries, so the map stays small (~40k) even though the file is large.
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            var separator = line.IndexOf(';');
+            if (separator <= 0)
+                continue;
+
+            var path = line.AsSpan(separator + 1);
+            if (!path.StartsWith(IconPathPrefix, StringComparison.OrdinalIgnoreCase) || !int.TryParse(line.AsSpan(0, separator), out var fileDataId))
+                continue;
+
+            icons[fileDataId] = Path.GetFileNameWithoutExtension(path.ToString());
+        }
+
+        return icons;
+    }
+
+    private async IAsyncEnumerable<string[]> ReadCsvRowsAsync(string url, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (line.Length > 0)
+                yield return ParseCsvLine(line);
+        }
     }
 
     /// <summary>
