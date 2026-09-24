@@ -128,7 +128,7 @@ public class SpellRepositoryBulkUpsertTests(RaidOpsWebApplicationFactory factory
 
             renamed.Added.Should().BeEmpty();
             renamed.Renamed.Select(e => (e.SpellId, e.PreviousNameEn, e.NameEn)).Should().Equal(
-                renamedIndexes.Select(i => (RerunBlock + i, NameOf(RerunBlock, i), $"Renamed {i}")));
+                renamedIndexes.Select(i => (RerunBlock + i, (string?)NameOf(RerunBlock, i), $"Renamed {i}")));
             (await CountAsync(RerunBlock)).Should().Be((total, total));
             foreach (var index in renamedIndexes)
             {
