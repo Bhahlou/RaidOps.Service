@@ -11,8 +11,8 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     public async Task<List<GuildAttributionDefinition>> GetForBranchAsync(string guildId, int guildBranchId, int? raidBossId, CancellationToken cancellationToken = default)
         => await context.GuildAttributionDefinitions
             .Where(d => d.GuildId == guildId && d.GuildBranchId == guildBranchId && d.RaidBossId == raidBossId)
-            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell).ThenInclude(s => s!.Availabilities)
-            .Include(d => d.SectionSpell).ThenInclude(s => s!.Availabilities)
+            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell).ThenInclude(s => s!.Availabilities) // NOSONAR S9129 — Cells is a collection (filtered include), it cannot be folded into one Include lambda
+            .Include(d => d.SectionSpell!.Availabilities)
             .OrderBy(d => d.SortOrder)
             .AsSplitQuery()
             .AsNoTracking()
@@ -21,8 +21,8 @@ public class GuildAttributionDefinitionsRepository(RaidOpsDbContext context) : I
     /// <inheritdoc/>
     public async Task<GuildAttributionDefinition?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
         => await context.GuildAttributionDefinitions
-            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell).ThenInclude(s => s!.Availabilities)
-            .Include(d => d.SectionSpell).ThenInclude(s => s!.Availabilities)
+            .Include(d => d.Cells.OrderBy(c => c.CellIndex)).ThenInclude(c => c.Spell).ThenInclude(s => s!.Availabilities) // NOSONAR S9129 — Cells is a collection (filtered include), it cannot be folded into one Include lambda
+            .Include(d => d.SectionSpell!.Availabilities)
             .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);

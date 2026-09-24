@@ -21,7 +21,7 @@ public class BranchRepositoryTests(RaidOpsWebApplicationFactory factory)
     private const int AnniversaryId = 4;
     private const int ForeverId = 5;
 
-    private IBranchRepository ResolveRepo(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IBranchRepository>();
+    private static IBranchRepository ResolveRepo(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IBranchRepository>();
 
     // ── Seed data ────────────────────────────────────────────────────────────
 

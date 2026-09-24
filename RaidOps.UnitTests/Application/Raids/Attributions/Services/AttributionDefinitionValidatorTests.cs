@@ -160,7 +160,7 @@ public class AttributionDefinitionValidatorTests
     [Fact]
     public async Task ValidateIconAsync_NoneWithAllowNone_ReturnsNull()
     {
-        var result = await AttributionDefinitionValidator.ValidateIconAsync(AttributionIconSource.None, null, null, null, ExpansionId, _spells.Object, default, allowNone: true);
+        var result = await AttributionDefinitionValidator.ValidateIconAsync(new SectionIconFields(AttributionIconSource.None, null, null, null), ExpansionId, _spells.Object, default, allowNone: true);
 
         result.Should().BeNull();
     }
@@ -168,7 +168,7 @@ public class AttributionDefinitionValidatorTests
     [Fact]
     public async Task ValidateIconAsync_NoneWithoutAllowNone_ReturnsInvalidRequest()
     {
-        var result = await AttributionDefinitionValidator.ValidateIconAsync(AttributionIconSource.None, null, null, null, ExpansionId, _spells.Object, default);
+        var result = await AttributionDefinitionValidator.ValidateIconAsync(new SectionIconFields(AttributionIconSource.None, null, null, null), ExpansionId, _spells.Object, default);
 
         result.Should().Be(ResponseDetail.InvalidRequest);
     }
@@ -176,7 +176,7 @@ public class AttributionDefinitionValidatorTests
     [Fact]
     public async Task ValidateIconAsync_UnknownIconSource_ReturnsInvalidRequest()
     {
-        var result = await AttributionDefinitionValidator.ValidateIconAsync((AttributionIconSource)99, null, null, null, ExpansionId, _spells.Object, default, allowNone: true);
+        var result = await AttributionDefinitionValidator.ValidateIconAsync(new SectionIconFields((AttributionIconSource)99, null, null, null), ExpansionId, _spells.Object, default, allowNone: true);
 
         result.Should().Be(ResponseDetail.InvalidRequest);
     }

@@ -27,7 +27,7 @@ internal static class AttributionDefinitionValidator
             switch (cell.Kind)
             {
                 case AttributionCellKind.Icon:
-                    var iconValidation = await ValidateIconAsync(cell.IconSource, cell.SpellId, cell.RaidMarker, cell.StaticRole, expansionId, spellRepository, cancellationToken);
+                    var iconValidation = await ValidateIconAsync(new SectionIconFields(cell.IconSource, cell.SpellId, cell.RaidMarker, cell.StaticRole), expansionId, spellRepository, cancellationToken);
                     if (iconValidation != null)
                         return iconValidation;
                     break;
@@ -54,29 +54,26 @@ internal static class AttributionDefinitionValidator
     /// </param>
     /// <param name="expansionId">The expansion of the guild branch the icon belongs to — a picked spell must have been observed on it.</param>
     public static async Task<string?> ValidateIconAsync(
-        AttributionIconSource iconSource,
-        int? spellId,
-        RaidMarkerIcon? raidMarker,
-        SpecRole? staticRole,
+        SectionIconFields icon,
         int expansionId,
         ISpellRepository spellRepository,
         CancellationToken cancellationToken,
         bool allowNone = false)
     {
-        switch (iconSource)
+        switch (icon.IconSource)
         {
             case AttributionIconSource.Spell:
-                if (spellId == null)
+                if (icon.SpellId == null)
                     return ResponseDetail.InvalidRequest;
-                if (await spellRepository.GetAvailabilityAsync(spellId.Value, expansionId, cancellationToken) == null)
+                if (await spellRepository.GetAvailabilityAsync(icon.SpellId.Value, expansionId, cancellationToken) == null)
                     return ResponseDetail.SpellNotFound;
                 return null;
 
             case AttributionIconSource.RaidMarker:
-                return raidMarker == null ? ResponseDetail.InvalidRequest : null;
+                return icon.RaidMarker == null ? ResponseDetail.InvalidRequest : null;
 
             case AttributionIconSource.StaticRole:
-                return staticRole == null ? ResponseDetail.InvalidRequest : null;
+                return icon.StaticRole == null ? ResponseDetail.InvalidRequest : null;
 
             case AttributionIconSource.None:
                 return allowNone ? null : ResponseDetail.InvalidRequest;

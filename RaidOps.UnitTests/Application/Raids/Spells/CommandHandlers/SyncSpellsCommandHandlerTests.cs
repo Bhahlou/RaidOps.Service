@@ -31,7 +31,9 @@ public class SyncSpellsCommandHandlerTests
     private readonly CapturingLogger<SyncSpellsCommandHandler> _logger = new();
     private readonly List<string> _callOrder = [];
 
-    private Dictionary<string, string?> _config = new() { ["Discord:SpellSyncChannelId"] = ChannelId };
+    private const string IconBaseUrl = "https://render.worldofwarcraft.com/us/icons/56/";
+
+    private Dictionary<string, string?> _config = new() { ["Discord:SpellSyncChannelId"] = ChannelId, ["Blizzard:SpellIconBaseUrl"] = IconBaseUrl };
     private List<SpellAvailability> _upsertedRows = [];
 
     public SyncSpellsCommandHandlerTests()
@@ -469,7 +471,7 @@ public class SyncSpellsCommandHandlerTests
     [InlineData("   ")]
     public async Task HandleAsync_ChannelIdNotConfigured_SkipsSendWithWarningAndStillSucceeds(string? channelId)
     {
-        _config = new Dictionary<string, string?> { ["Discord:SpellSyncChannelId"] = channelId };
+        _config = new Dictionary<string, string?> { ["Discord:SpellSyncChannelId"] = channelId, ["Blizzard:SpellIconBaseUrl"] = IconBaseUrl };
         SetupBranches(MakeBranch(5, "Forever", ForeverProduct, ForeverExpansionId));
         SetupLatestBuilds((ForeverProduct, "b2"));
         SetupEmptyBuildContent("b2");
@@ -502,7 +504,7 @@ public class SyncSpellsCommandHandlerTests
     [Fact]
     public async Task HandleAsync_UnparseableChannelId_IsSwallowedLikeAnyOtherNotificationFailure()
     {
-        _config = new Dictionary<string, string?> { ["Discord:SpellSyncChannelId"] = "not-a-number" };
+        _config = new Dictionary<string, string?> { ["Discord:SpellSyncChannelId"] = "not-a-number", ["Blizzard:SpellIconBaseUrl"] = IconBaseUrl };
         SetupBranches(MakeBranch(5, "Forever", ForeverProduct, ForeverExpansionId));
         SetupLatestBuilds((ForeverProduct, "b2"));
         SetupEmptyBuildContent("b2");

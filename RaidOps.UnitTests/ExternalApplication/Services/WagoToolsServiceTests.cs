@@ -12,7 +12,7 @@ public class WagoToolsServiceTests
     private static (WagoToolsService Sut, FakeHttpMessageHandler Handler) MakeSut(HttpStatusCode status, string? content)
     {
         var handler = new FakeHttpMessageHandler(status, content);
-        return (new WagoToolsService(new HttpClient(handler)), handler);
+        return (new WagoToolsService(new HttpClient(handler) { BaseAddress = new Uri("https://wago.tools") }), handler);
     }
 
     // ── GetLatestBuildsAsync ─────────────────────────────────────────────────

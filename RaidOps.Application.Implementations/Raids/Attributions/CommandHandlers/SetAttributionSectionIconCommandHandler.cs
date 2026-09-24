@@ -27,12 +27,11 @@ public class SetAttributionSectionIconCommandHandler(
         if (expansionId is null)
             return Result<CommandResponse>.Fail(ResponseDetail.GuildBranchNotFound, "Guild branch not found.");
 
-        var validation = await AttributionDefinitionValidator.ValidateIconAsync(
-            command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole, expansionId.Value, spellRepository, cancellationToken, allowNone: true);
+        var icon = new SectionIconFields(command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole);
+        var validation = await AttributionDefinitionValidator.ValidateIconAsync(icon, expansionId.Value, spellRepository, cancellationToken, allowNone: true);
         if (validation != null)
             return Result<CommandResponse>.Fail(validation, "Invalid section icon fields.");
 
-        var icon = new SectionIconFields(command.IconSource, command.SpellId, command.RaidMarker, command.StaticRole);
         var updated = await definitionsRepository.SetSectionIconAsync(command.GuildId, command.GuildBranchId, command.RaidBossId, command.Section, icon, cancellationToken);
         if (updated == 0)
             return Result<CommandResponse>.Fail(ResponseDetail.AttributionDefinitionNotFound, $"No row uses section '{command.Section}' in this scope.");

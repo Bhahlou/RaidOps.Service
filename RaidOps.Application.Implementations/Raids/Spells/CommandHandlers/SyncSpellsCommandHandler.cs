@@ -27,7 +27,6 @@ public class SyncSpellsCommandHandler(
     ILogger<SyncSpellsCommandHandler> logger)
     : ICommandHandlerAsync<SyncSpellsCommand>
 {
-    private const string IconBaseUrl = "https://render.worldofwarcraft.com/us/icons/56/";
     private const int MaxSampleEntriesPerField = 10;
     private const int IconResolutionConcurrency = 16;
 
@@ -67,7 +66,8 @@ public class SyncSpellsCommandHandler(
             if (skipped)
                 continue;
 
-            logger.LogInformation("Spell sync: syncing {BranchName} to build {Build}...", branch.Name, buildInfo.Version);
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("Spell sync: syncing {BranchName} to build {Build}...", branch.Name, buildInfo.Version);
 
             var diff = await SyncBranchAsync(branch, buildInfo.Version, cancellationToken);
             result.AddedCount = diff.Added.Count;
@@ -75,9 +75,12 @@ public class SyncSpellsCommandHandler(
 
             await branchRepository.UpdateSyncStateAsync(branch.Id, buildInfo.Version, buildInfo.CreatedAt, cancellationToken);
 
-            logger.LogInformation(
-                "Spell sync: {BranchName} synced to build {Build} — {Added} added, {Renamed} renamed.",
-                branch.Name, buildInfo.Version, diff.Added.Count, diff.Renamed.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Spell sync: {BranchName} synced to build {Build} — {Added} added, {Renamed} renamed.",
+                    branch.Name, buildInfo.Version, diff.Added.Count, diff.Renamed.Count);
+            }
 
             if (diff.Added.Count > 0 || diff.Renamed.Count > 0)
                 changesByBranch.Add(new BranchChange(branch.Name, buildInfo.Version, branch.LastSyncedBuildVersion, diff));
@@ -136,6 +139,8 @@ public class SyncSpellsCommandHandler(
     private async Task<Dictionary<int, string>> ResolveIconUrlsAsync(List<int> fileDataIds, string build, CancellationToken cancellationToken)
     {
         var iconUrlByFileDataId = new ConcurrentDictionary<int, string>();
+        var iconBaseUrl = configuration["Blizzard:SpellIconBaseUrl"]
+            ?? throw new InvalidOperationException("Blizzard:SpellIconBaseUrl is not configured.");
 
         var options = new ParallelOptions { MaxDegreeOfParallelism = IconResolutionConcurrency, CancellationToken = cancellationToken };
         await Parallel.ForEachAsync(fileDataIds, options, async (fileDataId, ct) =>
@@ -146,7 +151,7 @@ public class SyncSpellsCommandHandler(
             try
             {
                 var fileName = await wagoToolsService.GetFileNameAsync(fileDataId, build, ct);
-                iconUrlByFileDataId[fileDataId] = BuildIconUrl(fileName);
+                iconUrlByFileDataId[fileDataId] = BuildIconUrl(iconBaseUrl, fileName);
             }
             catch (HttpRequestException ex)
             {
@@ -158,10 +163,10 @@ public class SyncSpellsCommandHandler(
         return new Dictionary<int, string>(iconUrlByFileDataId);
     }
 
-    private static string BuildIconUrl(string fileName)
+    private static string BuildIconUrl(string iconBaseUrl, string fileName)
     {
         var iconName = Path.GetFileNameWithoutExtension(fileName.Replace('\\', '/'));
-        return $"{IconBaseUrl}{iconName}.jpg";
+        return $"{iconBaseUrl}{iconName}.jpg";
     }
 
     private async Task NotifyDiscordAsync(List<BranchChange> changesByBranch, CancellationToken cancellationToken)

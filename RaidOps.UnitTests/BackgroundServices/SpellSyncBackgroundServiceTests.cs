@@ -78,7 +78,7 @@ public class SpellSyncBackgroundServiceTests
         await sut.StopAsync(CancellationToken.None).WaitAsync(Timeout);
 
         await WaitUntilAsync(() => sut.ExecuteTask!.IsCompleted);
-        sut.ExecuteTask!.IsCanceled.Should().BeTrue();
+        sut.ExecuteTask!.IsCompletedSuccessfully.Should().BeTrue("stopping while waiting for the next tick is a clean shutdown");
     }
 
     [Fact]
@@ -150,9 +150,7 @@ public class SpellSyncBackgroundServiceTests
         await sut.StopAsync(CancellationToken.None);
 
         logger.Verify(l => l.IsEnabled(LogLevel.Warning), Times.Once);
-        logger.Verify(l => l.Log(
-            It.IsAny<LogLevel>(), It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(), It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Never);
+        logger.Invocations.Should().NotContain(i => i.Method.Name == nameof(ILogger.Log));
     }
 
     // The poll interval is a private static readonly one hour; reach it with UnsafeAccessor so the

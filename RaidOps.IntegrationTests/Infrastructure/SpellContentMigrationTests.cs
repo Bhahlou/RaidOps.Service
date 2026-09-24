@@ -28,7 +28,7 @@ public class SpellContentMigrationTests : IAsyncLifetime
     private const int SpellWithOneExpansionAndNoIcon = 9890002;
     private const int SpellWithoutAnyAvailability = 9890003;
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("raidops_migration")
         .WithUsername("postgres")
         .WithPassword("postgres")

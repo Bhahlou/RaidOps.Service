@@ -5,11 +5,11 @@ namespace RaidOps.API.BackgroundServices;
 
 /// <summary>
 /// Polls wago.tools hourly for new builds of every active, wago-tracked branch and keeps the
-/// <see cref="RaidOps.Domain.Models.Reference.Spell"/> reference table in sync — see
+/// <see cref="RaidOps.Domain.Models.Reference.SpellAvailability"/> reference data in sync — see
 /// <see cref="SyncSpellsCommand"/>/<c>SyncSpellsCommandHandler</c> for the actual sync logic. Runs
-/// once immediately on startup, then every <see cref="PollInterval"/>. A hosted service is a
-/// singleton, but <see cref="ICommandDispatcher"/> and everything it resolves are scoped, so each
-/// tick creates its own scope — same pattern as the Discord bot's gateway handlers
+/// once immediately on startup, then waits <see cref="PollInterval"/> after each run. A hosted service
+/// is a singleton, but <see cref="ICommandDispatcher"/> and everything it resolves are scoped, so each
+/// run creates its own scope — same pattern as the Discord bot's gateway handlers
 /// (<c>GuildDeleteHandler</c> et al.).
 /// </summary>
 public class SpellSyncBackgroundService(
@@ -21,9 +21,7 @@ public class SpellSyncBackgroundService(
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(PollInterval);
-
-        do
+        while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
@@ -33,7 +31,16 @@ public class SpellSyncBackgroundService(
             {
                 logger.LogError(ex, "Spell sync poll failed.");
             }
-        } while (await timer.WaitForNextTickAsync(stoppingToken));
+
+            try
+            {
+                await Task.Delay(PollInterval, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutdown requested while waiting — the loop condition ends the service cleanly.
+            }
+        }
     }
 
     private async Task SyncAsync(CancellationToken cancellationToken)

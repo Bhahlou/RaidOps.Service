@@ -7,16 +7,15 @@ namespace RaidOps.ExternalApplication.Implementations.Services;
 
 /// <summary>
 /// HTTP client implementation of <see cref="IWagoToolsService"/> that calls the public,
-/// unauthenticated wago.tools API and DB2 CSV exports.
+/// unauthenticated wago.tools API and DB2 CSV exports. The base address comes from the
+/// <c>Wago:BaseUrl</c> setting, applied when the typed client is registered.
 /// </summary>
 public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
 {
-    private const string BaseUrl = "https://wago.tools";
-
     /// <inheritdoc/>
     public async Task<Dictionary<string, WagoBuildInfo>> GetLatestBuildsAsync(CancellationToken cancellationToken = default)
     {
-        var response = await httpClient.GetAsync($"{BaseUrl}/api/builds/latest", cancellationToken);
+        var response = await httpClient.GetAsync("api/builds/latest", cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -27,7 +26,7 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
     /// <inheritdoc/>
     public async Task<List<WagoSpellName>> GetSpellNamesAsync(string build, string locale, CancellationToken cancellationToken = default)
     {
-        var rows = await GetCsvRowsAsync($"{BaseUrl}/db2/SpellName/csv?build={build}&locale={locale}", cancellationToken);
+        var rows = await GetCsvRowsAsync($"db2/SpellName/csv?build={build}&locale={locale}", cancellationToken);
 
         return rows.Skip(1)
             .Where(row => row.Length >= 2)
@@ -38,7 +37,7 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
     /// <inheritdoc/>
     public async Task<Dictionary<int, int>> GetSpellIconFileDataIdsAsync(string build, CancellationToken cancellationToken = default)
     {
-        var rows = await GetCsvRowsAsync($"{BaseUrl}/db2/SpellMisc/csv?build={build}", cancellationToken);
+        var rows = await GetCsvRowsAsync($"db2/SpellMisc/csv?build={build}", cancellationToken);
         var header = rows[0];
         var spellIdIndex = Array.IndexOf(header, "SpellID");
         var iconIndex = Array.IndexOf(header, "SpellIconFileDataID");
@@ -60,7 +59,7 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
     /// <inheritdoc/>
     public async Task<string> GetFileNameAsync(int fileDataId, string build, CancellationToken cancellationToken = default)
     {
-        var response = await httpClient.GetAsync($"{BaseUrl}/api/info/{fileDataId}?version={build}", cancellationToken);
+        var response = await httpClient.GetAsync($"api/info/{fileDataId}?version={build}", cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -93,9 +92,10 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
         var current = new StringBuilder();
         var inQuotes = false;
 
-        for (var i = 0; i < line.Length; i++)
+        var index = 0;
+        while (index < line.Length)
         {
-            var c = line[i];
+            var c = line[index++];
 
             if (inQuotes)
             {
@@ -105,10 +105,10 @@ public class WagoToolsService(HttpClient httpClient) : IWagoToolsService
                     continue;
                 }
 
-                if (i + 1 < line.Length && line[i + 1] == '"')
+                if (index < line.Length && line[index] == '"')
                 {
                     current.Append('"');
-                    i++;
+                    index++;
                 }
                 else
                 {

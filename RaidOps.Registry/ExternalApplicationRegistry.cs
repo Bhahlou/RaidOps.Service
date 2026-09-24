@@ -34,7 +34,8 @@ internal static class ExternalApplicationsRegistry
 
         // wago.tools API (public, unauthenticated) — keeps the Spell reference table in sync with
         // live WoW branches (e.g. Forever) instead of a one-time checked-in JSON dump.
-        services.AddHttpClient<IWagoToolsService, WagoToolsService>();
+        services.AddHttpClient<IWagoToolsService, WagoToolsService>(client =>
+            client.BaseAddress = new Uri(configuration["Wago:BaseUrl"]!));
 
         // Plain HttpClientFactory (no typed client) so IEmojiService can fetch manifest image
         // bytes without tying its own lifetime to the transient default of a typed client.
