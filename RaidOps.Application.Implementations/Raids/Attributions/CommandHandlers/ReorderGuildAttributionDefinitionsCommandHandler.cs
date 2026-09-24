@@ -15,11 +15,11 @@ public class ReorderGuildAttributionDefinitionsCommandHandler(
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(ReorderGuildAttributionDefinitionsCommand command, CancellationToken cancellationToken = default)
     {
-        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
+        var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, command.GuildBranchId, cancellationToken);
         if (accessLevel != GuildAccessLevel.Officer)
-            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild.");
+            return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "User is not an officer of this guild branch.");
 
-        await definitionsRepository.ReorderAsync(command.GuildId, command.OrderedIds, cancellationToken);
+        await definitionsRepository.ReorderAsync(command.GuildId, command.GuildBranchId, command.OrderedIds, cancellationToken);
 
         return Result<CommandResponse>.Ok(new CommandResponse("Attribution definitions reordered successfully."));
     }

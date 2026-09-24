@@ -688,6 +688,9 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("GuildBranchId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("GuildId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -724,11 +727,13 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GuildId");
+
                     b.HasIndex("RaidBossId");
 
                     b.HasIndex("SectionSpellId");
 
-                    b.HasIndex("GuildId", "SortOrder");
+                    b.HasIndex("GuildBranchId", "SortOrder");
 
                     b.ToTable("GuildAttributionDefinitions");
                 });
@@ -764,6 +769,84 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.HasIndex("CharacterId");
 
                     b.ToTable("RaidEventAttributions");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.CompositionPreviews.RaidCompositionPreview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByDiscordId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("GroupCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuildBranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SlotsPerGroup")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildBranchId");
+
+                    b.ToTable("RaidCompositionPreviews");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.CompositionPreviews.RaidCompositionPreviewSlot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("GroupNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("RaidCompositionPreviewId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlotNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SpecId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("WowClassId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecId");
+
+                    b.HasIndex("WowClassId");
+
+                    b.HasIndex("RaidCompositionPreviewId", "GroupNumber", "SlotNumber")
+                        .IsUnique();
+
+                    b.ToTable("RaidCompositionPreviewSlots");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.GuildRaidZoneLockout", b =>
@@ -1638,6 +1721,13 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("LastSyncedBuildDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastSyncedBuildVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -1645,6 +1735,10 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
                     b.Property<bool>("SyncAvailable")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("WagoProductCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -1660,7 +1754,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             CurrentExpansionId = 11,
                             IsActive = true,
                             Name = "Retail",
-                            SyncAvailable = true
+                            SyncAvailable = true,
+                            WagoProductCode = "wow"
                         },
                         new
                         {
@@ -1678,7 +1773,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             CurrentExpansionId = 5,
                             IsActive = true,
                             Name = "Classic",
-                            SyncAvailable = true
+                            SyncAvailable = true,
+                            WagoProductCode = "wow_classic"
                         },
                         new
                         {
@@ -1687,7 +1783,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             CurrentExpansionId = 2,
                             IsActive = true,
                             Name = "Classic Anniversary",
-                            SyncAvailable = true
+                            SyncAvailable = true,
+                            WagoProductCode = "wow_anniversary"
                         },
                         new
                         {
@@ -1696,7 +1793,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                             CurrentExpansionId = 12,
                             IsActive = true,
                             Name = "Forever",
-                            SyncAvailable = false
+                            SyncAvailable = false,
+                            WagoProductCode = "wow_classic_beta"
                         });
                 });
 
@@ -2443,6 +2541,16 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("integer");
 
+                    b.HasKey("Id");
+
+                    b.ToTable("Spells");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.SpellAvailability", b =>
+                {
+                    b.Property<int>("SpellId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("ExpansionId")
                         .HasColumnType("integer");
 
@@ -2466,11 +2574,11 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.HasKey("Id");
+                    b.HasKey("SpellId", "ExpansionId");
 
                     b.HasIndex("ExpansionId");
 
-                    b.ToTable("Spells");
+                    b.ToTable("SpellAvailabilities");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.WowClass", b =>
@@ -2905,6 +3013,12 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.Attributions.GuildAttributionDefinition", b =>
                 {
+                    b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
+                        .WithMany()
+                        .HasForeignKey("GuildBranchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("RaidOps.Domain.Models.Discord.Guild", "Guild")
                         .WithMany()
                         .HasForeignKey("GuildId")
@@ -2922,6 +3036,8 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Guild");
+
+                    b.Navigation("GuildBranch");
 
                     b.Navigation("RaidBoss");
 
@@ -2953,6 +3069,42 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("Character");
 
                     b.Navigation("RaidEvent");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.CompositionPreviews.RaidCompositionPreview", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.GuildBranch", "GuildBranch")
+                        .WithMany()
+                        .HasForeignKey("GuildBranchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GuildBranch");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.CompositionPreviews.RaidCompositionPreviewSlot", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Raids.CompositionPreviews.RaidCompositionPreview", "RaidCompositionPreview")
+                        .WithMany("Slots")
+                        .HasForeignKey("RaidCompositionPreviewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spec", "Spec")
+                        .WithMany()
+                        .HasForeignKey("SpecId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.WowClass", "WowClass")
+                        .WithMany()
+                        .HasForeignKey("WowClassId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RaidCompositionPreview");
+
+                    b.Navigation("Spec");
+
+                    b.Navigation("WowClass");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.GuildRaidZoneLockout", b =>
@@ -3188,7 +3340,7 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("Class");
                 });
 
-            modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spell", b =>
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.SpellAvailability", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "Expansion")
                         .WithMany()
@@ -3196,7 +3348,15 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spell", "Spell")
+                        .WithMany("Availabilities")
+                        .HasForeignKey("SpellId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Expansion");
+
+                    b.Navigation("Spell");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Calendar.RecurringAvailabilityPattern", b =>
@@ -3247,6 +3407,11 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("Cells");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Raids.CompositionPreviews.RaidCompositionPreview", b =>
+                {
+                    b.Navigation("Slots");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Raids.RaidEvent", b =>
                 {
                     b.Navigation("Assignments");
@@ -3268,6 +3433,11 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("Bosses");
 
                     b.Navigation("LockoutOverrides");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spell", b =>
+                {
+                    b.Navigation("Availabilities");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.WowClass", b =>

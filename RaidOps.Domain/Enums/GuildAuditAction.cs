@@ -103,4 +103,7 @@ public enum GuildAuditAction
 
     /// <summary>A raid event's attribution slot was filled or cleared.</summary>
     RaidEventAttributionUpdated = 33,
+
+    /// <summary>A raid composition preview was created, renamed, duplicated, or deleted.</summary>
+    RaidCompositionPreviewUpdated = 34,
 }

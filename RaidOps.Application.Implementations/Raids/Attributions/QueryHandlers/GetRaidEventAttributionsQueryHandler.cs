@@ -9,9 +9,10 @@ using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Raids.Attributions.QueryHandlers;
 
-/// <summary>Handles <see cref="GetRaidEventAttributionsQuery"/> by merging the guild's attribution template with a raid event's existing fills and seated characters.</summary>
+/// <summary>Handles <see cref="GetRaidEventAttributionsQuery"/> by merging the event's guild branch's attribution template with the event's existing fills and seated characters.</summary>
 public class GetRaidEventAttributionsQueryHandler(
     IGuildAccessService guildAccessService,
+    IGuildBranchesRepository guildBranchesRepository,
     IRaidEventRepository raidEventRepository,
     IGuildAttributionDefinitionsRepository definitionsRepository,
     IRaidEventAttributionsRepository attributionsRepository,
@@ -39,7 +40,11 @@ public class GetRaidEventAttributionsQueryHandler(
                 return Result<RaidEventAttributionsResponse>.Fail(ResponseDetail.BossNotTargetedByEvent, $"Boss '{query.BossId}' is not targeted by this raid event.");
         }
 
-        var definitions = await definitionsRepository.GetForGuildAsync(query.GuildId, query.BossId, cancellationToken);
+        var expansionId = await guildBranchesRepository.GetCurrentExpansionIdAsync(query.GuildId, query.GuildBranchId, cancellationToken);
+        if (expansionId is null)
+            return Result<RaidEventAttributionsResponse>.Fail(ResponseDetail.GuildBranchNotFound, "Guild branch not found.");
+
+        var definitions = await definitionsRepository.GetForBranchAsync(query.GuildId, query.GuildBranchId, query.BossId, cancellationToken);
         var fills = await attributionsRepository.GetForEventAsync(query.EventId, cancellationToken);
 
         var seatedAssignmentsById = raidEvent.Assignments
@@ -50,7 +55,7 @@ public class GetRaidEventAttributionsQueryHandler(
 
         var response = new RaidEventAttributionsResponse
         {
-            Definitions = definitions.Select(AttributionCellMapper.ToDefinitionResponse).ToList(),
+            Definitions = definitions.Select(d => AttributionCellMapper.ToDefinitionResponse(d, expansionId.Value)).ToList(),
 
             // Scoped to this page's own definitions — the event's other boss pages' fills are
             // irrelevant here and would only bloat the payload (cell IDs are globally unique
