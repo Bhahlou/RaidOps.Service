@@ -28,7 +28,8 @@ public class SyncSpellsCommandHandler(
     : ICommandHandlerAsync<SyncSpellsCommand>
 {
     private const int MaxSampleEntriesPerField = 10;
-    private const int IconResolutionConcurrency = 16;
+    private const int IconLookupConcurrency = 4;
+    private const int MaxIndividualIconLookups = 500;
 
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(SyncSpellsCommand command, CancellationToken cancellationToken = default)
@@ -41,6 +42,7 @@ public class SyncSpellsCommandHandler(
 
         var results = new List<BranchSyncResult>();
         var changesByBranch = new List<BranchChange>();
+        Task<Dictionary<int, string>>? listfileIconNames = null;
 
         foreach (var branch in branches)
         {
@@ -69,7 +71,10 @@ public class SyncSpellsCommandHandler(
             if (logger.IsEnabled(LogLevel.Information))
                 logger.LogInformation("Spell sync: syncing {BranchName} to build {Build}...", branch.Name, buildInfo.Version);
 
-            var diff = await SyncBranchAsync(branch, buildInfo.Version, cancellationToken);
+            var iconBaseUrl = configuration["Blizzard:SpellIconBaseUrl"]
+                ?? throw new InvalidOperationException("Blizzard:SpellIconBaseUrl is not configured.");
+            listfileIconNames ??= wagoToolsService.GetIconFileNamesAsync(cancellationToken);
+            var diff = await SyncBranchAsync(branch, buildInfo.Version, iconBaseUrl, listfileIconNames, cancellationToken);
             result.AddedCount = diff.Added.Count;
             result.RenamedCount = diff.Renamed.Count;
 
@@ -91,7 +96,8 @@ public class SyncSpellsCommandHandler(
         return Result<CommandResponse>.Ok(new CommandResponse($"{results.Count} branch(es) checked.", results));
     }
 
-    private async Task<SpellSyncDiff> SyncBranchAsync(Branch branch, string build, CancellationToken cancellationToken)
+    private async Task<SpellSyncDiff> SyncBranchAsync(
+        Branch branch, string build, string iconBaseUrl, Task<Dictionary<int, string>> listfileIconNames, CancellationToken cancellationToken)
     {
         var enNames = await wagoToolsService.GetSpellNamesAsync(build, "enUS", cancellationToken);
         var frNames = await wagoToolsService.GetSpellNamesAsync(build, "frFR", cancellationToken);
@@ -101,11 +107,11 @@ public class SyncSpellsCommandHandler(
         var frById = frNames.ToDictionary(s => s.Id, s => s.Name);
         var deById = deNames.ToDictionary(s => s.Id, s => s.Name);
 
-        // Most spells share an icon (per-rank/per-difficulty variants) — resolve each distinct
-        // FileDataID at most once, and in parallel (bounded), rather than once-per-spell,
-        // sequentially. Thousands of distinct icons at once would otherwise take hours.
-        var iconUrlByFileDataId = await ResolveIconUrlsAsync(iconFileDataIds.Values.Distinct().ToList(), build, cancellationToken);
+        // Most spells share an icon (per-rank/per-difficulty variants) — resolve each distinct FileDataID once.
+        var iconNames = await ResolveIconNamesAsync(iconFileDataIds.Values.Distinct().ToList(), await listfileIconNames, build, cancellationToken);
 
+        // Lazy on purpose: the repository consumes it in chunks, so the full set of rows (hundreds of
+        // thousands for Retail) is never materialized at once.
         var rows = enNames.Select(en => new SpellAvailability
         {
             SpellId = en.Id,
@@ -113,45 +119,57 @@ public class SyncSpellsCommandHandler(
             NameEn = en.Name,
             NameFr = frById.GetValueOrDefault(en.Id, en.Name),
             NameDe = deById.GetValueOrDefault(en.Id, en.Name),
-            IconUrl = iconFileDataIds.TryGetValue(en.Id, out var fileDataId) && iconUrlByFileDataId.TryGetValue(fileDataId, out var iconUrl)
-                ? iconUrl
+            IconUrl = iconFileDataIds.TryGetValue(en.Id, out var fileDataId) && iconNames.TryGetValue(fileDataId, out var iconName)
+                ? $"{iconBaseUrl}{iconName}.jpg"
                 : string.Empty,
-        }).ToList();
+        });
 
         return await spellRepository.UpsertAsync(rows, cancellationToken);
     }
 
-    private async Task<Dictionary<int, string>> ResolveIconUrlsAsync(List<int> fileDataIds, string build, CancellationToken cancellationToken)
+    private async Task<Dictionary<int, string>> ResolveIconNamesAsync(
+        List<int> fileDataIds, Dictionary<int, string> listfileIconNames, string build, CancellationToken cancellationToken)
     {
-        var iconUrlByFileDataId = new ConcurrentDictionary<int, string>();
-        var iconBaseUrl = configuration["Blizzard:SpellIconBaseUrl"]
-            ?? throw new InvalidOperationException("Blizzard:SpellIconBaseUrl is not configured.");
-
-        var options = new ParallelOptions { MaxDegreeOfParallelism = IconResolutionConcurrency, CancellationToken = cancellationToken };
-        await Parallel.ForEachAsync(fileDataIds, options, async (fileDataId, ct) =>
+        var resolved = new Dictionary<int, string>();
+        var notInListfile = new List<int>();
+        foreach (var fileDataId in fileDataIds)
         {
-            // A stale/dangling FileDataID (removed from the client since this build's SpellMisc
-            // export was generated) shouldn't abort the whole branch's sync — fall back to no icon
-            // for just that one and keep going.
+            if (listfileIconNames.TryGetValue(fileDataId, out var iconName))
+                resolved[fileDataId] = iconName;
+            else
+                notInListfile.Add(fileDataId);
+        }
+
+        if (notInListfile.Count == 0)
+            return resolved;
+
+        // Icons too new for the community listfile (e.g. a beta's fresh art) are looked up one by one.
+        // FileDataIDs grow over time, so the newest few are the ones worth asking wago.tools for; the
+        // rest are mostly stale references to files no longer in the client (they 400) and are skipped.
+        var lookups = notInListfile.OrderByDescending(id => id).Take(MaxIndividualIconLookups).ToList();
+        var skipped = notInListfile.Count - lookups.Count;
+        if (skipped > 0 && logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("Spell sync: {Skipped} icon(s) missing from the listfile beyond the {Max} newest were left without an icon.", skipped, MaxIndividualIconLookups);
+
+        var found = new ConcurrentDictionary<int, string>();
+        var options = new ParallelOptions { MaxDegreeOfParallelism = IconLookupConcurrency, CancellationToken = cancellationToken };
+        await Parallel.ForEachAsync(lookups, options, async (fileDataId, token) =>
+        {
             try
             {
-                var fileName = await wagoToolsService.GetFileNameAsync(fileDataId, build, ct);
-                iconUrlByFileDataId[fileDataId] = BuildIconUrl(iconBaseUrl, fileName);
+                var fileName = await wagoToolsService.GetFileNameAsync(fileDataId, build, token);
+                found[fileDataId] = Path.GetFileNameWithoutExtension(fileName.Replace('\\', '/'));
             }
             catch (HttpRequestException ex)
             {
                 logger.LogWarning(ex, "Failed to resolve icon FileDataID {FileDataId} for build {Build}; affected spells are left without an icon.", fileDataId, build);
-                iconUrlByFileDataId[fileDataId] = string.Empty;
             }
         });
 
-        return new Dictionary<int, string>(iconUrlByFileDataId);
-    }
+        foreach (var (fileDataId, iconName) in found)
+            resolved[fileDataId] = iconName;
 
-    private static string BuildIconUrl(string iconBaseUrl, string fileName)
-    {
-        var iconName = Path.GetFileNameWithoutExtension(fileName.Replace('\\', '/'));
-        return $"{iconBaseUrl}{iconName}.jpg";
+        return resolved;
     }
 
     // The sync itself already succeeded and is saved — a bad Discord channel config/permission
