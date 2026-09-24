@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.0...v2.1.1) (2026-09-24)
+
+
+### 🐛 Bug Fixes
+
+* Make the spell sync light enough for a small container by streaming exports, using the community listfile for icons and upserting in chunks ([#89](https://github.com/Bhahlou/RaidOps.Service/issues/89)) ([409faf9](https://github.com/Bhahlou/RaidOps.Service/commit/409faf945891c786f57eb03aa2c29f1397468c21))
+
 ## [2.1.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.0.0...v2.1.0) (2026-09-24)
 
 
