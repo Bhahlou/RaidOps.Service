@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.1...v2.2.0) (2026-09-28)
+
+
+### 🚀 Features
+
+* Add curated raid buff/debuff definitions per expansion with an owner-only admin screen and expose spell search as one public endpoint ([#92](https://github.com/Bhahlou/RaidOps.Service/issues/92)) ([39e375b](https://github.com/Bhahlou/RaidOps.Service/commit/39e375bbcc779d371b002206ee8945bbf8fa5f38))
+
 ## [2.1.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.0...v2.1.1) (2026-09-24)
 
 
