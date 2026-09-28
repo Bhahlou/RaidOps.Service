@@ -22,6 +22,8 @@ public class UpsertRaidBuffDefinitionsCommandHandlerTests
 
     private const int ExpansionId = 12;
 
+    private static readonly int[] ExpectedSpellIds = [16176, 14892];
+
     public UpsertRaidBuffDefinitionsCommandHandlerTests()
     {
         _expansions.Setup(e => e.GetAllAsync(default)).ReturnsAsync([new Expansion { Id = ExpansionId, Name = "Forever", ShortCode = "Forever" }]);
@@ -103,7 +105,7 @@ public class UpsertRaidBuffDefinitionsCommandHandlerTests
         summary.Deleted.Should().Be(3);
         _definitions.Verify(d => d.UpsertAsync(
             ExpansionId,
-            It.Is<IReadOnlyList<RaidBuffDefinition>>(list => list.Select(x => x.SpellId).SequenceEqual(new[] { 16176, 14892 })),
+            It.Is<IReadOnlyList<RaidBuffDefinition>>(list => list.Select(x => x.SpellId).SequenceEqual(ExpectedSpellIds)),
             true,
             default), Times.Once);
     }

@@ -65,7 +65,7 @@ public class AdminController(
     public async Task<IActionResult> ImportRaidBuffs(int expansionId, [FromBody] ImportRaidBuffDefinitionsRequest request, CancellationToken cancellationToken)
     {
         var result = await CommandDispatcher.DispatchAsync(
-            new UpsertRaidBuffDefinitionsCommand { ExpansionId = expansionId, Definitions = request.Definitions, PruneMissing = request.PruneMissing },
+            new UpsertRaidBuffDefinitionsCommand { ExpansionId = expansionId, Definitions = request.Definitions, PruneMissing = request.PruneMissing ?? false },
             cancellationToken);
 
         return ToActionResult(result);

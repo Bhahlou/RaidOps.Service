@@ -23,6 +23,8 @@ public class RaidBuffDefinitionValidationServiceTests
 
     private const int ExpansionId = 12;
 
+    private static readonly int[] SingleKnownSpellId = [16176];
+
     public RaidBuffDefinitionValidationServiceTests()
     {
         _classes.Setup(c => c.GetAllAsync(default)).ReturnsAsync([new WowClass { Id = 7, Name = "Shaman", Color = "0070DE" }]);
@@ -45,7 +47,7 @@ public class RaidBuffDefinitionValidationServiceTests
     [Fact]
     public async Task ValidateAsync_SpellKnownOnTheExpansion_ReturnsNoErrors()
     {
-        _spells.Setup(s => s.GetAvailabilitiesAsync(ExpansionId, It.Is<List<int>>(ids => ids.SequenceEqual(new[] { 16176 })), default))
+        _spells.Setup(s => s.GetAvailabilitiesAsync(ExpansionId, It.Is<List<int>>(ids => ids.SequenceEqual(SingleKnownSpellId)), default))
             .ReturnsAsync([new SpellAvailability { SpellId = 16176, ExpansionId = ExpansionId, NameEn = "x", NameFr = "x", NameDe = "x", IconUrl = "x" }]);
 
         var errors = await _sut.ValidateAsync(ExpansionId, [MakeDefinition(16176)], default);

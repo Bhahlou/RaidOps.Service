@@ -111,6 +111,17 @@ public class AdminControllerTests
     }
 
     [Fact]
+    public async Task ImportRaidBuffs_PruneMissingOmittedFromTheRequestBody_DefaultsToFalse()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<UpsertRaidBuffDefinitionsCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("ok")));
+
+        await MakeSut().ImportRaidBuffs(12, new ImportRaidBuffDefinitionsRequest { Definitions = [MakeDefinition()], PruneMissing = null }, default);
+
+        _commands.Verify(c => c.DispatchAsync(It.Is<UpsertRaidBuffDefinitionsCommand>(cmd => !cmd.PruneMissing), default), Times.Once);
+    }
+
+    [Fact]
     public async Task ImportRaidBuffs_CommandFails_ReturnsBadRequest()
     {
         _commands.Setup(c => c.DispatchAsync(It.IsAny<UpsertRaidBuffDefinitionsCommand>(), default))
