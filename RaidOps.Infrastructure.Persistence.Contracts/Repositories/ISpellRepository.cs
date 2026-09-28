@@ -15,6 +15,12 @@ public interface ISpellRepository
     Task<SpellAvailability?> GetAvailabilityAsync(int spellId, int expansionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the availability rows of <paramref name="expansionId"/> for whichever of
+    /// <paramref name="spellIds"/> have been observed on that expansion — IDs with no row are simply absent.
+    /// </summary>
+    Task<List<SpellAvailability>> GetAvailabilitiesAsync(int expansionId, IReadOnlyCollection<int> spellIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns up to <paramref name="limit"/> spells observed on <paramref name="expansionId"/> whose
     /// localized name on that expansion (matching <paramref name="locale"/>) contains
     /// <paramref name="searchTerm"/>, case-insensitively.

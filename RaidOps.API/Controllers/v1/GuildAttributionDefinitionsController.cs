@@ -8,15 +8,12 @@ using RaidOps.Application.Contracts.Raids.Attributions.Queries;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
 using RaidOps.Application.Contracts.Raids.Bosses.Queries;
 using RaidOps.Application.Contracts.Raids.Bosses.Responses;
-using RaidOps.Application.Contracts.Raids.Spells.Queries;
-using RaidOps.Application.Contracts.Raids.Spells.Responses;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace RaidOps.API.Controllers.v1;
 
 /// <summary>
-/// Manages a guild branch's raid-attribution template (buffs, curses, tank/heal swaps, …) and the spell
-/// search backing its icon picker. Every template is scoped to one guild branch — a guild running
+/// Manages a guild branch's raid-attribution template (buffs, curses, tank/heal swaps, …). Every template is scoped to one guild branch — a guild running
 /// several branches keeps one template per branch. Officer-only — see each handler's access check.
 /// </summary>
 [ApiVersion("1.0")]
@@ -133,21 +130,6 @@ public class GuildAttributionDefinitionsController(
         command.RequesterDiscordId = discordId;
 
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
-        return ToActionResult(result);
-    }
-
-    /// <summary>Searches the spell reference data of the guild branch's expansion by localized name substring — backs the template editor's spell picker.</summary>
-    [HttpGet("{guildId}/branches/{guildBranchId:int}/spells/search")]
-    public async Task<IActionResult> SearchSpells(string guildId, int guildBranchId, [FromQuery] string searchTerm, [FromQuery] string locale, CancellationToken cancellationToken)
-    {
-        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        if (discordId == null)
-            return Unauthorized();
-
-        var result = await QueryDispatcher.DispatchAsync<SearchSpellsQuery, List<SpellResponse>>(
-            new SearchSpellsQuery { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, SearchTerm = searchTerm, Locale = locale },
-            cancellationToken);
-
         return ToActionResult(result);
     }
 }
