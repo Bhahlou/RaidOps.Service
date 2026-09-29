@@ -17,6 +17,7 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
 {
     private const string Url = "/api/v1/user/me";
     private const string ChangelogSeenUrl = "/api/v1/user/changelog-seen";
+    private const string TourSeenUrl = "/api/v1/user/tour-seen";
     private const string DiscordId = "200000000000000001";
 
     private static readonly string[] SingleEntryId = ["e1"];
@@ -369,6 +370,99 @@ public class UserControllerTests(RaidOpsWebApplicationFactory factory)
         using (scope)
         {
             var count = await db2.SeenChangelogEntries.CountAsync(s => s.UserDiscordId == id);
+            count.Should().Be(0);
+        }
+    }
+
+    [Fact]
+    public async Task GetMe_UserHasSeenTours_ReturnsThemInResponse()
+    {
+        const string id = "200000000000000980";
+        await SeedAsync(db =>
+        {
+            db.Users.Add(TestDataBuilder.CreateUser(id));
+            db.SeenTours.Add(new SeenTour { UserDiscordId = id, TourId = "general", SeenAt = DateTime.UtcNow });
+            return Task.CompletedTask;
+        });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.GetAsync(Url);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<UserResponse>();
+        body!.SeenTourIds.Should().ContainSingle().Which.Should().Be("general");
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_WithoutToken_Returns401()
+    {
+        var response = await Client.PostAsync(TourSeenUrl, JsonContent.Create(new { tourId = "general" }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_TokenWithoutSubClaim_Returns401()
+    {
+        var client = CreateClientWithoutSubClaim();
+
+        var response = await client.PostAsync(TourSeenUrl, JsonContent.Create(new { tourId = "general" }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_Success_Returns200AndPersistsTour()
+    {
+        const string id = "200000000000000981";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsync(TourSeenUrl, JsonContent.Create(new { tourId = "general" }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db2) = CreateDbScope();
+        using (scope)
+        {
+            var seenIds = await db2.SeenTours.Where(s => s.UserDiscordId == id).Select(s => s.TourId).ToListAsync();
+            seenIds.Should().ContainSingle().Which.Should().Be("general");
+        }
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_SameTourTwice_IsIdempotent()
+    {
+        const string id = "200000000000000982";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var first = await client.PostAsync(TourSeenUrl, JsonContent.Create(new { tourId = "general" }));
+        var second = await client.PostAsync(TourSeenUrl, JsonContent.Create(new { tourId = "general" }));
+
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+        var (scope, db2) = CreateDbScope();
+        using (scope)
+        {
+            var count = await db2.SeenTours.CountAsync(s => s.UserDiscordId == id);
+            count.Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_BlankTourId_Returns400AndPersistsNothing()
+    {
+        const string id = "200000000000000983";
+        await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
+        var client = CreateAuthenticatedClient(discordId: id);
+
+        var response = await client.PostAsync(TourSeenUrl, JsonContent.Create(new { tourId = " " }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var (scope, db2) = CreateDbScope();
+        using (scope)
+        {
+            var count = await db2.SeenTours.CountAsync(s => s.UserDiscordId == id);
             count.Should().Be(0);
         }
     }

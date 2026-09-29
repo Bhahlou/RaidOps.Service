@@ -29,6 +29,7 @@ internal static class PersistenceRegistry
         services.AddScoped<IGuildAuditLogRepository, GuildAuditLogRepository>();
         services.AddScoped<INotificationDismissalRepository, NotificationDismissalRepository>();
         services.AddScoped<ISeenChangelogEntryRepository, SeenChangelogEntryRepository>();
+        services.AddScoped<ISeenTourRepository, SeenTourRepository>();
         services.AddScoped<IAvailabilityRepository, AvailabilityRepository>();
         services.AddScoped<IGuildNotificationSettingsRepository, GuildNotificationSettingsRepository>();
         services.AddScoped<IRaidZoneRepository, RaidZoneRepository>();
