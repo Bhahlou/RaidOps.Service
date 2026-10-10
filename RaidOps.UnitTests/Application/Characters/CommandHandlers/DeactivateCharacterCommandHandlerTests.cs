@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -23,7 +24,7 @@ public class DeactivateCharacterCommandHandlerTests
 
     public DeactivateCharacterCommandHandlerTests()
     {
-        _sut = new DeactivateCharacterCommandHandler(_characters.Object);
+        _sut = new DeactivateCharacterCommandHandler(_characters.Object, NullLogger<DeactivateCharacterCommandHandler>.Instance);
     }
 
     [Fact]

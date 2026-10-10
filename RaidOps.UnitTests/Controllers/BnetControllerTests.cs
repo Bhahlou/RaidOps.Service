@@ -52,46 +52,81 @@ public class BnetControllerTests
         act.Should().Throw<InvalidOperationException>().WithMessage("*CallbackUrl*");
     }
 
-    // ── GetAccount ────────────────────────────────────────────────────────────
+    // ── GetAccounts ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAccount_SubMissing_ReturnsUnauthorized()
+    public async Task GetAccounts_SubMissing_ReturnsUnauthorized()
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
-        (await _sut.GetAccount(default)).Should().BeOfType<UnauthorizedResult>();
+        (await _sut.GetAccounts(default)).Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
-    public async Task GetAccount_NotFound_ReturnsNotFound()
+    public async Task GetAccounts_QueryFails_ReturnsBadRequest()
     {
-        _queries.Setup(q => q.DispatchAsync<GetBnetAccountQuery, BnetAccountResponse>(
-                It.IsAny<GetBnetAccountQuery>(), default))
-            .ReturnsAsync(Result<BnetAccountResponse>.Fail(ResponseDetail.NotFound));
+        _queries.Setup(q => q.DispatchAsync<GetBnetAccountsQuery, List<BnetAccountResponse>>(
+                It.IsAny<GetBnetAccountsQuery>(), default))
+            .ReturnsAsync(Result<List<BnetAccountResponse>>.Fail("some-error"));
 
-        (await _sut.GetAccount(default)).Should().BeOfType<NotFoundResult>();
+        (await _sut.GetAccounts(default)).Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
-    public async Task GetAccount_OtherError_ReturnsBadRequest()
+    public async Task GetAccounts_NoneLinked_ReturnsOkWithEmptyList()
     {
-        _queries.Setup(q => q.DispatchAsync<GetBnetAccountQuery, BnetAccountResponse>(
-                It.IsAny<GetBnetAccountQuery>(), default))
-            .ReturnsAsync(Result<BnetAccountResponse>.Fail("some-error"));
+        _queries.Setup(q => q.DispatchAsync<GetBnetAccountsQuery, List<BnetAccountResponse>>(
+                It.IsAny<GetBnetAccountsQuery>(), default))
+            .ReturnsAsync(Result<List<BnetAccountResponse>>.Ok([]));
 
-        (await _sut.GetAccount(default)).Should().BeOfType<BadRequestObjectResult>();
+        var result = await _sut.GetAccounts(default);
+
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeEquivalentTo(new List<BnetAccountResponse>());
     }
 
     [Fact]
-    public async Task GetAccount_QuerySucceeds_ReturnsOkWithAccount()
+    public async Task GetAccounts_QuerySucceeds_ReturnsOkWithAccounts()
     {
-        var account = new BnetAccountResponse { BnetId = "42", BattleTag = "Player#1234", Region = "eu", TokenExpiry = DateTimeOffset.UtcNow.AddHours(1) };
-        _queries.Setup(q => q.DispatchAsync<GetBnetAccountQuery, BnetAccountResponse>(
-                It.IsAny<GetBnetAccountQuery>(), default))
-            .ReturnsAsync(Result<BnetAccountResponse>.Ok(account));
+        var accounts = new List<BnetAccountResponse>
+        {
+            new() { BnetId = "42", BattleTag = "Player#1234", Region = "eu", TokenExpiry = DateTimeOffset.UtcNow.AddHours(1) },
+        };
+        _queries.Setup(q => q.DispatchAsync<GetBnetAccountsQuery, List<BnetAccountResponse>>(
+                It.IsAny<GetBnetAccountsQuery>(), default))
+            .ReturnsAsync(Result<List<BnetAccountResponse>>.Ok(accounts));
 
-        var result = await _sut.GetAccount(default);
+        var result = await _sut.GetAccounts(default);
 
-        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(account);
+        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(accounts);
+    }
+
+    // ── Unlink ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Unlink_SubMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+        (await _sut.Unlink("bnet-1", default)).Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task Unlink_CommandFails_ReturnsBadRequest()
+    {
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<UnlinkBnetAccountCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail("some-error"));
+
+        (await _sut.Unlink("bnet-1", default)).Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Unlink_CommandSucceeds_ReturnsOk()
+    {
+        _commands.Setup(c => c.DispatchAsync(
+                It.Is<UnlinkBnetAccountCommand>(cmd => cmd.UserDiscordId == DiscordId && cmd.BnetId == "bnet-1"), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("unlinked")));
+
+        var result = await _sut.Unlink("bnet-1", default);
+
+        result.Should().BeOfType<OkObjectResult>();
     }
 
     // ── Initiate ──────────────────────────────────────────────────────────────

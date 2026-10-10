@@ -27,7 +27,7 @@ public class UserNotificationServiceTests
         return provider;
     }
 
-    private static NotificationResponse MakeNotification(string guildId, NotificationType type = NotificationType.OfficerThresholdNotConfigured)
+    private static NotificationResponse MakeNotification(string guildId, NotificationType type = NotificationType.BranchOfficerRolesNotConfigured)
         => new() { Type = type, GuildId = guildId, GuildName = $"Guild {guildId}" };
 
     public UserNotificationServiceTests()
@@ -75,7 +75,7 @@ public class UserNotificationServiceTests
         var dismissed = MakeNotification("g1");
         var kept = MakeNotification("g2");
         _dismissals.Setup(d => d.GetDismissedKeysAsync(DiscordId, default))
-            .ReturnsAsync([(NotificationType.OfficerThresholdNotConfigured, "g1")]);
+            .ReturnsAsync([(NotificationType.BranchOfficerRolesNotConfigured, "g1")]);
         var sut = MakeSut(MakeProvider(dismissed, kept).Object);
 
         var result = await sut.GetActiveNotificationsAsync(DiscordId, EligibleGuilds, default);
@@ -87,9 +87,9 @@ public class UserNotificationServiceTests
     public async Task GetActiveNotificationsAsync_DismissalMatchesOnTypeAndGuildTogether()
     {
         // Same GuildId but a different Type must not be filtered out by a dismissal for another type.
-        var notification = MakeNotification("g1", NotificationType.OfficerThresholdNotConfigured);
+        var notification = MakeNotification("g1", NotificationType.BranchOfficerRolesNotConfigured);
         _dismissals.Setup(d => d.GetDismissedKeysAsync(DiscordId, default))
-            .ReturnsAsync([(NotificationType.OfficerThresholdNotConfigured, "g2")]);
+            .ReturnsAsync([(NotificationType.BranchOfficerRolesNotConfigured, "g2")]);
         var sut = MakeSut(MakeProvider(notification).Object);
 
         var result = await sut.GetActiveNotificationsAsync(DiscordId, EligibleGuilds, default);

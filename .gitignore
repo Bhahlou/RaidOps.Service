@@ -6,6 +6,9 @@ obj/
 .vs/
 *.userprefs
 
+## Logs (Serilog file sink)
+logs/
+
 ## Tests / couverture
 TestResults/
 coverage-report/
@@ -17,9 +20,9 @@ coverage.xml
 
 ## Secrets / local config
 .env
-appsettings.Development.json
 appsettings.*.json
 !appsettings.json
+!appsettings.Acceptance.json
 
 ## JetBrains
 .idea/

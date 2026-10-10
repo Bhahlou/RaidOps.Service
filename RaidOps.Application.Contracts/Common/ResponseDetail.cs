@@ -42,4 +42,59 @@ public static class ResponseDetail
 
     // ── Branch ────────────────────────────────────────────────────────────
     public const string BranchNotFound = nameof(BranchNotFound);
+    public const string GuildBranchNotFound = nameof(GuildBranchNotFound);
+    public const string GuildBranchNotActive = nameof(GuildBranchNotActive);
+    public const string GuildBranchAlreadyActive = nameof(GuildBranchAlreadyActive);
+    public const string InvalidRegion = nameof(InvalidRegion);
+
+    // ── Calendar ──────────────────────────────────────────────────────────
+    public const string AvailabilityExceptionNotFound = nameof(AvailabilityExceptionNotFound);
+    public const string RecurringAvailabilityPatternNotFound = nameof(RecurringAvailabilityPatternNotFound);
+    public const string PastDeclarationLocked = nameof(PastDeclarationLocked);
+
+    // ── Raids ─────────────────────────────────────────────────────────────
+    public const string RaidZoneNotFound = nameof(RaidZoneNotFound);
+    public const string RaidSeriesNotFound = nameof(RaidSeriesNotFound);
+    public const string RaidEventNotFound = nameof(RaidEventNotFound);
+    public const string SlotOccupied = nameof(SlotOccupied);
+    public const string SlotEmpty = nameof(SlotEmpty);
+    public const string BothSlotsMustBeOccupiedToSwap = nameof(BothSlotsMustBeOccupiedToSwap);
+    public const string InvalidGroupOrSlotNumber = nameof(InvalidGroupOrSlotNumber);
+    public const string CharacterNotOnRoster = nameof(CharacterNotOnRoster);
+    public const string BranchMismatch = nameof(BranchMismatch);
+    public const string PlayerAlreadyAssignedInEvent = nameof(PlayerAlreadyAssignedInEvent);
+    public const string MemberDeclaredAbsent = nameof(MemberDeclaredAbsent);
+    public const string RaidLockoutConflict = nameof(RaidLockoutConflict);
+    public const string RaidEventAlreadyPublished = nameof(RaidEventAlreadyPublished);
+    public const string CharacterHasNoRaidSpec = nameof(CharacterHasNoRaidSpec);
+    public const string SpecNotAvailableForCharacter = nameof(SpecNotAvailableForCharacter);
+    public const string GridShrinkWouldOrphanAssignments = nameof(GridShrinkWouldOrphanAssignments);
+    public const string RaidEventNotPublished = nameof(RaidEventNotPublished);
+    public const string NoAnnouncementChannelConfigured = nameof(NoAnnouncementChannelConfigured);
+    public const string NoAssignmentsToNotify = nameof(NoAssignmentsToNotify);
+    public const string RaidGroupingRequesterHasNoCharacter = nameof(RaidGroupingRequesterHasNoCharacter);
+    public const string RaidGroupingCharacterNotFound = nameof(RaidGroupingCharacterNotFound);
+    public const string RaidEventNotInSignupMode = nameof(RaidEventNotInSignupMode);
+    public const string PlayerHasNotAcceptedSignup = nameof(PlayerHasNotAcceptedSignup);
+    public const string CharacterRequiredForSignup = nameof(CharacterRequiredForSignup);
+    public const string SpecRequiredForSignup = nameof(SpecRequiredForSignup);
+    public const string DiscordChannelCreationFailed = nameof(DiscordChannelCreationFailed);
+
+    // ── Raid attributions ─────────────────────────────────────────────────
+    public const string AttributionDefinitionNotFound = nameof(AttributionDefinitionNotFound);
+    public const string CharacterNotSeatedInEvent = nameof(CharacterNotSeatedInEvent);
+    public const string SpellNotFound = nameof(SpellNotFound);
+    public const string AttributionCellNotFound = nameof(AttributionCellNotFound);
+    public const string AttributionCellNotNameSlot = nameof(AttributionCellNotNameSlot);
+    public const string CharacterDoesNotMeetSlotRequirement = nameof(CharacterDoesNotMeetSlotRequirement);
+    public const string NoCellsInDefinition = nameof(NoCellsInDefinition);
+    public const string InvalidInstanceIndex = nameof(InvalidInstanceIndex);
+    public const string RaidBossNotFound = nameof(RaidBossNotFound);
+    public const string BossNotTargetedByEvent = nameof(BossNotTargetedByEvent);
+    public const string DefinitionBossMismatch = nameof(DefinitionBossMismatch);
+
+    // ── Raid composition previews ────────────────────────────────────────
+    public const string RaidCompositionPreviewNotFound = nameof(RaidCompositionPreviewNotFound);
+    public const string SpecClassMismatch = nameof(SpecClassMismatch);
+    public const string InvalidGroupCount = nameof(InvalidGroupCount);
 }

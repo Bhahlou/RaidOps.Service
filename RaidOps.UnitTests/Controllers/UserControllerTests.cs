@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using RaidOps.API.Controllers.v1;
+using RaidOps.Application.Contracts.Authentication.Commands;
 using RaidOps.Application.Contracts.Authentication.Queries;
 using RaidOps.Application.Contracts.Authentication.Responses;
 using RaidOps.Application.Contracts.Common;
@@ -11,6 +12,8 @@ namespace RaidOps.UnitTests.Controllers;
 
 public class UserControllerTests
 {
+    private static readonly string[] SingleEntryId = ["e1"];
+
     private readonly Mock<ICommandDispatcher> _commands = new();
     private readonly Mock<IQueryDispatcher>   _queries  = new();
     private readonly UserController           _sut;
@@ -53,6 +56,43 @@ public class UserControllerTests
             .ReturnsAsync(Result<UserResponse>.Fail(ResponseDetail.UserNotFound));
 
         var result = await _sut.GetMe(default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_SubClaimMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+
+        var result = await _sut.MarkChangelogSeen(new MarkChangelogSeenCommand { EntryIds = ["e1"] }, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_CommandSucceeds_ReturnsOk()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeContext("user-1");
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<MarkChangelogSeenCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("Changelog entries acknowledged.")));
+
+        var result = await _sut.MarkChangelogSeen(new MarkChangelogSeenCommand { EntryIds = ["e1"] }, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        _commands.Verify(c => c.DispatchAsync(
+            It.Is<MarkChangelogSeenCommand>(x => x.RequesterDiscordId == "user-1" && x.EntryIds.SequenceEqual(SingleEntryId)),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkChangelogSeen_CommandFails_ReturnsBadRequest()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeContext("user-1");
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<MarkChangelogSeenCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.UserNotFound));
+
+        var result = await _sut.MarkChangelogSeen(new MarkChangelogSeenCommand { EntryIds = ["e1"] }, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
@@ -31,7 +32,7 @@ public class RegisterGuildCommandHandlerTests
     public RegisterGuildCommandHandlerTests()
     {
         _bot.Setup(b => b.Guilds).Returns(_guildService.Object);
-        _sut = new RegisterGuildCommandHandler(_userGuilds.Object, _guilds.Object, _bot.Object, _auditLog.Object);
+        _sut = new RegisterGuildCommandHandler(_userGuilds.Object, _guilds.Object, _bot.Object, _auditLog.Object, NullLogger<RegisterGuildCommandHandler>.Instance);
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guildService.Setup(g => g.Get(GuildId, default))
+        _guildService.Setup(g => g.GetPreferredLocale(GuildId, default))
             .Throws<InvalidOperationException>();
 
         var result = await _sut.HandleAsync(Command);
@@ -79,7 +80,7 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guilds.Setup(g => g.RegisterAsync(GuildId, default)).ReturnsAsync((Guild?)null);
+        _guilds.Setup(g => g.RegisterAsync(GuildId, It.IsAny<string?>(), default)).ReturnsAsync((Guild?)null);
 
         var result = await _sut.HandleAsync(Command);
 
@@ -93,13 +94,31 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guilds.Setup(g => g.RegisterAsync(GuildId, default))
+        _guilds.Setup(g => g.RegisterAsync(GuildId, It.IsAny<string?>(), default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild", IconHash = "icon123" });
 
         var result = await _sut.HandleAsync(Command);
 
         result.IsSuccess.Should().BeTrue();
-        _guilds.Verify(g => g.RegisterAsync(GuildId, default), Times.Once);
+        _guilds.Verify(g => g.RegisterAsync(GuildId, It.IsAny<string?>(), default), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("fr", "fr")]
+    [InlineData("de-DE", "de")]
+    [InlineData("pt-BR", "en")]
+    [InlineData(null, "en")]
+    public async Task HandleAsync_Success_MapsDiscordPreferredLocaleToAppLanguage(string? discordLocale, string expectedLanguage)
+    {
+        _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
+            .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
+        _guildService.Setup(g => g.GetPreferredLocale(GuildId, default)).Returns(discordLocale);
+        _guilds.Setup(g => g.RegisterAsync(GuildId, It.IsAny<string?>(), default))
+            .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild" });
+
+        await _sut.HandleAsync(Command);
+
+        _guilds.Verify(g => g.RegisterAsync(GuildId, expectedLanguage, default), Times.Once);
     }
 
     [Fact]
@@ -108,7 +127,7 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guilds.Setup(g => g.RegisterAsync(GuildId, default))
+        _guilds.Setup(g => g.RegisterAsync(GuildId, It.IsAny<string?>(), default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild", IconHash = "icon123" });
 
         await _sut.HandleAsync(Command);
@@ -127,7 +146,7 @@ public class RegisterGuildCommandHandlerTests
         _userGuilds.Setup(r => r.GetByUserDiscordIdAsync(RequesterId, default))
             .ReturnsAsync([new UserGuild { GuildId = GuildId, UserDiscordId = RequesterId, IsAdmin = true }]);
 
-        _guilds.Setup(g => g.RegisterAsync(GuildId, default))
+        _guilds.Setup(g => g.RegisterAsync(GuildId, It.IsAny<string?>(), default))
             .ReturnsAsync(new Guild { Id = GuildId, Name = "Test Guild", IconHash = null });
 
         await _sut.HandleAsync(Command);

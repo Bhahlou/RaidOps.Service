@@ -26,7 +26,9 @@ public class GetBranchesQueryHandler(IBranchRepository branchRepository)
             Id = b.Id,
             Name = b.Name,
             BnetNamespacePrefix = b.BnetNamespacePrefix,
-            CurrentExpansionShortCode = b.CurrentExpansion.ShortCode
+            CurrentExpansionShortCode = b.CurrentExpansion.ShortCode,
+            IsActive = b.IsActive,
+            SyncAvailable = b.SyncAvailable
         });
 
         return Result<IEnumerable<BranchDto>>.Ok(dtos);

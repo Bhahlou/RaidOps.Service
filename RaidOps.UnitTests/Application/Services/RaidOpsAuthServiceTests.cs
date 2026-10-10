@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Authentication.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -22,7 +23,7 @@ public class RaidOpsAuthServiceTests
 
     public RaidOpsAuthServiceTests()
     {
-        _sut = new RaidOpsAuthService(_discordSync.Object, _jwt.Object);
+        _sut = new RaidOpsAuthService(_discordSync.Object, _jwt.Object, NullLogger<RaidOpsAuthService>.Instance);
 
         _jwt.Setup(j => j.GenerateAccessToken(It.IsAny<string>(), It.IsAny<string>()))
             .Returns((FakeAccessToken, DateTime.UtcNow.AddMinutes(15)));

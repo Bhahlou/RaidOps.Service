@@ -4,8 +4,12 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using NetCord;
 using NetCord.Gateway;
+using NetCord.Gateway.JsonModels.EventArgs;
 using NetCord.JsonModels;
 using NetCord.Rest;
+using NetCord.Rest.JsonModels;
+using NetCord.Services.ApplicationCommands;
+using NetCord.Services.ComponentInteractions;
 using Moq;
 
 namespace RaidOps.UnitTests.ExternalApplication.Bot;
@@ -102,16 +106,26 @@ internal static class NetCordTestHelpers
         ulong guildId,
         ulong ownerId,
         IReadOnlyDictionary<ulong, GuildUser> users,
-        JsonRole[]? roles = null)
+        JsonRole[]? roles = null,
+        IReadOnlyDictionary<ulong, IGuildChannel>? channels = null,
+        string? preferredLocale = null,
+        Permissions? permissions = null)
     {
         var jsonGuild = Uninitialized<JsonGuild>();
         SetField(jsonGuild, typeof(JsonGuild).BaseType!, "<Id>k__BackingField", guildId);
         SetField(jsonGuild, typeof(JsonGuild), "<OwnerId>k__BackingField", ownerId);
+        if (preferredLocale is not null)
+            SetField(jsonGuild, typeof(JsonGuild), "<PreferredLocale>k__BackingField", preferredLocale);
+        // NetCord's GetChannelPermissions(Guild) computes from this summary field (the acting
+        // user's own guild-level permission bit), not from per-role aggregation — a null value
+        // means "partial guild" and makes permission calculation throw.
+        SetField(jsonGuild, typeof(JsonGuild), "<Permissions>k__BackingField", permissions);
 
         var guild = Uninitialized<Guild>();
         // _jsonModel is declared on RestGuild (Guild base) — GetField searches up hierarchy
         SetField(guild, typeof(Guild), "_jsonModel", jsonGuild);
         SetField(guild, typeof(Guild), "<Users>k__BackingField", users);
+        SetField(guild, typeof(Guild), "<Channels>k__BackingField", channels ?? new Dictionary<ulong, IGuildChannel>());
 
         // <Roles>k__BackingField is on RestGuild — build IReadOnlyDictionary<ulong, Role>
         var rolesDict = (roles ?? [])
@@ -120,6 +134,58 @@ internal static class NetCordTestHelpers
         SetField(guild, typeof(Guild), "<Roles>k__BackingField", rolesDict);
 
         return guild;
+    }
+
+    /// <summary>Builds a minimal text channel with no permission overwrites — pair with an Administrator role on the acting member to bypass overwrite computation entirely.</summary>
+    internal static TextGuildChannel MakeTextChannel(ulong id, string name, ulong guildId, ulong? parentId = null)
+    {
+        var jsonChannelType = Type.GetType("NetCord.JsonModels.JsonChannel, NetCord")!;
+        var jc = RuntimeHelpers.GetUninitializedObject(jsonChannelType);
+        SetField(jc, jsonChannelType.BaseType!, "<Id>k__BackingField", id);
+        SetField(jc, jsonChannelType, "<Name>k__BackingField", name);
+        if (parentId.HasValue)
+            SetField(jc, jsonChannelType, "<ParentId>k__BackingField", (ulong?)parentId.Value);
+
+        var channel = Uninitialized<TextGuildChannel>();
+        SetField(channel, typeof(TextGuildChannel).BaseType!.BaseType!, "_jsonModel", jc);
+        SetField(channel, typeof(TextGuildChannel), "<GuildId>k__BackingField", guildId);
+        SetField(channel, typeof(TextGuildChannel), "<PermissionOverwrites>k__BackingField", new Dictionary<ulong, PermissionOverwrite>());
+
+        return channel;
+    }
+
+    /// <summary>
+    /// Builds a minimal category channel with no permission overwrites. Unlike <see cref="MakeTextChannel"/>,
+    /// <c>CategoryGuildChannel</c> inherits directly from <c>Channel</c> (one level, not two —
+    /// <c>TextGuildChannel</c> has the extra empty <c>TextChannel</c> rung in between), so
+    /// <c>_jsonModel</c> is set one level up rather than two.
+    /// </summary>
+    internal static CategoryGuildChannel MakeCategoryChannel(ulong id, string name, ulong guildId)
+    {
+        var jsonChannelType = Type.GetType("NetCord.JsonModels.JsonChannel, NetCord")!;
+        var jc = RuntimeHelpers.GetUninitializedObject(jsonChannelType);
+        SetField(jc, jsonChannelType.BaseType!, "<Id>k__BackingField", id);
+        SetField(jc, jsonChannelType, "<Name>k__BackingField", name);
+
+        var channel = Uninitialized<CategoryGuildChannel>();
+        SetField(channel, typeof(CategoryGuildChannel).BaseType!, "_jsonModel", jc);
+        SetField(channel, typeof(CategoryGuildChannel), "<GuildId>k__BackingField", guildId);
+        SetField(channel, typeof(CategoryGuildChannel), "<PermissionOverwrites>k__BackingField", new Dictionary<ulong, PermissionOverwrite>());
+
+        return channel;
+    }
+
+    // ── CurrentUser (bot's own user) ────────────────────────────────────────────
+
+    internal static CurrentUser MakeCurrentUser(ulong userId)
+    {
+        var jsonUserType = Type.GetType("NetCord.JsonModels.JsonUser, NetCord")!;
+        var ju = RuntimeHelpers.GetUninitializedObject(jsonUserType);
+        SetField(ju, jsonUserType.BaseType!, "<Id>k__BackingField", userId);
+
+        var user = Uninitialized<CurrentUser>();
+        SetField(user, typeof(CurrentUser).BaseType!, "_jsonModel", ju);
+        return user;
     }
 
     private static Role MakeRole(JsonRole jsonRole, ulong guildId)
@@ -146,7 +212,15 @@ internal static class NetCordTestHelpers
 
     // ── GuildUser ─────────────────────────────────────────────────────────────
 
-    internal static GuildUser MakeGuildUser(ulong userId, ulong guildId, ulong[] roleIds)
+    internal static GuildUser MakeGuildUser(
+        ulong userId,
+        ulong guildId,
+        ulong[] roleIds,
+        string? username = null,
+        string? nickname = null,
+        string? globalName = null,
+        string? avatarHash = null,
+        string? guildAvatarHash = null)
     {
         var jsonGuildUserType = Type.GetType("NetCord.JsonModels.JsonGuildUser, NetCord")!;
         var jsonUserType      = Type.GetType("NetCord.JsonModels.JsonUser, NetCord")!;
@@ -154,10 +228,20 @@ internal static class NetCordTestHelpers
         // JsonGuildUser: set RoleIds
         var jgu = RuntimeHelpers.GetUninitializedObject(jsonGuildUserType);
         SetField(jgu, jsonGuildUserType, "<RoleIds>k__BackingField", roleIds);
+        if (nickname is not null)
+            SetField(jgu, jsonGuildUserType, "<Nickname>k__BackingField", nickname);
+        if (guildAvatarHash is not null)
+            SetField(jgu, jsonGuildUserType, "<GuildAvatarHash>k__BackingField", guildAvatarHash);
 
         // JsonUser: set Id (via JsonEntity base)
         var ju = RuntimeHelpers.GetUninitializedObject(jsonUserType);
         SetField(ju, jsonUserType.BaseType!, "<Id>k__BackingField", userId);
+        if (username is not null)
+            SetField(ju, jsonUserType, "<Username>k__BackingField", username);
+        if (globalName is not null)
+            SetField(ju, jsonUserType, "<GlobalName>k__BackingField", globalName);
+        if (avatarHash is not null)
+            SetField(ju, jsonUserType, "<AvatarHash>k__BackingField", avatarHash);
 
         // GuildUser: set both _jsonModel fields and guildId
         var user   = Uninitialized<GuildUser>();
@@ -173,6 +257,27 @@ internal static class NetCordTestHelpers
             .SetValue(user, ju);
 
         return user;
+    }
+
+    // ── GuildUserRemoveEventArgs ────────────────────────────────────────────────
+
+    internal static GuildUserRemoveEventArgs MakeGuildUserRemoveEventArgs(ulong guildId, ulong userId)
+    {
+        var jsonArgs = Uninitialized<JsonGuildUserRemoveEventArgs>();
+        SetField(jsonArgs, typeof(JsonGuildUserRemoveEventArgs), "<GuildId>k__BackingField", guildId);
+
+        var jsonUserType = Type.GetType("NetCord.JsonModels.JsonUser, NetCord")!;
+        var ju = RuntimeHelpers.GetUninitializedObject(jsonUserType);
+        SetField(ju, jsonUserType.BaseType!, "<Id>k__BackingField", userId);
+
+        var user = Uninitialized<User>();
+        SetField(user, typeof(User), "_jsonModel", ju);
+
+        var args = Uninitialized<GuildUserRemoveEventArgs>();
+        SetField(args, typeof(GuildUserRemoveEventArgs), "<jsonModel>P", jsonArgs);
+        SetField(args, typeof(GuildUserRemoveEventArgs), "<User>k__BackingField", user);
+
+        return args;
     }
 
     // ── Role ──────────────────────────────────────────────────────────────────
@@ -211,12 +316,164 @@ internal static class NetCordTestHelpers
         return cache;
     }
 
+    /// <summary>Same as <see cref="CacheWith"/>, but also stubs <c>Cache.User</c> with the bot's own current user — required by <c>GuildService.GetChannels</c>.</summary>
+    internal static Mock<IGatewayClientCache> CacheWith(CurrentUser botUser, params (ulong id, Guild guild)[] guilds)
+    {
+        var cache = CacheWith(guilds);
+        cache.Setup(c => c.User).Returns(botUser);
+        return cache;
+    }
+
     internal static Mock<IGatewayClientCache> EmptyCache()
     {
         var cache = new Mock<IGatewayClientCache>();
         cache.Setup(c => c.Guilds)
              .Returns(new Dictionary<ulong, Guild>());
         return cache;
+    }
+
+    // ── Slash command / autocomplete interaction contexts ───────────────────────
+
+    /// <summary>
+    /// Builds a real <see cref="ApplicationCommandContext"/> backed by a real
+    /// <see cref="SlashCommandInteraction"/> — unlike the sealed gateway-cache types above, these
+    /// NetCord types have public constructors and fully public settable JSON models, so no
+    /// reflection is needed to build the object graph itself. <paramref name="guild"/> is passed
+    /// straight to the interaction's constructor exactly as NetCord's own gateway dispatch would:
+    /// <c>null</c> for a DM-context interaction, exercising the same <c>Context.Guild is null</c>
+    /// path a real DM invocation would hit.
+    /// </summary>
+    /// <summary>
+    /// Base <see cref="JsonInteraction"/> with every collection <see cref="NetCord.Interaction"/>'s
+    /// ctor unconditionally <c>.Select()</c>s/dereferences pre-populated to a non-null (if empty)
+    /// value — <c>Channel</c>, <c>Entitlements</c>, <c>Data</c> (whose own <c>Options</c> array is
+    /// itself read the same unconditional way one level down). Every field left unset here defaults
+    /// safely to <c>null</c>/empty on its own.
+    /// </summary>
+    private static JsonInteraction MakeBaseJsonInteraction() => new()
+    {
+        ApplicationId = 1,
+        Token = "token",
+        User = new JsonUser { Id = 1 },
+        Channel = new JsonChannel { Id = 1, Type = ChannelType.TextGuildChannel, PermissionOverwrites = [] },
+        Entitlements = [],
+        Data = new JsonInteractionData { Id = 1, Name = "raid", Options = [] },
+    };
+
+    internal static ApplicationCommandContext MakeSlashCommandContext(ulong userId, Guild? guild, RestClient rest)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+        jsonInteraction.User = new JsonUser { Id = userId };
+
+        var interaction = new SlashCommandInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new ApplicationCommandContext(interaction, gatewayClient);
+    }
+
+    /// <summary>Same shape as <see cref="MakeSlashCommandContext"/>, for <see cref="AutocompleteInteractionContext"/>.</summary>
+    internal static AutocompleteInteractionContext MakeAutocompleteContext(Guild? guild, RestClient rest)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+
+        var interaction = new AutocompleteInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new AutocompleteInteractionContext(interaction, gatewayClient);
+    }
+
+    /// <summary>
+    /// Minimal <see cref="JsonMessage"/> for the message a component interaction is attached to —
+    /// <c>MessageComponentInteraction</c>'s ctor (unlike <c>SlashCommandInteraction</c>'s) unconditionally
+    /// reads it to build its own <c>Message</c>, and dereferences several of its array properties the
+    /// same unconditional way <see cref="MakeBaseJsonInteraction"/>'s doc already describes.
+    /// </summary>
+    private static JsonMessage MakeBaseJsonMessage() => new()
+    {
+        Id = 1,
+        ChannelId = 1,
+        Author = new JsonUser { Id = 1 },
+        Content = "",
+        MentionedUsers = [],
+        MentionedRoleIds = [],
+        MentionedChannels = [],
+        Attachments = [],
+        Embeds = [],
+        Reactions = [],
+        Components = [],
+        Stickers = [],
+        MessageSnapshots = [],
+    };
+
+    /// <summary>Same shape as <see cref="MakeSlashCommandContext"/>, for a button click's <see cref="ButtonInteractionContext"/>.</summary>
+    internal static ButtonInteractionContext MakeButtonInteractionContext(ulong userId, Guild? guild, RestClient rest)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+        jsonInteraction.User = new JsonUser { Id = userId };
+        jsonInteraction.Message = MakeBaseJsonMessage();
+
+        var interaction = new ButtonInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new ButtonInteractionContext(interaction, gatewayClient);
+    }
+
+    /// <summary>Same shape as <see cref="MakeSlashCommandContext"/>, for a select menu's <see cref="StringMenuInteractionContext"/> — <paramref name="selectedValues"/> becomes <c>Context.SelectedValues</c>.</summary>
+    internal static StringMenuInteractionContext MakeStringMenuInteractionContext(ulong userId, Guild? guild, RestClient rest, params string[] selectedValues)
+    {
+        var jsonInteraction = MakeBaseJsonInteraction();
+        jsonInteraction.User = new JsonUser { Id = userId };
+        jsonInteraction.Message = MakeBaseJsonMessage();
+        jsonInteraction.Data = new JsonInteractionData { Id = 1, SelectedValues = selectedValues };
+
+        var interaction = new StringMenuInteraction(jsonInteraction, guild!, MakeSendResponseDelegate(rest), rest);
+        var gatewayClient = MakeGatewayClient(EmptyCache().Object, rest);
+        return new StringMenuInteractionContext(interaction, gatewayClient);
+    }
+
+    /// <summary>
+    /// <see cref="MessageOptions"/> (the type <c>ModifyResponseAsync(Action&lt;MessageOptions&gt;)</c>
+    /// mutates) has no accessible constructor from outside NetCord — same reflection workaround as
+    /// every other constructor-less type in this file. Its <c>With*</c> methods only ever write their
+    /// own backing fields, so a skipped constructor is safe here.
+    /// </summary>
+    internal static MessageOptions MakeMessageOptions() => Uninitialized<MessageOptions>();
+
+    /// <summary>
+    /// The delegate an <see cref="NetCord.Interaction"/> uses for its very first response
+    /// (<c>RespondAsync</c>) — unlike every later call (<c>ModifyResponseAsync</c>, follow-ups),
+    /// which goes through the injected <see cref="RestClient"/>'s faked <c>IRestRequestHandler</c>
+    /// seam, this initial one is a plain delegate NetCord's real dispatch machinery supplies
+    /// itself. The returned response is never inspected by any of this repo's command modules
+    /// (they only ever <c>await</c> it), so a minimal non-null instance is enough.
+    /// </summary>
+    private static Func<IInteraction, InteractionCallbackProperties, bool, RestRequestProperties?, CancellationToken, Task<InteractionCallbackResponse?>> MakeSendResponseDelegate(RestClient rest) =>
+        (_, _, _, _, _) => Task.FromResult<InteractionCallbackResponse?>(new InteractionCallbackResponse(
+            new JsonInteractionCallbackResponse
+            {
+                Interaction = new JsonInteractionCallbackResponseInteraction(),
+                Resource = new JsonInteractionCallbackResponseResource(),
+            },
+            rest));
+
+    /// <summary>
+    /// Sets a <c>NetCord.Services.ApplicationCommands.ApplicationCommandModule{T}</c> (or
+    /// autocomplete provider context field)'s backing <c>_context</c> field directly. NetCord sets
+    /// this via an explicit interface implementation of the internal <c>IBaseModule&lt;T&gt;.SetContext</c>
+    /// — inaccessible from this assembly since the interface itself isn't public — so this bypasses
+    /// it the same way the rest of this class bypasses other constructor-less NetCord types.
+    /// </summary>
+    internal static void SetModuleContext(object module, object context)
+    {
+        var t = module.GetType();
+        while (t is not null && t != typeof(object))
+        {
+            var field = t.GetField("_context", Private);
+            if (field is not null)
+            {
+                field.SetValue(module, context);
+                return;
+            }
+            t = t.BaseType;
+        }
+        throw new InvalidOperationException($"'_context' field not found in the type hierarchy of {module.GetType()}");
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

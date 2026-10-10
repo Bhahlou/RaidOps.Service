@@ -1,0 +1,25 @@
+{
+  "commands": {
+    "raid": {
+      "name": "raid",
+      "description": "Raid-Befehle nur für Offiziere",
+      "subcommands": {
+        "invite": {
+          "name": "einladen",
+          "description": "Ping die zugewiesenen Spieler, um jetzt Gruppen zu bilden",
+          "parameters": {
+            "raid": {
+              "name": "raid",
+              "description": "Für welchen Raid gruppiert werden soll"
+            },
+            "character": {
+              "name": "charakter",
+              "description": "Charakter, auf den gruppiert werden soll (standardmäßig deiner in diesem Raid)"
+            }
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}

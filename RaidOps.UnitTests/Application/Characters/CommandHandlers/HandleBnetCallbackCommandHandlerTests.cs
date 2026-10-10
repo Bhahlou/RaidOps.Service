@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -47,7 +48,7 @@ public class HandleBnetCallbackCommandHandlerTests
 
     public HandleBnetCallbackCommandHandlerTests()
     {
-        _sut = new HandleBnetCallbackCommandHandler(_jwt.Object, _bnetApi.Object, _bnetAccounts.Object);
+        _sut = new HandleBnetCallbackCommandHandler(_jwt.Object, _bnetApi.Object, _bnetAccounts.Object, NullLogger<HandleBnetCallbackCommandHandler>.Instance);
     }
 
     // ── Guard clauses ────────────────────────────────────────────────────────

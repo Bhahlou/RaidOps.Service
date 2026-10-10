@@ -14,7 +14,7 @@ public class NotificationsControllerTests(RaidOpsWebApplicationFactory factory)
     [Fact]
     public async Task Dismiss_WithoutToken_Returns401()
     {
-        var body = JsonContent.Create(new { type = "OfficerThresholdNotConfigured", guildId = "910000000000000020" });
+        var body = JsonContent.Create(new { type = "BranchOfficerRolesNotConfigured", guildId = "910000000000000020" });
 
         var response = await Client.PostAsync("/api/v1/notifications/dismiss", body);
 
@@ -25,7 +25,7 @@ public class NotificationsControllerTests(RaidOpsWebApplicationFactory factory)
     public async Task Dismiss_TokenWithoutSubClaim_Returns401()
     {
         var client = CreateClientWithoutSubClaim();
-        var body = JsonContent.Create(new { type = "OfficerThresholdNotConfigured", guildId = "910000000000000020" });
+        var body = JsonContent.Create(new { type = "BranchOfficerRolesNotConfigured", guildId = "910000000000000020" });
 
         var response = await client.PostAsync("/api/v1/notifications/dismiss", body);
 
@@ -39,7 +39,7 @@ public class NotificationsControllerTests(RaidOpsWebApplicationFactory factory)
         const string guildId = "910000000000000020";
         await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { type = "OfficerThresholdNotConfigured", guildId });
+        var body = JsonContent.Create(new { type = "BranchOfficerRolesNotConfigured", guildId });
 
         var response = await client.PostAsync("/api/v1/notifications/dismiss", body);
 
@@ -48,7 +48,7 @@ public class NotificationsControllerTests(RaidOpsWebApplicationFactory factory)
         using (scope)
         {
             var dismissal = await db.NotificationDismissals.FirstOrDefaultAsync(d =>
-                d.UserDiscordId == id && d.Type == NotificationType.OfficerThresholdNotConfigured && d.GuildId == guildId);
+                d.UserDiscordId == id && d.Type == NotificationType.BranchOfficerRolesNotConfigured && d.GuildId == guildId);
             dismissal.Should().NotBeNull();
         }
     }
@@ -60,7 +60,7 @@ public class NotificationsControllerTests(RaidOpsWebApplicationFactory factory)
         const string guildId = "910000000000000021";
         await SeedAsync(db => { db.Users.Add(TestDataBuilder.CreateUser(id)); return Task.CompletedTask; });
         var client = CreateAuthenticatedClient(discordId: id);
-        var body = JsonContent.Create(new { type = "OfficerThresholdNotConfigured", guildId });
+        var body = JsonContent.Create(new { type = "BranchOfficerRolesNotConfigured", guildId });
 
         var first = await client.PostAsync("/api/v1/notifications/dismiss", body);
         var second = await client.PostAsync("/api/v1/notifications/dismiss", body);

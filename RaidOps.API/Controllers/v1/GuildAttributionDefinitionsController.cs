@@ -1,0 +1,135 @@
+using Asp.Versioning;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using RaidOps.Application.Contracts.CQRS;
+using RaidOps.Application.Contracts.Raids.Attributions.Commands;
+using RaidOps.Application.Contracts.Raids.Attributions.Queries;
+using RaidOps.Application.Contracts.Raids.Attributions.Responses;
+using RaidOps.Application.Contracts.Raids.Bosses.Queries;
+using RaidOps.Application.Contracts.Raids.Bosses.Responses;
+using System.IdentityModel.Tokens.Jwt;
+
+namespace RaidOps.API.Controllers.v1;
+
+/// <summary>
+/// Manages a guild branch's raid-attribution template (buffs, curses, tank/heal swaps, …). Every template is scoped to one guild branch — a guild running
+/// several branches keeps one template per branch. Officer-only — see each handler's access check.
+/// </summary>
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/guilds")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+public class GuildAttributionDefinitionsController(
+    ICommandDispatcher commandDispatcher,
+    IQueryDispatcher queryDispatcher) : ApiControllerBase(commandDispatcher, queryDispatcher)
+{
+    /// <summary>Returns a guild branch's raid-attribution template for one scope ("General", or one specific boss), ordered for display.</summary>
+    [HttpGet("{guildId}/branches/{guildBranchId:int}/attribution-definitions")]
+    public async Task<IActionResult> GetDefinitions(string guildId, int guildBranchId, [FromQuery] int? raidBossId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetGuildAttributionDefinitionsQuery, List<GuildAttributionDefinitionResponse>>(
+            new GetGuildAttributionDefinitionsQuery { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, RaidBossId = raidBossId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>Returns every boss of one raid zone — backs the template editor's boss picker once a raid is chosen.</summary>
+    [HttpGet("{guildId}/raid-zones/{raidZoneId:int}/bosses")]
+    public async Task<IActionResult> GetBossesForZone(string guildId, int raidZoneId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await QueryDispatcher.DispatchAsync<GetRaidBossesForZoneQuery, List<RaidBossResponse>>(
+            new GetRaidBossesForZoneQuery { GuildId = guildId, RequesterDiscordId = discordId, RaidZoneId = raidZoneId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>Adds a new row to a guild branch's raid-attribution template.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/attribution-definitions")]
+    public async Task<IActionResult> CreateDefinition(string guildId, int guildBranchId, [FromBody] CreateGuildAttributionDefinitionCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Updates an existing row of a guild branch's raid-attribution template.</summary>
+    [HttpPatch("{guildId}/branches/{guildBranchId:int}/attribution-definitions/{definitionId:int}")]
+    public async Task<IActionResult> UpdateDefinition(string guildId, int guildBranchId, int definitionId, [FromBody] UpdateGuildAttributionDefinitionCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+        command.DefinitionId = definitionId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Permanently deletes a row of a guild branch's raid-attribution template.</summary>
+    [HttpDelete("{guildId}/branches/{guildBranchId:int}/attribution-definitions/{definitionId:int}")]
+    public async Task<IActionResult> DeleteDefinition(string guildId, int guildBranchId, int definitionId, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        var result = await CommandDispatcher.DispatchAsync(
+            new DeleteGuildAttributionDefinitionCommand { GuildId = guildId, GuildBranchId = guildBranchId, RequesterDiscordId = discordId, DefinitionId = definitionId },
+            cancellationToken);
+
+        return ToActionResult(result);
+    }
+
+    /// <summary>Re-numbers a guild branch's template rows to match the given order.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/attribution-definitions/reorder")]
+    public async Task<IActionResult> ReorderDefinitions(string guildId, int guildBranchId, [FromBody] ReorderGuildAttributionDefinitionsCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+
+    /// <summary>Sets the section-header icon shown above every row sharing one (scope, section) tuple.</summary>
+    [HttpPost("{guildId}/branches/{guildBranchId:int}/attribution-definitions/sections/icon")]
+    public async Task<IActionResult> SetSectionIcon(string guildId, int guildBranchId, [FromBody] SetAttributionSectionIconCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.GuildId = guildId;
+        command.GuildBranchId = guildBranchId;
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
+}

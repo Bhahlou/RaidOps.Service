@@ -1,23 +1,22 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Settings.Commands;
 using RaidOps.Application.Contracts.Services;
-using RaidOps.Application.Implementations.Guilds.Settings.Helpers;
 using RaidOps.Domain.Enums;
-using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
 namespace RaidOps.Application.Implementations.Guilds.Settings.CommandHandlers;
 
 /// <summary>
 /// Handles <see cref="UpdateGuildSettingsCommand"/> by verifying admin rights,
-/// confirming the guild is registered, then persisting the settings.
+/// confirming the guild is registered, then persisting the guild-level identity settings.
 /// </summary>
 public class UpdateGuildSettingsCommandHandler(
     IGuildAccessService guildAccessService,
     IGuildsRepository guildsRepository,
-    IDiscordBotService discordBotService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
+    IAuditLogService auditLogService,
+    ILogger<UpdateGuildSettingsCommandHandler> logger) : ICommandHandlerAsync<UpdateGuildSettingsCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateGuildSettingsCommand command, CancellationToken cancellationToken = default)
@@ -35,25 +34,19 @@ public class UpdateGuildSettingsCommandHandler(
 
         // Captured before UpdateSettingsAsync: it mutates this same tracked entity in place.
         var oldTimezone = guild.Timezone;
-        var oldRosterMode = guild.RosterMode;
-        var oldMinRosterRoleId = guild.MinRosterRoleId;
+        var oldLanguage = guild.Language;
 
         await guildsRepository.UpdateSettingsAsync(
             command.GuildId,
             command.Timezone,
-            command.RosterMode,
-            command.MinRosterRoleId,
+            command.Language,
             cancellationToken);
-
-        // Mirrors GuildsRepository.UpdateSettingsAsync, which clears the role unless DiscordRoleOnly.
-        var newMinRosterRoleId = command.RosterMode == RosterMode.DiscordRoleOnly ? command.MinRosterRoleId : null;
 
         var variables = new Dictionary<string, string>();
         var changedFields = new List<string>();
 
         RecordChange(variables, changedFields, "timezone", "Timezone", oldTimezone, command.Timezone);
-        RecordChange(variables, changedFields, "rosterMode", "RosterMode", oldRosterMode, command.RosterMode);
-        RecordMinRosterRoleChange(variables, changedFields, command.GuildId, command.RosterMode, oldMinRosterRoleId, newMinRosterRoleId, cancellationToken);
+        RecordChange(variables, changedFields, "language", "Language", oldLanguage, command.Language);
 
         if (changedFields.Count > 0)
         {
@@ -64,6 +57,13 @@ public class UpdateGuildSettingsCommandHandler(
                 GuildAuditAction.SettingsUpdated,
                 variables,
                 cancellationToken);
+        }
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Guild {GuildId} settings updated by discord user {DiscordId}: fields [{ChangedFields}]",
+                command.GuildId, command.RequesterDiscordId, string.Join(", ", changedFields));
         }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Guild settings updated successfully."));
@@ -90,30 +90,5 @@ public class UpdateGuildSettingsCommandHandler(
         if (oldValue is not null)
             variables[$"old{variableSuffix}"] = oldValue.ToString()!;
         variables[$"new{variableSuffix}"] = newValue!.ToString()!;
-    }
-
-    /// <summary>
-    /// Records a minimum-roster-role change, resolving the old/new role display info.
-    /// Only meaningful when the role threshold still applies in the new state — switching to
-    /// Open makes any prior role threshold moot, so there's nothing worth logging about it.
-    /// </summary>
-    private void RecordMinRosterRoleChange(
-        Dictionary<string, string> variables,
-        List<string> changedFields,
-        string guildId,
-        RosterMode newRosterMode,
-        string? oldMinRosterRoleId,
-        string? newMinRosterRoleId,
-        CancellationToken cancellationToken)
-    {
-        if (newRosterMode != RosterMode.DiscordRoleOnly || oldMinRosterRoleId == newMinRosterRoleId)
-            return;
-
-        changedFields.Add("minRosterRoleId");
-        var roles = RoleChangeAuditHelper.TryGetRoles(discordBotService, guildId, cancellationToken);
-        if (oldMinRosterRoleId != null)
-            RoleChangeAuditHelper.AddRoleVariables(variables, "old", "MinRosterRole", roles, oldMinRosterRoleId);
-        if (newMinRosterRoleId != null)
-            RoleChangeAuditHelper.AddRoleVariables(variables, "new", "MinRosterRole", roles, newMinRosterRoleId);
     }
 }

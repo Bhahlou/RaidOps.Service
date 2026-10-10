@@ -4,12 +4,24 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using NetCord.Hosting.Services.ApplicationCommands;
+using NetCord.Hosting.Services.ComponentInteractions;
+using NetCord.Services.ComponentInteractions;
+using RaidOps.API.BackgroundServices;
+using RaidOps.API.Hubs;
 using RaidOps.Application.Contracts.Configuration;
+using RaidOps.Application.Contracts.Services;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
+using RaidOps.ExternalApplication.Implementations.Bot.Commands;
+using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 using RaidOps.Infrastructure.Persistence.Implementations;
 using RaidOps.Registry;
+using Serilog;
+using Serilog.Enrichers.ShortTypeName;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -21,7 +33,34 @@ namespace RaidOps.API
     {
         private static async Task Main(string[] args)
         {
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.Console()
+                .CreateBootstrapLogger();
+
+            try
+            {
+                await RunAsync(args);
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "RaidOps.API terminated unexpectedly");
+                Environment.ExitCode = 1;
+            }
+            finally
+            {
+                await Log.CloseAndFlushAsync();
+            }
+        }
+
+        private static async Task RunAsync(string[] args)
+        {
             var builder = WebApplication.CreateBuilder(args);
+
+            builder.Host.UseSerilog((context, services, configuration) => configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext()
+                .Enrich.WithShortTypeName());
 
             var frontendUrl = builder.Configuration["FrontendUrl"] ?? string.Empty;
 
@@ -56,6 +95,7 @@ namespace RaidOps.API
 
             builder.Services.AddControllers()
                 .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+            builder.Services.Configure<ApiBehaviorOptions>(options => options.SuppressMapClientErrors = true);
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
             builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
@@ -125,24 +165,52 @@ namespace RaidOps.API
                         {
                             context.Token = context.Request.Cookies["access_token"];
                             return Task.CompletedTask;
+                        },
+                        // All RaidOps-issued JWTs (access, refresh, OAuth state tokens) share the
+                        // same signing key/issuer/audience, so without this check a leaked refresh
+                        // or state token could be replayed as an access token via the cookie above.
+                        OnTokenValidated = context =>
+                        {
+                            var type = context.Principal?.FindFirst("typ")?.Value;
+                            if (type != "access")
+                            {
+                                context.Fail("Token is not an access token.");
+                            }
+                            return Task.CompletedTask;
                         }
                     };
                 });
 
             builder.Services.AddAuthorization();
 
+            builder.Services.AddSignalR();
+            builder.Services.AddSingleton<IUserIdProvider, JwtSubUserIdProvider>();
+            builder.Services.AddSingleton<IAuthNotifier, AuthNotifier>();
+            builder.Services.AddSingleton<IRaidSignupNotifier, RaidSignupNotifier>();
+            builder.Services.AddHostedService<SpellSyncBackgroundService>();
+
             builder.Services.AddRaidOps(builder.Configuration);
 
             var app = builder.Build();
+
+            app.AddApplicationCommandModule<RaidCommandModule>();
+            app.AddComponentInteractionModule<ButtonInteractionContext, RaidSignupInteractionModule>();
+            app.AddComponentInteractionModule<StringMenuInteractionContext, RaidSignupPickerModule>();
 
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
             });
 
+            app.UseSerilogRequestLogging();
+
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<RaidOpsDbContext>();
+
+                // Data-heavy migrations (e.g. backfilling the ~570k-row SpellAvailabilities table) blow
+                // through Npgsql's default 30s command timeout — give startup migrations room to finish.
+                db.Database.SetCommandTimeout(TimeSpan.FromMinutes(15));
                 await db.Database.MigrateAsync();
             }
 
@@ -171,6 +239,8 @@ namespace RaidOps.API
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
+            app.MapHub<AuthHub>("/hubs/auth");
+            app.MapHub<RaidSignupHub>("/hubs/raid-signup");
 
             await app.RunAsync();
         }

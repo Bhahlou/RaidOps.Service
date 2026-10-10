@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using RaidOps.API.Controllers.v1;
+using RaidOps.Application.Contracts.Characters.Responses;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Roster.Queries;
@@ -16,8 +17,9 @@ public class GuildRosterControllerTests
     private readonly Mock<IQueryDispatcher>   _queries  = new();
     private readonly GuildRosterController    _sut;
 
-    private const string DiscordId = "user-1";
-    private const string GuildId   = "guild-1";
+    private const string DiscordId     = "user-1";
+    private const string GuildId       = "guild-1";
+    private const int    GuildBranchId = 1;
 
     public GuildRosterControllerTests()
     {
@@ -34,7 +36,7 @@ public class GuildRosterControllerTests
     {
         _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
 
-        var result = await _sut.GetRoster(GuildId, default);
+        var result = await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
@@ -46,7 +48,7 @@ public class GuildRosterControllerTests
                 It.IsAny<GetGuildRosterQuery>(), default))
             .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Fail(ResponseDetail.RosterAccessDenied));
 
-        var result = await _sut.GetRoster(GuildId, default);
+        var result = await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
@@ -58,17 +60,26 @@ public class GuildRosterControllerTests
         {
             new()
             {
-                CharacterId = 1, CharacterName = "Arthas", ClassId = 6, ClassName = "Death Knight",
-                ClassColor = "#C41F3B", Level = 80, BranchName = "Classic Anniversary", RealmSlug = "kazzak",
-                PlayerDiscordId = DiscordId, RaidSpecs = [], CharacterRank = CharacterRank.Main,
-                JoinedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                CharacterId = 1,
+                CharacterName = "Arthas",
+                ClassId = 6,
+                ClassName = "Death Knight",
+                ClassColor = "#C41F3B",
+                Level = 80,
+                BranchName = "Classic Anniversary",
+                RealmSlug = "kazzak",
+                PlayerDiscordId = DiscordId,
+                RaidSpecs = [],
+                CharacterRank = CharacterRank.Main,
+                JoinedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), 
+                CanExclude = true
             },
         };
         _queries.Setup(q => q.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
                 It.IsAny<GetGuildRosterQuery>(), default))
             .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok(response));
 
-        var result = await _sut.GetRoster(GuildId, default);
+        var result = await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         result.Should().BeOfType<OkObjectResult>().Which.Value.Should().Be(response);
     }
@@ -78,9 +89,9 @@ public class GuildRosterControllerTests
     {
         _queries.Setup(q => q.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
                 It.IsAny<GetGuildRosterQuery>(), default))
-            .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok([]));
+            .ReturnsAsync(Result<List<GuildRosterMemberResponse>>.Ok([])); // remplacer [] par new List<...>()
 
-        await _sut.GetRoster(GuildId, default);
+        await _sut.GetRoster(GuildId, GuildBranchId, default);
 
         _queries.Verify(q => q.DispatchAsync<GetGuildRosterQuery, List<GuildRosterMemberResponse>>(
             It.Is<GetGuildRosterQuery>(x => x.GuildId == GuildId && x.RequesterDiscordId == DiscordId),

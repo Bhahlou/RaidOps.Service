@@ -22,6 +22,14 @@ public class UserGuild
     /// </summary>
     public bool IsAdmin { get; set; }
 
+    /// <summary>
+    /// Whether the user is the actual owner of this Discord server, as reported by Discord's
+    /// <c>owner</c> flag. Tracked separately from <see cref="IsAdmin"/> (which also becomes
+    /// <c>true</c> for any Administrator, owner or not) so nobody — not even another admin —
+    /// can ever outrank the real owner in <c>IGuildAccessService.OutranksAsync</c>.
+    /// </summary>
+    public bool IsOwner { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The user side of the membership.</summary>

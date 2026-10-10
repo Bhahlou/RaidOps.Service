@@ -19,6 +19,13 @@ public class AuditLogEntryResponse
     /// <summary>Discord avatar hash of the actor, or <c>null</c> if it could not be resolved.</summary>
     public string? ActorAvatarHash { get; set; }
 
+    /// <summary>
+    /// The actor's server-specific avatar URL (Discord's per-guild avatar override), or
+    /// <c>null</c> if they have none set for this guild. Falls back to <see cref="ActorAvatarHash"/>
+    /// when absent.
+    /// </summary>
+    public string? ActorGuildAvatarUrl { get; set; }
+
     /// <summary>Type of the action that was performed.</summary>
     public required GuildAuditAction ActionType { get; set; }
 

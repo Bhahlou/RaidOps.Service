@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Services;
@@ -15,7 +16,6 @@ namespace RaidOps.UnitTests.Application.Characters.CommandHandlers;
 public class ActivateCharactersCommandHandlerTests
 {
     private readonly Mock<ICharacterRepository>  _characters   = new();
-    private readonly Mock<IBnetAccountRepository> _bnetAccounts = new();
     private readonly Mock<IBnetApiService>        _bnetApi      = new();
     private readonly Mock<ISpecResolverService>   _specResolver = new();
     private readonly ActivateCharactersCommandHandler _sut;
@@ -29,22 +29,13 @@ public class ActivateCharactersCommandHandlerTests
         CharacterIds  = [CharacterId],
     };
 
-    private static readonly BattleNetAccount Account = new()
-    {
-        UserDiscordId = DiscordId,
-        BnetId        = "bnet-1",
-        AccessToken   = "tok",
-        Region        = "eu",
-        BattleTag     = "Player#1234",
-    };
-
     public ActivateCharactersCommandHandlerTests()
     {
         _sut = new ActivateCharactersCommandHandler(
             _characters.Object,
-            _bnetAccounts.Object,
             _bnetApi.Object,
-            _specResolver.Object);
+            _specResolver.Object,
+            NullLogger<ActivateCharactersCommandHandler>.Instance);
 
         _specResolver.Setup(s => s.ResolveAsync(
                 It.IsAny<BnetCharacterSpecializationsResponse>(),
@@ -60,12 +51,11 @@ public class ActivateCharactersCommandHandlerTests
             .ReturnsAsync("app-token");
     }
 
-    // ── No BNet account ───────────────────────────────────────────────────────
+    // ── App token fetch fails ────────────────────────────────────────────────
 
     [Fact]
     public async Task HandleAsync_AppTokenFetchFails_ActivatesWithoutEnrichment()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
         _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
             .ReturnsAsync([MakeCharacter()]);
         _bnetApi.Setup(b => b.GetAppTokenAsync(It.IsAny<string>(), default))
@@ -79,19 +69,56 @@ public class ActivateCharactersCommandHandlerTests
         _characters.Verify(r => r.ActivateAsync(Command.CharacterIds, DiscordId, default), Times.Once);
     }
 
-    [Fact]
-    public async Task HandleAsync_NoBnetAccount_ActivatesWithoutEnrichment()
-    {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default))
-            .ReturnsAsync((BattleNetAccount?)null);
-        _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
-            .ReturnsAsync([MakeCharacter()]);
+    // ── Multi-region token fetch ─────────────────────────────────────────────
 
-        var result = await _sut.HandleAsync(Command);
+    [Fact]
+    public async Task HandleAsync_CharactersAcrossTwoRegions_FetchesOneAppTokenPerDistinctRegion()
+    {
+        var command = new ActivateCharactersCommand { UserDiscordId = DiscordId, CharacterIds = [10, 11] };
+        var euChar = MakeCharacter(id: 10, region: "eu");
+        var usChar = MakeCharacter(id: 11, region: "us");
+        _characters.Setup(r => r.GetByIdsWithDetailsAsync(command.CharacterIds, DiscordId, default))
+            .ReturnsAsync([euChar, usChar]);
+        _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 600 });
+        _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterMediaResponse());
+        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
+
+        await _sut.HandleAsync(command);
+
+        _bnetApi.Verify(b => b.GetAppTokenAsync("eu", default), Times.Once);
+        _bnetApi.Verify(b => b.GetAppTokenAsync("us", default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_TokenFetchFailsForOneRegionOnly_StillEnrichesTheOtherRegion()
+    {
+        var command = new ActivateCharactersCommand { UserDiscordId = DiscordId, CharacterIds = [10, 11] };
+        var euChar = MakeCharacter(id: 10, region: "eu");
+        var usChar = MakeCharacter(id: 11, region: "us");
+        _characters.Setup(r => r.GetByIdsWithDetailsAsync(command.CharacterIds, DiscordId, default))
+            .ReturnsAsync([euChar, usChar]);
+
+        _bnetApi.Setup(b => b.GetAppTokenAsync("eu", default))
+            .ThrowsAsync(new HttpRequestException("token endpoint unreachable"));
+        _bnetApi.Setup(b => b.GetAppTokenAsync("us", default))
+            .ReturnsAsync("us-app-token");
+        _bnetApi.Setup(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterDetailResponse { Level = 80, EquippedItemLevel = 600 });
+        _bnetApi.Setup(b => b.GetCharacterMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterMediaResponse());
+        _bnetApi.Setup(b => b.GetCharacterSpecializationsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default))
+            .ReturnsAsync(new BnetCharacterSpecializationsResponse());
+
+        var result = await _sut.HandleAsync(command);
 
         result.IsSuccess.Should().BeTrue();
-        _bnetApi.Verify(b => b.GetCharacterAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
-        _characters.Verify(r => r.ActivateAsync(Command.CharacterIds, DiscordId, default), Times.Once);
+        _bnetApi.Verify(b => b.GetCharacterAsync("us-app-token", "us", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Once);
+        _bnetApi.Verify(b => b.GetCharacterAsync(It.IsAny<string>(), "eu", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _characters.Verify(r => r.UpsertAsync(It.Is<Character>(c => c.Id == 11), default), Times.Once);
+        _characters.Verify(r => r.UpsertAsync(It.Is<Character>(c => c.Id == 10), default), Times.Never);
     }
 
     // ── BNet API succeeds ────────────────────────────────────────────────────
@@ -99,7 +126,6 @@ public class ActivateCharactersCommandHandlerTests
     [Fact]
     public async Task HandleAsync_BnetApiSucceeds_EnrichesCharacterThenActivates()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
         _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
             .ReturnsAsync([MakeCharacter()]);
 
@@ -123,7 +149,6 @@ public class ActivateCharactersCommandHandlerTests
     [Fact]
     public async Task HandleAsync_BnetApiThrows_ActivatesWithoutEnrichment()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
         _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
             .ReturnsAsync([MakeCharacter()]);
 
@@ -142,7 +167,6 @@ public class ActivateCharactersCommandHandlerTests
     [Fact]
     public async Task HandleAsync_ZeroEquippedItemLevel_SetsItemLevelToNull()
     {
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
         _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
             .ReturnsAsync([MakeCharacter()]);
 
@@ -166,7 +190,6 @@ public class ActivateCharactersCommandHandlerTests
         var character = MakeCharacter();
         character.ExpansionStates = [existingState];
 
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync(Account);
         _characters.Setup(r => r.GetByIdsWithDetailsAsync(Command.CharacterIds, DiscordId, default))
             .ReturnsAsync([character]);
 
@@ -186,15 +209,15 @@ public class ActivateCharactersCommandHandlerTests
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static Character MakeCharacter() => new()
+    private static Character MakeCharacter(int id = CharacterId, string region = "eu") => new()
     {
-        Id            = CharacterId,
+        Id            = id,
         Name          = "Arthas",
         Faction       = Faction.Alliance,
         UserDiscordId = DiscordId,
         ClassId       = 6,
         Branch  = new Branch { Id = 1, Name = "Retail", BnetNamespacePrefix = "dynamic", CurrentExpansionId = 10 },
-        Realm   = new Realm  { Id = 1, Name = "Kazzak", Slug = "kazzak", Region = "eu", BranchId = 1 },
+        Realm   = new Realm  { Id = 1, Name = "Kazzak", Slug = "kazzak", Region = region, BranchId = 1 },
         Class   = new WowClass { Id = 6, Name = "Death Knight", Color = "C41F3B" },
         Race    = new Race { Id = 1, Name = "Human" },
         ExpansionStates = [],

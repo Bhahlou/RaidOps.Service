@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
@@ -18,7 +19,8 @@ public class SetCharacterRaidSpecsCommandHandler(
     ICharacterRepository characterRepository,
     ISpecRepository specRepository,
     IGuildMembershipRepository membershipRepository,
-    IGuildAccessService guildAccessService)
+    IGuildAccessService guildAccessService,
+    ILogger<SetCharacterRaidSpecsCommandHandler> logger)
     : ICommandHandlerAsync<SetCharacterRaidSpecsCommand>
 {
     /// <inheritdoc/>
@@ -36,14 +38,24 @@ public class SetCharacterRaidSpecsCommandHandler(
 
         var character = await characterRepository.GetByIdAsync(command.CharacterId, cancellationToken);
         if (character is null)
+        {
+            logger.LogWarning(
+                "Set raid specs failed for discord user {DiscordId}: character {CharacterId} does not exist",
+                command.UserDiscordId, command.CharacterId);
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotFound, $"Character '{command.CharacterId}' does not exist.");
+        }
 
         if (character.UserDiscordId != command.UserDiscordId)
         {
             var accessLevel = await CharacterGuildAccessHelper.GetHighestAccessAsync(
                 character, command.UserDiscordId, membershipRepository, guildAccessService, cancellationToken);
             if (accessLevel < GuildAccessLevel.Officer)
+            {
+                logger.LogWarning(
+                    "Set raid specs forbidden for discord user {DiscordId} on character {CharacterId}: not owner and access level {AccessLevel} below Officer",
+                    command.UserDiscordId, command.CharacterId, accessLevel);
                 return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of a guild it belongs to.");
+            }
         }
 
         var allSpecs = (await specRepository.GetAllAsync(cancellationToken)).ToDictionary(s => s.Id);
@@ -62,6 +74,13 @@ public class SetCharacterRaidSpecsCommandHandler(
         });
 
         await characterRepository.UpsertRaidSpecsAsync(command.CharacterId, raidSpecs, cancellationToken);
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Raid specs updated for character {CharacterId} by discord user {DiscordId}: main spec {MainSpecId}, viable specs [{ViableSpecIds}]",
+                command.CharacterId, command.UserDiscordId, command.MainSpecId, string.Join(", ", viableIds));
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Raid specs updated successfully."));
     }

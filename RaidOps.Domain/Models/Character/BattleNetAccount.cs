@@ -6,20 +6,23 @@ namespace RaidOps.Domain.Models.Character;
 
 /// <summary>
 /// A Battle.net account linked to a RaidOps user.
-/// At most one BNet account per user. Stores the OAuth2 tokens needed to call
-/// the BNet API on the user's behalf.
+/// A user may link several BNet accounts (composite key: <see cref="UserDiscordId"/> +
+/// <see cref="BnetId"/>). Stores the OAuth2 tokens needed to call the BNet API on the user's
+/// behalf for that specific account.
 /// </summary>
 [Table("BattleNetAccounts")]
 public class BattleNetAccount
 {
     /// <summary>
-    /// Discord ID of the linked RaidOps user.
-    /// Acts as both primary key and foreign key to <see cref="User"/>.
+    /// Discord ID of the linked RaidOps user. First half of the composite primary key
+    /// (see <see cref="RaidOpsDbContext.OnModelCreating"/>), and foreign key to <see cref="User"/>.
     /// </summary>
-    [Key]
     public string UserDiscordId { get; set; } = string.Empty;
 
-    /// <summary>Blizzard's numeric account ID (from BNet token introspection).</summary>
+    /// <summary>
+    /// Blizzard's numeric account ID (from BNet token introspection).
+    /// Second half of the composite primary key — distinguishes accounts of the same user.
+    /// </summary>
     [Required, MaxLength(32)]
     public string BnetId { get; set; } = string.Empty;
 

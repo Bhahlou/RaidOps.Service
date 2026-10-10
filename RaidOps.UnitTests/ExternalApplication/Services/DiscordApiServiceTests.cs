@@ -22,20 +22,34 @@ public class DiscordApiServiceTests
     [Fact]
     public async Task GetCurrentUserAsync_Success_ReturnsDeserializedUser()
     {
-        var json = """{"id":"123","global_name":"Bhahlou","avatar":"abc"}""";
+        var json = """{"id":"123","username":"bhahlou","global_name":"Bhahlou","avatar":"abc"}""";
         var sut  = MakeSut(HttpStatusCode.OK, json);
 
         var result = await sut.GetCurrentUserAsync("token");
 
         result.Id.Should().Be("123");
-        result.Username.Should().Be("Bhahlou");
+        result.Username.Should().Be("bhahlou");
+        result.GlobalName.Should().Be("Bhahlou");
         result.Avatar.Should().Be("abc");
+    }
+
+    [Fact]
+    public async Task GetCurrentUserAsync_NullGlobalName_DisplayNameFallsBackToUsername()
+    {
+        // Accounts that never set a custom display name get global_name: null from Discord.
+        var json = """{"id":"229253291756748804","username":"sion29270","global_name":null,"avatar":null}""";
+        var sut  = MakeSut(HttpStatusCode.OK, json);
+
+        var result = await sut.GetCurrentUserAsync("token");
+
+        result.GlobalName.Should().BeNull();
+        result.DisplayName.Should().Be("sion29270");
     }
 
     [Fact]
     public async Task GetCurrentUserAsync_SetsAuthorizationHeader()
     {
-        var json    = """{"id":"1","global_name":"u","avatar":null}""";
+        var json    = """{"id":"1","username":"u","global_name":"u","avatar":null}""";
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
         var sut     = new DiscordApiService(new HttpClient(handler), _config.Object);
 

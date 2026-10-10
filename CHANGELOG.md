@@ -1,5 +1,147 @@
 # Changelog
 
+## [2.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.2.0...v2.2.1) (2026-10-10)
+
+
+### 🐛 Bug Fixes
+
+* Split multi-collection EF queries and merge chained Includes to clear the Sonar reliability gate, and analyse dev on every merge ([#97](https://github.com/Bhahlou/RaidOps.Service/issues/97)) ([e8ad505](https://github.com/Bhahlou/RaidOps.Service/commit/e8ad505a937e515875fa38fa0b50277f7e4599fb))
+
+## [2.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.1...v2.2.0) (2026-10-10)
+
+
+### 🚀 Features
+
+* Add curated raid buff/debuff definitions per expansion with an owner-only admin screen and expose spell search as one public endpoint ([#92](https://github.com/Bhahlou/RaidOps.Service/issues/92)) ([39e375b](https://github.com/Bhahlou/RaidOps.Service/commit/39e375bbcc779d371b002206ee8945bbf8fa5f38))
+
+
+### 🐛 Bug Fixes
+
+* Stop the API from restart-looping when the wago.tools spell sync times out by only letting shutdown cancellations escape the background service ([#94](https://github.com/Bhahlou/RaidOps.Service/issues/94)) ([d5b0983](https://github.com/Bhahlou/RaidOps.Service/commit/d5b09830f995a7fe22b582b9b9f92f90cc620aaa))
+
+## [2.1.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.0...v2.1.1) (2026-09-24)
+
+
+### 🐛 Bug Fixes
+
+* Make the spell sync light enough for a small container by streaming exports, using the community listfile for icons and upserting in chunks ([#89](https://github.com/Bhahlou/RaidOps.Service/issues/89)) ([409faf9](https://github.com/Bhahlou/RaidOps.Service/commit/409faf945891c786f57eb03aa2c29f1397468c21))
+
+## [2.1.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.0.0...v2.1.0) (2026-09-24)
+
+
+### 🚀 Features
+
+* Add raid composition preview tool for theoretical raid planning ([#85](https://github.com/Bhahlou/RaidOps.Service/issues/85)) ([cf87561](https://github.com/Bhahlou/RaidOps.Service/commit/cf875612352592bcd05f88c61a3c0310a68dc01c))
+* Sync WoW spell data from wago.tools per expansion and scope raid attribution templates to a guild branch ([#87](https://github.com/Bhahlou/RaidOps.Service/issues/87)) ([f9fab03](https://github.com/Bhahlou/RaidOps.Service/commit/f9fab0390acc167182b9af16d0061f56953d79a1))
+
+## [2.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.7.0...v2.0.0) (2026-09-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* Add the WoW Forever game branch and deprecate Classic Era ([#83](https://github.com/Bhahlou/RaidOps.Service/issues/83))
+
+### 🚀 Features
+
+* Add a guild-wide raid attribution template, filled in per raid event ([#81](https://github.com/Bhahlou/RaidOps.Service/issues/81)) ([b22c07d](https://github.com/Bhahlou/RaidOps.Service/commit/b22c07d6a5eef441c39ef4a7149b2b1e8e5cc6e3))
+* Add the WoW Forever game branch and deprecate Classic Era ([#83](https://github.com/Bhahlou/RaidOps.Service/issues/83)) ([a7f37ae](https://github.com/Bhahlou/RaidOps.Service/commit/a7f37ae65a64c88a048015ca1ab7475c56b664a3))
+* Let a raid event extend another raid event's lockout across multiple nights ([#79](https://github.com/Bhahlou/RaidOps.Service/issues/79)) ([4fa5cf4](https://github.com/Bhahlou/RaidOps.Service/commit/4fa5cf4307a52f91d310aba047ea6e2f51955193))
+* Scope raid attribution rows to a specific boss, with section icons ([#82](https://github.com/Bhahlou/RaidOps.Service/issues/82)) ([8971c33](https://github.com/Bhahlou/RaidOps.Service/commit/8971c33c9785b3de6c53e963a38479d63a30f6ff))
+
+## [1.7.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.6.0...v1.7.0) (2026-08-20)
+
+
+### 🚀 Features
+
+* Add per-user changelog seen-state tracking ([#72](https://github.com/Bhahlou/RaidOps.Service/issues/72)) ([b42686b](https://github.com/Bhahlou/RaidOps.Service/commit/b42686be26c24f663b4b9e17c78872772cc2f8f0))
+* Add raid composition announcements, grouping ping, and default raid signup mode setting ([#76](https://github.com/Bhahlou/RaidOps.Service/issues/76)) ([3090d5c](https://github.com/Bhahlou/RaidOps.Service/commit/3090d5c718c1b1b7f8e90fa8155636fa879ca4c4))
+* Expose per-guild Discord nickname/avatar on the roster and audit log ([#74](https://github.com/Bhahlou/RaidOps.Service/issues/74)) ([7964d2a](https://github.com/Bhahlou/RaidOps.Service/commit/7964d2ad0cd5848b86c56480baf2aa8a715552b0))
+* push live Discord role, guild join, and guild leave notifications via SignalR ([#73](https://github.com/Bhahlou/RaidOps.Service/issues/73)) ([6ae54e7](https://github.com/Bhahlou/RaidOps.Service/commit/6ae54e7120807e1a13b3dbc0809f64f7f69868dd))
+
+
+### 🐛 Bug Fixes
+
+* Build a real diff for the notification-settings audit log instead of a bare event count ([#75](https://github.com/Bhahlou/RaidOps.Service/issues/75)) ([120630c](https://github.com/Bhahlou/RaidOps.Service/commit/120630cf186562cf7ddae25c4ca0b18187bb3362))
+* Fix acceptance deploy from silently duplicating/resurrecting content ([#70](https://github.com/Bhahlou/RaidOps.Service/issues/70)) ([dd8f0c5](https://github.com/Bhahlou/RaidOps.Service/commit/dd8f0c57a241ce4b46cc4562db4346a72eea7bab))
+* Stop RemoveNetcordServices from breaking every integration test,close remaining coverage gaps, and add raid signup mode with Discord channel picker ([#77](https://github.com/Bhahlou/RaidOps.Service/issues/77)) ([0d23ff5](https://github.com/Bhahlou/RaidOps.Service/commit/0d23ff52a3f7b27fab8d9f384fcef2aa93380cb9))
+
+## [1.6.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.5.1...v1.6.0) (2026-08-03)
+
+
+### 🚀 Features
+
+* Raid notifications and logs ([#67](https://github.com/Bhahlou/RaidOps.Service/issues/67)) ([6526b47](https://github.com/Bhahlou/RaidOps.Service/commit/6526b473666dfa3a030769bf849782058a2c6219))
+
+## [1.5.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.5.0...v1.5.1) (2026-08-02)
+
+
+### 🐛 Bug Fixes
+
+* Fall back to Discord username when global_name is null on signup ([#64](https://github.com/Bhahlou/RaidOps.Service/issues/64)) ([b01e52d](https://github.com/Bhahlou/RaidOps.Service/commit/b01e52d87612962cae64e0e7184fb1bf0ba12ed6))
+
+## [1.5.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.4.0...v1.5.0) (2026-08-01)
+
+
+### 🚀 Features
+
+* Raid builder API ([#61](https://github.com/Bhahlou/RaidOps.Service/issues/61)) ([8cd338c](https://github.com/Bhahlou/RaidOps.Service/commit/8cd338c0a39c795d9a9ea054f4e27b31deee9556))
+
+## [1.4.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.2...v1.4.0) (2026-07-30)
+
+
+### 🚀 Features
+
+* Calendar global availability ([#59](https://github.com/Bhahlou/RaidOps.Service/issues/59)) ([39bc433](https://github.com/Bhahlou/RaidOps.Service/commit/39bc43300dea90459f153b53a91e32e4935f0032))
+* Guild now support multi-branch. You can play several wow branch on a single discord server ([#57](https://github.com/Bhahlou/RaidOps.Service/issues/57)) ([5c3ab75](https://github.com/Bhahlou/RaidOps.Service/commit/5c3ab75acea257e21614e9663e3742395a8f3f5a))
+
+## [1.3.2](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.1...v1.3.2) (2026-07-25)
+
+
+### 🐛 Bug Fixes
+
+* Require EmbedLinks permission for a notification channel to be marked postable ([#54](https://github.com/Bhahlou/RaidOps.Service/issues/54)) ([8c2bee0](https://github.com/Bhahlou/RaidOps.Service/commit/8c2bee06ba8178a4549e30287d130fec03efa6a1))
+
+## [1.3.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.3.0...v1.3.1) (2026-07-25)
+
+
+### 🐛 Bug Fixes
+
+* Stop using non-invariant CultureInfo for absence notification date formatting ([#51](https://github.com/Bhahlou/RaidOps.Service/issues/51)) ([423899c](https://github.com/Bhahlou/RaidOps.Service/commit/423899c727f94531d2d2209f15ccbffe13f3cc21))
+
+## [1.3.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.2.1...v1.3.0) (2026-07-25)
+
+
+### 🚀 Features
+
+* Add guild Discord notification settings and switch availability announcements to real state diffing ([#48](https://github.com/Bhahlou/RaidOps.Service/issues/48)) ([c8ef113](https://github.com/Bhahlou/RaidOps.Service/commit/c8ef113ba54d42bf99f9c32b4b99bde537427c28))
+
+## [1.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v1.2.0...v1.2.1) (2026-07-22)
+
+
+### 🐛 Bug Fixes
+
+* Partial availability now requires at least one time bound ([#45](https://github.com/Bhahlou/RaidOps.Service/issues/45)) ([11d0998](https://github.com/Bhahlou/RaidOps.Service/commit/11d09985efe645e74294b9feec2b82aaadd1ec67))
+
+## [1.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.1.0...v1.2.0) (2026-07-20)
+
+
+### 🚀 Features
+
+* Add guild calendar availability declarations (one-off exceptions and recurring patterns) ([#42](https://github.com/Bhahlou/RaidOps.Service/issues/42)) ([d2a3c5e](https://github.com/Bhahlou/RaidOps.Service/commit/d2a3c5e73f4d6408c2eac6d05a32b3c3aec74321))
+
+## [1.1.0](https://github.com/Bhahlou/RaidOps.Service/compare/v1.0.0...v1.1.0) (2026-07-19)
+
+
+### 🚀 Features
+
+* support linking multiple Battle.net accounts per user ([#40](https://github.com/Bhahlou/RaidOps.Service/issues/40)) ([f31878f](https://github.com/Bhahlou/RaidOps.Service/commit/f31878f2e90d9daf0bb14fb46b7004c3dda30695))
+
+
+### 🐛 Bug Fixes
+
+* close JWT token-type confusion and CSRF gaps, bump Microsoft.Ope… ([#37](https://github.com/Bhahlou/RaidOps.Service/issues/37)) ([988a1e9](https://github.com/Bhahlou/RaidOps.Service/commit/988a1e942999e46626fd7b79dcdf260df6178662))
+* prevent excluding a guild member with an equal or higher role ([#39](https://github.com/Bhahlou/RaidOps.Service/issues/39)) ([6b087e9](https://github.com/Bhahlou/RaidOps.Service/commit/6b087e9038e82e6edd2d64b79eb64a3a29083629))
+
 ## [1.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v0.2.1...v1.0.0) (2026-07-06)
 
 

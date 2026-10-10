@@ -25,4 +25,85 @@ public enum GuildAuditAction
 
     /// <summary>The guild's Officer role threshold was updated.</summary>
     OfficerThresholdUpdated = 7,
+
+    /// <summary>A member declared a one-off availability exception (absence/lateness).</summary>
+    AvailabilityExceptionDeclared = 8,
+
+    /// <summary>A member deleted a one-off availability exception.</summary>
+    AvailabilityExceptionDeleted = 9,
+
+    /// <summary>A member created a recurring availability pattern.</summary>
+    RecurringAvailabilityPatternCreated = 10,
+
+    /// <summary>A member edited a recurring availability pattern (non-retroactively).</summary>
+    RecurringAvailabilityPatternUpdated = 11,
+
+    /// <summary>A member stopped a recurring availability pattern (non-retroactively).</summary>
+    RecurringAvailabilityPatternStopped = 12,
+
+    /// <summary>The guild's Discord notification settings (per-event enabled state and channel) were updated.</summary>
+    NotificationSettingsUpdated = 13,
+
+    /// <summary>A WoW game-version branch was activated on the guild.</summary>
+    BranchActivated = 14,
+
+    /// <summary>A WoW game-version branch was deactivated on the guild.</summary>
+    BranchDeactivated = 15,
+
+    /// <summary>A guild branch's roster/officer role-set configuration was updated.</summary>
+    BranchRosterSettingsUpdated = 16,
+
+    /// <summary>A branch's Discord notification settings overrides were reset, reverting it to the guild-wide fallback.</summary>
+    NotificationSettingsReset = 17,
+
+    /// <summary>A recurring raid series was created.</summary>
+    RaidSeriesCreated = 18,
+
+    /// <summary>A recurring raid series was updated.</summary>
+    RaidSeriesUpdated = 19,
+
+    /// <summary>A recurring raid series was deactivated.</summary>
+    RaidSeriesDeactivated = 20,
+
+    /// <summary>An ad-hoc raid event was created.</summary>
+    RaidEventCreated = 21,
+
+    /// <summary>A raid event was updated.</summary>
+    RaidEventUpdated = 22,
+
+    /// <summary>A raid event was cancelled.</summary>
+    RaidEventCancelled = 23,
+
+    /// <summary>A raid event was deleted.</summary>
+    RaidEventDeleted = 24,
+
+    /// <summary>A raid event was published, making it visible to non-officer roster members.</summary>
+    RaidEventPublished = 25,
+
+    /// <summary>A guild branch's Blizzard API region was set or changed.</summary>
+    BranchRegionUpdated = 26,
+
+    /// <summary>A character was assigned to a slot on an already-published raid event.</summary>
+    SlotAssigned = 27,
+
+    /// <summary>A character was unassigned from a slot on an already-published raid event.</summary>
+    SlotUnassigned = 28,
+
+    /// <summary>Two characters' slots were swapped on an already-published raid event.</summary>
+    SlotsSwapped = 29,
+
+    /// <summary>A slot assignment's spec was changed on an already-published raid event.</summary>
+    SlotAssignmentSpecChanged = 30,
+
+    /// <summary>A guild branch's default raid signup mode was set or changed.</summary>
+    BranchSignupModeUpdated = 31,
+
+    /// <summary>A raid attribution template row was created, updated, deleted, or reordered.</summary>
+    AttributionTemplateUpdated = 32,
+
+    /// <summary>A raid event's attribution slot was filled or cleared.</summary>
+    RaidEventAttributionUpdated = 33,
+
+    /// <summary>A raid composition preview was created, renamed, duplicated, or deleted.</summary>
+    RaidCompositionPreviewUpdated = 34,
 }

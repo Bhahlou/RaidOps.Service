@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RaidOps.Application.Contracts.Common;
 using RaidOps.Application.Contracts.CQRS;
 using RaidOps.Application.Contracts.Guilds.Memberships.Commands;
@@ -16,7 +17,8 @@ public class UpdateCharacterRankCommandHandler(
     ICharacterRepository characterRepository,
     IGuildMembershipRepository membershipRepository,
     IGuildAccessService guildAccessService,
-    IAuditLogService auditLogService) : ICommandHandlerAsync<UpdateCharacterRankCommand>
+    IAuditLogService auditLogService,
+    ILogger<UpdateCharacterRankCommandHandler> logger) : ICommandHandlerAsync<UpdateCharacterRankCommand>
 {
     /// <inheritdoc/>
     public async Task<Result<CommandResponse>> HandleAsync(UpdateCharacterRankCommand command, CancellationToken cancellationToken = default)
@@ -25,16 +27,16 @@ public class UpdateCharacterRankCommandHandler(
         if (character == null)
             return Result<CommandResponse>.Fail(ResponseDetail.CharacterNotFound, $"Character '{command.CharacterId}' does not exist.");
 
-        if (character.UserDiscordId != command.RequesterDiscordId)
-        {
-            var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, cancellationToken);
-            if (accessLevel < GuildAccessLevel.Officer)
-                return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of this guild.");
-        }
-
         var membership = await membershipRepository.GetAsync(command.CharacterId, command.GuildId, cancellationToken);
         if (membership == null)
             return Result<CommandResponse>.Fail(ResponseDetail.NotAMember, "This character is not on this guild's roster.");
+
+        if (character.UserDiscordId != command.RequesterDiscordId)
+        {
+            var accessLevel = await guildAccessService.GetAccessLevelAsync(command.RequesterDiscordId, command.GuildId, membership.GuildBranchId, cancellationToken);
+            if (accessLevel < GuildAccessLevel.Officer)
+                return Result<CommandResponse>.Fail(ResponseDetail.Forbidden, "You do not own this character and are not an officer of this guild.");
+        }
 
         if (membership.CharacterRank == command.CharacterRank)
             return Result<CommandResponse>.Ok(new CommandResponse("Rank unchanged."));
@@ -54,6 +56,13 @@ public class UpdateCharacterRankCommandHandler(
                 ["newRank"] = command.CharacterRank.ToString(),
             },
             cancellationToken);
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Character {CharacterId} ({CharacterName}) rank updated from {OldRank} to {NewRank} in guild {GuildId}, requested by discord user {DiscordId}",
+                character.Id, character.Name, oldRank, command.CharacterRank, command.GuildId, command.RequesterDiscordId);
+        }
 
         return Result<CommandResponse>.Ok(new CommandResponse("Character rank updated."));
     }

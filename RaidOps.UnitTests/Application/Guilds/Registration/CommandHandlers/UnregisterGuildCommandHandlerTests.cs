@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Guilds.Registration.Commands;
 using RaidOps.Application.Implementations.Guilds.Registration.CommandHandlers;
@@ -17,7 +18,7 @@ public class UnregisterGuildCommandHandlerTests
 
     public UnregisterGuildCommandHandlerTests()
     {
-        _sut = new UnregisterGuildCommandHandler(_guilds.Object);
+        _sut = new UnregisterGuildCommandHandler(_guilds.Object, NullLogger<UnregisterGuildCommandHandler>.Instance);
     }
 
     [Fact]

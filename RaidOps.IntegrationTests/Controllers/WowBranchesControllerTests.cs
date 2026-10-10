@@ -23,7 +23,7 @@ public class WowBranchesControllerTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task GetAll_WithValidToken_Returns4SeededBranches()
+    public async Task GetAll_WithValidToken_Returns5SeededBranches()
     {
         var client = CreateAuthenticatedClient();
 
@@ -31,10 +31,11 @@ public class WowBranchesControllerTests(RaidOpsWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var branches = await response.Content.ReadFromJsonAsync<List<BranchDto>>();
-        branches.Should().HaveCount(4)
-            .And.Contain(b => b.Name == "Retail")
-            .And.Contain(b => b.Name == "Classic Era")
-            .And.Contain(b => b.Name == "Classic")
-            .And.Contain(b => b.Name == "Classic Anniversary");
+        branches.Should().HaveCount(5)
+            .And.Contain(b => b.Name == "Retail" && b.IsActive && b.SyncAvailable)
+            .And.Contain(b => b.Name == "Classic Era" && !b.IsActive && b.SyncAvailable)
+            .And.Contain(b => b.Name == "Classic" && b.IsActive && b.SyncAvailable)
+            .And.Contain(b => b.Name == "Classic Anniversary" && b.IsActive && b.SyncAvailable)
+            .And.Contain(b => b.Name == "Forever" && b.IsActive && !b.SyncAvailable);
     }
 }

@@ -20,4 +20,14 @@ public class BranchDto
 
     /// <summary>Short code of the expansion currently active on this branch (e.g. "TWW", "TBC").</summary>
     public string CurrentExpansionShortCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this branch is offered for new activity. Callers that let a user pick a *new* branch
+    /// (character sync, guild branch activation) should filter this out unless already in use by
+    /// that user/guild; callers only resolving an existing reference's name/icon should ignore it.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>Whether BNet character sync works for this branch yet (see <see cref="RaidOps.Domain.Models.Reference.Branch.SyncAvailable"/>).</summary>
+    public bool SyncAvailable { get; set; } = true;
 }

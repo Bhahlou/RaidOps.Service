@@ -44,6 +44,13 @@ public class GuildRosterMemberResponse
     /// <summary>Discord avatar hash of the player, or <c>null</c> if it could not be resolved.</summary>
     public string? PlayerAvatarHash { get; set; }
 
+    /// <summary>
+    /// The player's server-specific avatar URL (Discord's per-guild avatar override), or
+    /// <c>null</c> if they have none set for this guild. Falls back to <see cref="PlayerAvatarHash"/>
+    /// when absent.
+    /// </summary>
+    public string? PlayerGuildAvatarUrl { get; set; }
+
     /// <summary>User-curated raid-viable specs, main spec first. Empty if none have been curated yet.</summary>
     public required List<CharacterRaidSpecDto> RaidSpecs { get; set; }
 
@@ -52,4 +59,11 @@ public class GuildRosterMemberResponse
 
     /// <summary>UTC timestamp of when the character joined the roster.</summary>
     public required DateTime JoinedAt { get; set; }
+
+    /// <summary>
+    /// Whether the requester is allowed to exclude this character from the roster: they must be an
+    /// Officer, and (unless this is the requester's own character) outrank the character's owner in
+    /// the guild's Discord role hierarchy.
+    /// </summary>
+    public required bool CanExclude { get; set; }
 }

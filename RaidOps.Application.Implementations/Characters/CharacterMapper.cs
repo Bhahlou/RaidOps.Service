@@ -59,6 +59,7 @@ internal static class CharacterMapper
                 .Select(m => new GuildMembershipResponse
                 {
                     GuildId       = m.GuildId,
+                    GuildBranchId = m.GuildBranchId,
                     GuildName     = m.Guild.Name,
                     GuildIconHash = m.Guild.IconHash,
                     CharacterRank = m.CharacterRank,

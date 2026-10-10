@@ -1,8 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using RaidOps.Application.Contracts.Services;
+using RaidOps.Application.Implementations.Calendar.Availability.Services;
 using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Application.Implementations.Guilds.Access;
+using RaidOps.Application.Implementations.Guilds.Notifications;
 using RaidOps.Application.Implementations.Notifications.Services;
+using RaidOps.Application.Implementations.Raids.Buffs.Services;
+using RaidOps.Application.Implementations.Raids.Services;
 using RaidOps.Application.Implementations.Services;
 
 namespace RaidOps.Registry;
@@ -17,7 +21,29 @@ internal static class ApplicationRegistry
         services.AddScoped<ISpecResolverService, SpecResolverService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IGuildAccessService, GuildAccessService>();
+        services.AddScoped<IGuildJoinEligibilityService, GuildJoinEligibilityService>();
         services.AddScoped<IUserNotificationService, UserNotificationService>();
+        services.AddScoped<IAvailabilityResolutionService, AvailabilityResolutionService>();
+        services.AddScoped<IActiveRosterBranchResolver, ActiveRosterBranchResolver>();
+        services.AddScoped<IGuildNotificationDispatcher, GuildNotificationDispatcher>();
+        services.AddScoped<IAbsenceNotificationContentBuilder, AbsenceNotificationContentBuilder>();
+        services.AddScoped<IAvailabilityChangeAnnouncer, AvailabilityChangeAnnouncer>();
+        services.AddScoped<IRaidLockoutService, RaidLockoutService>();
+        services.AddScoped<IRaidAvailabilityService, RaidAvailabilityService>();
+        services.AddScoped<IRaidLockoutConflictChecker, RaidLockoutConflictChecker>();
+        services.AddScoped<IRaidSlotEligibilityValidator, RaidSlotEligibilityValidator>();
+        services.AddScoped<IRaidGridAndZoneValidator, RaidGridAndZoneValidator>();
+        services.AddScoped<IRaidNotificationContentBuilder, RaidNotificationContentBuilder>();
+        services.AddScoped<IRaidCompositionAnnouncementService, RaidCompositionAnnouncementService>();
+        services.AddScoped<IRaidCompositionNotifier, RaidCompositionNotifier>();
+        services.AddScoped<IRaidSignupAnnouncementService, RaidSignupAnnouncementService>();
+        services.AddScoped<IRaidEventDeletionNotifier, RaidEventDeletionNotifier>();
+        services.AddScoped<IRaidEventUpdateNotifier, RaidEventUpdateNotifier>();
+        services.AddScoped<IRaidSignupResponseBuilder, RaidSignupResponseBuilder>();
+        services.AddScoped<IRaidSlotUnassignmentService, RaidSlotUnassignmentService>();
+        services.AddScoped<IRaidSignupChangeNotifier, RaidSignupChangeNotifier>();
+        services.AddScoped<IRaidBoardEnrichmentDataLoader, RaidBoardEnrichmentDataLoader>();
+        services.AddScoped<IRaidBuffDefinitionValidationService, RaidBuffDefinitionValidationService>();
         return services;
     }
 }

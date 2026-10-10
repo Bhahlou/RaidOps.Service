@@ -29,7 +29,7 @@ public class DiscordSyncService(
     {
         var (userInfo, discordGuilds) = await FetchDiscordDataAsync(accessToken, cancellationToken);
 
-        var user = await SyncUserAsync(discordId, userInfo.Username, userInfo.Avatar, refreshToken, cancellationToken);
+        var user = await SyncUserAsync(discordId, userInfo.DisplayName, userInfo.Avatar, refreshToken, cancellationToken);
         await SyncGuildsAsync(discordId, discordGuilds, cancellationToken);
         return user;
     }
@@ -53,7 +53,7 @@ public class DiscordSyncService(
 
         var (userInfo, discordGuilds) = await FetchDiscordDataAsync(tokenResponse.AccessToken, cancellationToken);
 
-        var user = await SyncUserAsync(discordId, userInfo.Username, userInfo.Avatar, tokenResponse.RefreshToken, cancellationToken);
+        var user = await SyncUserAsync(discordId, userInfo.DisplayName, userInfo.Avatar, tokenResponse.RefreshToken, cancellationToken);
         await SyncGuildsAsync(discordId, discordGuilds, cancellationToken);
         return user;
     }
@@ -133,7 +133,8 @@ public class DiscordSyncService(
         {
             UserDiscordId = discordId,
             GuildId = g.Id,
-            IsAdmin = g.IsAdmin
+            IsAdmin = g.IsAdmin,
+            IsOwner = g.Owner
         }).ToList();
 
         await userGuildsRepository.ReplaceUserGuildsAsync(discordId, userGuilds, cancellationToken);

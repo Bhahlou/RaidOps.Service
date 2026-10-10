@@ -22,7 +22,7 @@ public class GetCharactersQueryHandlerTests
     public GetCharactersQueryHandlerTests()
     {
         _sut = new GetCharactersQueryHandler(_characters.Object, _bnetAccounts.Object);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default)).ReturnsAsync((BattleNetAccount?)null);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default)).ReturnsAsync((IReadOnlyList<BattleNetAccount>)[]);
     }
 
     [Fact]
@@ -63,38 +63,58 @@ public class GetCharactersQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_NoBnetAccountLinked_ReturnsNullBnetAccount()
+    public async Task HandleAsync_NoBnetAccountLinked_ReturnsEmptyBnetAccounts()
     {
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default)).ReturnsAsync([]);
 
         var result = await _sut.HandleAsync(Query, default);
 
-        result.Value!.BnetAccount.Should().BeNull();
+        result.Value!.BnetAccounts.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task HandleAsync_BnetAccountLinked_ReturnsMappedBnetAccount()
+    public async Task HandleAsync_OneBnetAccountLinked_ReturnsMappedBnetAccount()
     {
         var expiry = DateTimeOffset.UtcNow.AddHours(1);
         _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default)).ReturnsAsync([]);
-        _bnetAccounts.Setup(r => r.GetByDiscordIdAsync(DiscordId, default))
-            .ReturnsAsync(new BattleNetAccount
-            {
-                UserDiscordId = DiscordId,
-                BnetId        = "bnet-42",
-                BattleTag     = "Player#1234",
-                AccessToken   = "tok",
-                Region        = "eu",
-                TokenExpiry   = expiry,
-            });
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default))
+            .ReturnsAsync((IReadOnlyList<BattleNetAccount>)
+            [
+                new BattleNetAccount
+                {
+                    UserDiscordId = DiscordId,
+                    BnetId        = "bnet-42",
+                    BattleTag     = "Player#1234",
+                    AccessToken   = "tok",
+                    Region        = "eu",
+                    TokenExpiry   = expiry,
+                },
+            ]);
 
         var result = await _sut.HandleAsync(Query, default);
 
-        result.Value!.BnetAccount.Should().NotBeNull();
-        result.Value.BnetAccount!.BnetId.Should().Be("bnet-42");
-        result.Value.BnetAccount.BattleTag.Should().Be("Player#1234");
-        result.Value.BnetAccount.Region.Should().Be("eu");
-        result.Value.BnetAccount.TokenExpiry.Should().Be(expiry);
+        result.Value!.BnetAccounts.Should().ContainSingle();
+        result.Value.BnetAccounts[0].BnetId.Should().Be("bnet-42");
+        result.Value.BnetAccounts[0].BattleTag.Should().Be("Player#1234");
+        result.Value.BnetAccounts[0].Region.Should().Be("eu");
+        result.Value.BnetAccounts[0].TokenExpiry.Should().Be(expiry);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MultipleBnetAccountsLinked_ReturnsAllOfThem()
+    {
+        _characters.Setup(r => r.GetByUserWithDetailsAsync(DiscordId, true, default)).ReturnsAsync([]);
+        _bnetAccounts.Setup(r => r.GetAllByDiscordIdAsync(DiscordId, default))
+            .ReturnsAsync((IReadOnlyList<BattleNetAccount>)
+            [
+                new BattleNetAccount { UserDiscordId = DiscordId, BnetId = "bnet-1", BattleTag = "Player#1234", AccessToken = "tok-1", Region = "eu" },
+                new BattleNetAccount { UserDiscordId = DiscordId, BnetId = "bnet-2", BattleTag = "Player#5678", AccessToken = "tok-2", Region = "us" },
+            ]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.BnetAccounts.Should().HaveCount(2);
+        result.Value.BnetAccounts.Select(a => a.BnetId).Should().BeEquivalentTo(["bnet-1", "bnet-2"]);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

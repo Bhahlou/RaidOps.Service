@@ -18,6 +18,15 @@ public class GuildMembership
     /// <summary>Discord snowflake ID of the guild.</summary>
     public string GuildId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// FK to the specific <see cref="GuildBranch"/> this membership was joined on. Populated once
+    /// at join time from the guild branch matching the character's <see cref="WowCharacter.BranchId"/>,
+    /// never updated afterwards (a character's branch never changes after creation). Indexed
+    /// separately from <see cref="GuildId"/> since "all roster members of guild X on branch Y" is
+    /// the dominant roster query.
+    /// </summary>
+    public int GuildBranchId { get; set; }
+
     /// <summary>Raid-composition rank of this character (Main / Split / Alt).</summary>
     public CharacterRank CharacterRank { get; set; } = CharacterRank.Main;
 
@@ -31,4 +40,7 @@ public class GuildMembership
 
     /// <summary>The guild this membership belongs to.</summary>
     public virtual Guild Guild { get; set; } = null!;
+
+    /// <summary>The specific guild branch this membership was joined on.</summary>
+    public virtual GuildBranch GuildBranch { get; set; } = null!;
 }

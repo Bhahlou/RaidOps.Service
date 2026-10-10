@@ -24,11 +24,14 @@ public interface IGuildMembershipRepository
     Task<List<GuildMembership>> GetByCharacterIdsAsync(IEnumerable<int> characterIds, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns all memberships in the given guild, including Character (with Realm and Class) navigation data.
+    /// Returns all memberships on the given guild branch, including Character (with Realm and Class)
+    /// navigation data. This is the dominant roster query ("all roster members of guild X on branch
+    /// Y"), hence the indexed <see cref="GuildMembership.GuildBranchId"/> FK rather than a join
+    /// through <see cref="RaidOps.Domain.Models.Character.Character.BranchId"/>.
     /// </summary>
-    /// <param name="guildId">Discord snowflake ID of the guild.</param>
+    /// <param name="guildBranchId">Surrogate ID of the guild branch.</param>
     /// <param name="cancellationToken">Token used to cancel the asynchronous operation.</param>
-    Task<List<GuildMembership>> GetByGuildIdAsync(string guildId, CancellationToken cancellationToken = default);
+    Task<List<GuildMembership>> GetByGuildBranchIdAsync(int guildBranchId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns <c>true</c> if the character is already on the specified guild's roster.

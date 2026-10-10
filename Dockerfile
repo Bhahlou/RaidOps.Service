@@ -33,7 +33,8 @@ ENV APP_VERSION=$APP_VERSION
 
 COPY --from=build /app/publish .
 
-RUN addgroup -S raidops && adduser -S raidops -G raidops
+RUN addgroup -S raidops && adduser -S raidops -G raidops \
+    && mkdir -p /app/logs && chown -R raidops:raidops /app/logs
 USER raidops
 
 EXPOSE 8080

@@ -5,12 +5,16 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NetCord.Gateway;
+using NetCord.Rest;
 using RaidOps.API;
 using RaidOps.ExternalApplication.Contracts.Services.BNet;
 using RaidOps.ExternalApplication.Contracts.Services.Discord;
 using RaidOps.ExternalApplication.Contracts.Services.DiscordBot;
+using RaidOps.ExternalApplication.Contracts.Services.WagoTools;
 using RaidOps.IntegrationTests.Infrastructure.Stubs;
 using System.Text;
 using Testcontainers.PostgreSql;
@@ -24,11 +28,21 @@ namespace RaidOps.IntegrationTests.Infrastructure;
 /// </summary>
 public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPoint>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17")
         .WithDatabase("raidops_integration")
         .WithUsername("postgres")
         .WithPassword("postgres")
         .Build();
+
+    /// <summary>Discord ID listed in <c>Admin:OwnerDiscordIds</c> — the only user the owner-only admin endpoints accept.</summary>
+    public const string OwnerDiscordId = "987000000000000001";
+
+    /// <summary>
+    /// The wago.tools stand-in registered in the test host. Reports no builds by default, so the spell sync
+    /// that fires on startup (and every other sync) does nothing; tests that need it to sync configure it
+    /// and must <see cref="StubWagoToolsService.Reset"/> it afterwards.
+    /// </summary>
+    internal StubWagoToolsService WagoStub { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -52,6 +66,7 @@ public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPo
                 ["BattleNet:ClientId"] = "test-bnet-client-id",
                 ["BattleNet:ClientSecret"] = "test-bnet-secret",
                 ["BattleNet:CallbackUrl"] = "http://localhost/bnet/callback",
+                ["Admin:OwnerDiscordIds"] = OwnerDiscordId,
             });
         });
 
@@ -97,26 +112,42 @@ public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPo
         });
     }
 
-    private static void ReplaceExternalApiServices(IServiceCollection services)
+    private void ReplaceExternalApiServices(IServiceCollection services)
     {
         services.RemoveAll<IDiscordApiService>();
         services.AddScoped<IDiscordApiService, NoOpDiscordApiService>();
 
         services.RemoveAll<IBnetApiService>();
         services.AddScoped<IBnetApiService, NoOpBnetApiService>();
+
+        services.RemoveAll<IWagoToolsService>();
+        services.AddSingleton<IWagoToolsService>(WagoStub);
     }
 
     private static void RemoveNetcordServices(IServiceCollection services)
     {
-        // NetCord.Gateway requires a real Discord WebSocket connection — remove it and replace
-        // IDiscordBotService with a configurable stub so tests can inject expected Discord data.
-        var toRemove = services
-            .Where(d =>
-                (d.ImplementationType?.Assembly.GetName().Name?.StartsWith("NetCord") ?? false) ||
-                (d.ServiceType.Assembly.GetName().Name?.StartsWith("NetCord") ?? false))
+        // NetCord.Gateway requires a real Discord WebSocket connection, and its own/the
+        // application-command hosted services would try to open that socket / sync commands with
+        // Discord's REST API on startup — remove just those, plus the client singletons they'd
+        // use, and replace IDiscordBotService with a configurable stub so tests can inject
+        // expected Discord data.
+        //
+        // Deliberately NOT a blanket "every service from a NetCord*-prefixed assembly" removal:
+        // that used to also strip NetCord.Services.ApplicationCommands.ApplicationCommandServiceManager
+        // (a harmless in-memory module registry, never touches the network) that Program.cs's
+        // app.AddApplicationCommandModule<RaidCommandModule>() needs to register itself into —
+        // with it gone, that call throws during host startup, WebApplicationFactory silently loses
+        // the host, and every integration test fails with "The server has not been started",
+        // regardless of what it's actually testing.
+        var hostedServicesToRemove = services
+            .Where(d => d.ServiceType == typeof(IHostedService) &&
+                        (d.ImplementationType?.Assembly.GetName().Name?.StartsWith("NetCord") ?? false))
             .ToList();
-        foreach (var descriptor in toRemove)
+        foreach (var descriptor in hostedServicesToRemove)
             services.Remove(descriptor);
+
+        services.RemoveAll<GatewayClient>();
+        services.RemoveAll<RestClient>();
 
         var botDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IDiscordBotService));
         if (botDescriptor is not null)

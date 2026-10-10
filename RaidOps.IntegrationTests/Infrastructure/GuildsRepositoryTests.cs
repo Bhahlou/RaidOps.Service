@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Discord;
 using RaidOps.Infrastructure.Persistence.Contracts.Repositories;
 
@@ -92,6 +91,51 @@ public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task ResetOnboardingAsync_GuildNotFound_DoesNothing()
+    {
+        const string guildId = "800000000000000010";
+
+        var (scope, _) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            var act = () => repo.ResetOnboardingAsync(guildId);
+
+            await act.Should().NotThrowAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ResetOnboardingAsync_FullyConfiguredGuild_ClearsRegistrationAndEverySetting()
+    {
+        const string guildId = "800000000000000011";
+        await SeedAsync(db =>
+        {
+            db.Guilds.Add(new Guild
+            {
+                Id = guildId,
+                Name = "Guild",
+                IsRegistered = true,
+                Timezone = "Europe/Paris",
+                Language = "fr",
+            });
+            return Task.CompletedTask;
+        });
+
+        var (scope, db) = CreateDbScope();
+        using (scope)
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
+            await repo.ResetOnboardingAsync(guildId);
+
+            var guild = await db.Guilds.FindAsync(guildId);
+            guild!.IsRegistered.Should().BeFalse();
+            guild.Timezone.Should().BeNull();
+            guild.Language.Should().BeNull();
+        }
+    }
+
+    [Fact]
     public async Task UpdateSettingsAsync_GuildNotFound_ReturnsFalse()
     {
         const string guildId = "800000000000000005";
@@ -100,14 +144,14 @@ public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
         using (scope)
         {
             var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
-            var result = await repo.UpdateSettingsAsync(guildId, "Europe/Paris", RosterMode.Open, null);
+            var result = await repo.UpdateSettingsAsync(guildId, "Europe/Paris", "en");
 
             result.Should().BeFalse();
         }
     }
 
     [Fact]
-    public async Task UpdateSettingsAsync_DiscordRoleOnly_SetsMinRosterRoleId()
+    public async Task UpdateSettingsAsync_ExistingGuild_UpdatesTimezoneAndLanguage()
     {
         const string guildId = "800000000000000006";
         await SeedAsync(db =>
@@ -120,70 +164,12 @@ public class GuildsRepositoryTests(RaidOpsWebApplicationFactory factory)
         using (scope)
         {
             var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
-            var result = await repo.UpdateSettingsAsync(guildId, "Europe/Paris", RosterMode.DiscordRoleOnly, "role-123");
+            var result = await repo.UpdateSettingsAsync(guildId, "Europe/Paris", "en");
 
             result.Should().BeTrue();
             var guild = await db.Guilds.FindAsync(guildId);
-            guild!.MinRosterRoleId.Should().Be("role-123");
-        }
-    }
-
-    [Fact]
-    public async Task UpdateSettingsAsync_Open_SetsMinRosterRoleIdToNull()
-    {
-        const string guildId = "800000000000000007";
-        await SeedAsync(db =>
-        {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Guild", IsRegistered = true, MinRosterRoleId = "role-abc" });
-            return Task.CompletedTask;
-        });
-
-        var (scope, db) = CreateDbScope();
-        using (scope)
-        {
-            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
-            var result = await repo.UpdateSettingsAsync(guildId, "UTC", RosterMode.Open, "role-abc");
-
-            result.Should().BeTrue();
-            var guild = await db.Guilds.FindAsync(guildId);
-            guild!.MinRosterRoleId.Should().BeNull();
-        }
-    }
-
-    [Fact]
-    public async Task UpdateOfficerThresholdAsync_GuildNotFound_ReturnsFalse()
-    {
-        const string guildId = "800000000000000008";
-
-        var (scope, _) = CreateDbScope();
-        using (scope)
-        {
-            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
-            var result = await repo.UpdateOfficerThresholdAsync(guildId, "role-123");
-
-            result.Should().BeFalse();
-        }
-    }
-
-    [Fact]
-    public async Task UpdateOfficerThresholdAsync_ExistingGuild_SetsMinOfficerRoleId()
-    {
-        const string guildId = "800000000000000009";
-        await SeedAsync(db =>
-        {
-            db.Guilds.Add(new Guild { Id = guildId, Name = "Guild", IsRegistered = true, MinOfficerRoleId = "role-old" });
-            return Task.CompletedTask;
-        });
-
-        var (scope, db) = CreateDbScope();
-        using (scope)
-        {
-            var repo = scope.ServiceProvider.GetRequiredService<IGuildsRepository>();
-            var result = await repo.UpdateOfficerThresholdAsync(guildId, "role-new");
-
-            result.Should().BeTrue();
-            var guild = await db.Guilds.FindAsync(guildId);
-            guild!.MinOfficerRoleId.Should().Be("role-new");
+            guild!.Timezone.Should().Be("Europe/Paris");
+            guild.Language.Should().Be("en");
         }
     }
 }

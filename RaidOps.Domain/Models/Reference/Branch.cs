@@ -30,6 +30,44 @@ public class Branch
     /// <summary>FK to the expansion that is currently active / end-game on this branch.</summary>
     public int CurrentExpansionId { get; set; }
 
+    /// <summary>
+    /// Whether this branch is offered for new activity — hidden from the character-sync branch
+    /// picker and from a guild's "activate a new branch" list once false. Existing data referencing
+    /// this branch (characters, GuildBranch activations) is never affected; only new sign-up surfaces
+    /// stop showing it.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Whether BNet character sync actually works for this branch yet. False for a branch that's
+    /// been announced/seeded ahead of Blizzard shipping its BNet API support (e.g. a brand-new game
+    /// branch in beta) — shown in the character-sync picker as "coming soon" rather than hidden
+    /// outright, since the branch itself can still be activated on a guild and used for
+    /// recruitment/planning in the meantime.
+    /// </summary>
+    public bool SyncAvailable { get; set; } = true;
+
+    /// <summary>
+    /// This branch's product code on wago.tools (e.g. <c>"wow_classic_beta"</c> for Forever), used by
+    /// the spell-sync background service to poll <c>/api/builds/latest</c> and pull DB2 exports for
+    /// the right product. Null for a branch that isn't tracked (e.g. the deactivated Classic Era).
+    /// </summary>
+    [MaxLength(32)]
+    public string? WagoProductCode { get; set; }
+
+    /// <summary>
+    /// The wago.tools build version (e.g. <c>"1.60.1.69977"</c>) this branch's spell data was last
+    /// synced from. Null until the first successful sync.
+    /// </summary>
+    [MaxLength(32)]
+    public string? LastSyncedBuildVersion { get; set; }
+
+    /// <summary>
+    /// The synced build's own <c>created_at</c> timestamp (UTC) from wago.tools — when Blizzard
+    /// shipped that build, not when RaidOps processed it.
+    /// </summary>
+    public DateTime? LastSyncedBuildDate { get; set; }
+
     // ── Navigation ────────────────────────────────────────────────────────
 
     /// <summary>The expansion currently active on this branch.</summary>

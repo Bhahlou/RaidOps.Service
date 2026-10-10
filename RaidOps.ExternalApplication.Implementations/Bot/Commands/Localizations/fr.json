@@ -1,0 +1,25 @@
+{
+  "commands": {
+    "raid": {
+      "name": "raid",
+      "description": "Commandes de raid réservées aux officiers",
+      "subcommands": {
+        "invite": {
+          "name": "inviter",
+          "description": "Ping les joueurs du raid pour les informer du groupage",
+          "parameters": {
+            "raid": {
+              "name": "raid",
+              "description": "Raid pour lequel grouper"
+            },
+            "character": {
+              "name": "personnage",
+              "description": "Personnage sur qui grouper (par défaut, le tien dans ce raid)"
+            }
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}

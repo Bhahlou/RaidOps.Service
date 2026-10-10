@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RaidOps.Application.Contracts.Characters.Commands;
 using RaidOps.Application.Contracts.Common;
@@ -31,7 +32,7 @@ public class SetCharacterRaidSpecsCommandHandlerTests
 
     public SetCharacterRaidSpecsCommandHandlerTests()
     {
-        _sut = new SetCharacterRaidSpecsCommandHandler(_characters.Object, _specs.Object, _memberships.Object, _guildAccess.Object);
+        _sut = new SetCharacterRaidSpecsCommandHandler(_characters.Object, _specs.Object, _memberships.Object, _guildAccess.Object, NullLogger<SetCharacterRaidSpecsCommandHandler>.Instance);
     }
 
     private static SetCharacterRaidSpecsCommand MakeCommand(int mainSpecId, IEnumerable<int> viableSpecIds) => new()

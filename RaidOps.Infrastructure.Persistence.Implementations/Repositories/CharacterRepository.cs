@@ -29,18 +29,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         if (activeOnly)
             query = query.Where(c => c.IsActiveInRaidOps);
 
-        return await query
-            .Include(c => c.Branch)
-            .Include(c => c.Realm)
-            .Include(c => c.Class)
-            .Include(c => c.Race)
-            .Include(c => c.ExpansionStates)
-                .ThenInclude(s => s.Specs)
-                    .ThenInclude(cs => cs.Spec)
-            .Include(c => c.RaidSpecs)
-                .ThenInclude(rs => rs.Spec)
-            .Include(c => c.GuildMemberships)
-                .ThenInclude(m => m.Guild)
+        return await WithFullDetails(query)
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
     }
@@ -68,20 +57,9 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         string realmSlug,
         string name,
         CancellationToken cancellationToken = default)
-        => await context.Characters
-            .AsNoTracking()
-            .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && EF.Functions.ILike(c.Name, name))
-            .Include(c => c.Branch)
-            .Include(c => c.Realm)
-            .Include(c => c.Class)
-            .Include(c => c.Race)
-            .Include(c => c.ExpansionStates)
-                .ThenInclude(s => s.Specs)
-                    .ThenInclude(cs => cs.Spec)
-            .Include(c => c.RaidSpecs)
-                .ThenInclude(rs => rs.Spec)
-            .Include(c => c.GuildMemberships)
-                .ThenInclude(m => m.Guild)
+        => await WithFullDetails(context.Characters
+                .AsNoTracking()
+                .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && EF.Functions.ILike(c.Name, name)))
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc/>
@@ -137,6 +115,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
             existing.RaceId = character.RaceId;
             existing.ClassId = character.ClassId;
             existing.AvatarUrl = character.AvatarUrl;
+            existing.SourceBnetId = character.SourceBnetId;
             // IsActiveInRaidOps is intentionally not updated here — use ActivateAsync.
             character = existing;
         }
@@ -211,6 +190,25 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
     }
 
     /// <inheritdoc/>
+    public async Task<List<CharacterRaidSpec>> GetRaidSpecsAsync(int characterId, CancellationToken cancellationToken = default)
+        => await context.CharacterRaidSpecs
+            .Where(rs => rs.CharacterId == characterId)
+            .Include(rs => rs.Spec)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<List<CharacterRaidSpec>> GetRaidSpecsForCharactersAsync(IEnumerable<int> characterIds, CancellationToken cancellationToken = default)
+    {
+        var idList = characterIds.ToList();
+        return await context.CharacterRaidSpecs
+            .Where(rs => idList.Contains(rs.CharacterId))
+            .Include(rs => rs.Spec)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task ActivateAsync(IEnumerable<int> characterIds, string userDiscordId, CancellationToken cancellationToken = default)
     {
         var ids = characterIds.ToList();
@@ -237,4 +235,23 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <summary>
+    /// Loads everything the character detail views need. Split into several SQL queries because
+    /// several collections are included at once, which would otherwise multiply the returned rows.
+    /// </summary>
+    private static IQueryable<Character> WithFullDetails(IQueryable<Character> characters)
+        => characters
+            .Include(c => c.Branch)
+            .Include(c => c.Realm)
+            .Include(c => c.Class)
+            .Include(c => c.Race)
+            .Include(c => c.ExpansionStates)
+                .ThenInclude(s => s.Specs)
+                    .ThenInclude(cs => cs.Spec)
+            .Include(c => c.RaidSpecs)
+                .ThenInclude(rs => rs.Spec)
+            .Include(c => c.GuildMemberships)
+                .ThenInclude(m => m.Guild)
+            .AsSplitQuery();
 }
