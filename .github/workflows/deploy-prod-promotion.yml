@@ -21,19 +21,55 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: master
+          # Need the parent of the promotion commit to know which version was live before it.
+          fetch-depth: 2
 
-      - name: Look up the release matching the promoted version
+      - name: Look up the releases shipped by this promotion
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          MANIFEST_VERSION=$(jq -r '.["."]' .release-please-manifest.json)
-          TAG="v${MANIFEST_VERSION}"
+          PREFIX="v"
+          NEW_VERSION=$(jq -r '.["."]' .release-please-manifest.json)
+          TAG="${PREFIX}${NEW_VERSION}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "url=$(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_OUTPUT"
+
+          # A promotion usually carries several releases cut on dev since the last prod deploy.
+          # The version live in prod before it is the manifest of the promotion commit's first
+          # parent; every release in (previous, new] belongs to this deploy. If the previous
+          # version can't be read, fall back to the new release alone.
+          PREV_VERSION=$(git show "${MERGE_SHA}^1:.release-please-manifest.json" 2>/dev/null | jq -r '.["."] // empty' 2>/dev/null || true)
+          VERSIONS="$NEW_VERSION"
+          if [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" != "$NEW_VERSION" ]; then
+            VERSIONS=$( { echo "$PREV_VERSION"; \
+              gh release list --limit 200 --json tagName,isDraft,isPrerelease \
+                -q '.[] | select(.isDraft == false and .isPrerelease == false) | .tagName' \
+                | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+$" | sed "s/^${PREFIX}//"; } \
+              | sort -Vru \
+              | awk -v prev="$PREV_VERSION" -v new="$NEW_VERSION" \
+                  '$0 == prev { exit } printing { print; next } $0 == new { printing = 1; print }')
+            [ -n "$VERSIONS" ] || VERSIONS="$NEW_VERSION"
+          fi
+
+          # Newest first, one release body after the other.
+          BODY=""
+          COUNT=0
+          for v in $VERSIONS; do
+            RELEASE_BODY=$(gh release view "${PREFIX}${v}" --json body -q .body 2>/dev/null || true)
+            [ -n "$RELEASE_BODY" ] || continue
+            BODY+="${RELEASE_BODY}"$'\n\n'
+            COUNT=$((COUNT + 1))
+          done
+
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ -n "$PREV_VERSION" ] && [ "$COUNT" -gt 1 ]; then
+            echo "prev_tag=${PREFIX}${PREV_VERSION}" >> "$GITHUB_OUTPUT"
+          fi
           {
             echo "body<<RELEASE_BODY_EOF"
-            gh release view "$TAG" --json body -q .body
+            echo "$BODY"
             echo "RELEASE_BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -56,6 +92,8 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DISCORD_PROD_WEBHOOK_URL }}
           SHORT_REPO: ${{ github.event.repository.name }}
           TAG: ${{ steps.check.outputs.tag }}
+          PREV_TAG: ${{ steps.check.outputs.prev_tag }}
+          COUNT: ${{ steps.check.outputs.count }}
           AUTHOR: ${{ github.actor }}
           BODY: ${{ steps.check.outputs.body }}
           URL: ${{ steps.check.outputs.url }}
@@ -63,19 +101,56 @@ jobs:
           # release-please HTML-escapes commit messages when building the
           # changelog (e.g. "->" becomes "-&gt;") — Discord doesn't decode
           # HTML entities, so undo that before sending.
-          DESC=$(echo "$BODY" | head -c 4000 | sed -e 's/&gt;/>/g' -e 's/&lt;/</g' -e 's/&amp;/\&/g' -e "s/&#39;/'/g" -e 's/&quot;/"/g')
-          curl -s -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg title "🚀 $SHORT_REPO — $AUTHOR pushed release $TAG" \
-              --arg desc "$DESC" \
-              --arg url "$URL" \
-              '{
-                embeds: [{
-                  title: $title,
-                  description: $desc,
-                  url: $url,
-                  color: 16750848,
-                  footer: { text: "Rolling out to production…" }
-                }]
-              }')"
+          DESC=$(printf '%s' "$BODY" | sed -e 's/&gt;/>/g' -e 's/&lt;/</g' -e 's/&amp;/\&/g' -e "s/&#39;/'/g" -e 's/&quot;/"/g')
+          if [ -n "$PREV_TAG" ]; then
+            DESC="**${PREV_TAG} → ${TAG}** · ${COUNT} releases"$'\n\n'"${DESC}"
+          fi
+
+          post() { # $1 = title, $2 = description, $3 = footer text (may be empty)
+            curl -s -o /dev/null -X POST "$WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg title "$1" \
+                --arg desc "$2" \
+                --arg url "$URL" \
+                --arg footer "$3" \
+                '{ embeds: [ { title: $title, description: $desc, url: $url, color: 16750848 }
+                    + (if $footer == "" then {} else { footer: { text: $footer } } end) ] }')"
+          }
+
+          # An embed description is capped at 4096 characters and a promotion can carry many
+          # releases, so cut at line boundaries and send the rest as follow-up messages.
+          MAX_CHARS=3800
+          MAX_MESSAGES=8
+          TITLE="🚀 $SHORT_REPO — $AUTHOR pushed release $TAG"
+          FOOTER="Rolling out to production…"
+          CHUNK=""
+          SENT=0
+          TRUNCATED=false
+
+          flush() {
+            [ -n "$CHUNK" ] || return 0
+            post "$TITLE" "$CHUNK" "$FOOTER"
+            SENT=$((SENT + 1))
+            CHUNK=""
+            TITLE="$SHORT_REPO — $TAG (continued)"
+            FOOTER=""
+            sleep 1
+          }
+
+          while IFS= read -r line; do
+            if [ -n "$CHUNK" ] && [ $(( ${#CHUNK} + ${#line} + 1 )) -gt "$MAX_CHARS" ]; then
+              flush
+              if [ "$SENT" -ge "$MAX_MESSAGES" ]; then
+                TRUNCATED=true
+                break
+              fi
+            fi
+            CHUNK+="${line}"$'\n'
+          done <<< "$DESC"
+
+          if [ "$TRUNCATED" = true ]; then
+            post "$TITLE" "…older releases not shown, see https://github.com/${GITHUB_REPOSITORY}/releases" ""
+          else
+            flush
+          fi
