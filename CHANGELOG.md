@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.1...v2.2.0) (2026-10-10)
+
+
+### 🚀 Features
+
+* Add curated raid buff/debuff definitions per expansion with an owner-only admin screen and expose spell search as one public endpoint ([#92](https://github.com/Bhahlou/RaidOps.Service/issues/92)) ([39e375b](https://github.com/Bhahlou/RaidOps.Service/commit/39e375bbcc779d371b002206ee8945bbf8fa5f38))
+
+
+### 🐛 Bug Fixes
+
+* Stop the API from restart-looping when the wago.tools spell sync times out by only letting shutdown cancellations escape the background service ([#94](https://github.com/Bhahlou/RaidOps.Service/issues/94)) ([d5b0983](https://github.com/Bhahlou/RaidOps.Service/commit/d5b09830f995a7fe22b582b9b9f92f90cc620aaa))
+
 ## [2.1.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.0...v2.1.1) (2026-09-24)
 
 

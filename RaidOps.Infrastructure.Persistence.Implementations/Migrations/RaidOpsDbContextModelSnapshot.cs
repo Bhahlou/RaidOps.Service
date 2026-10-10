@@ -2153,6 +2153,90 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.RaidBuffDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CapacityPoolKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExclusiveGroupKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ExpansionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LabelDe")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("LabelEn")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("LabelFr")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SpellId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpellId");
+
+                    b.HasIndex("ExpansionId", "SpellId")
+                        .IsUnique();
+
+                    b.ToTable("RaidBuffDefinitions");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.RaidBuffSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClassId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RaidBuffDefinitionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SpecId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClassId");
+
+                    b.HasIndex("RaidBuffDefinitionId");
+
+                    b.HasIndex("SpecId");
+
+                    b.ToTable("RaidBuffSources");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spec", b =>
                 {
                     b.Property<int>("Id")
@@ -3329,6 +3413,51 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("ForkedFromExpansion");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.RaidBuffDefinition", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Reference.Expansion", "Expansion")
+                        .WithMany()
+                        .HasForeignKey("ExpansionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spell", "Spell")
+                        .WithMany()
+                        .HasForeignKey("SpellId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Expansion");
+
+                    b.Navigation("Spell");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.RaidBuffSource", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Reference.WowClass", "Class")
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.RaidBuffDefinition", "RaidBuffDefinition")
+                        .WithMany("Sources")
+                        .HasForeignKey("RaidBuffDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RaidOps.Domain.Models.Reference.Spec", "Spec")
+                        .WithMany()
+                        .HasForeignKey("SpecId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Class");
+
+                    b.Navigation("RaidBuffDefinition");
+
+                    b.Navigation("Spec");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spec", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Reference.WowClass", "Class")
@@ -3433,6 +3562,11 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.Navigation("Bosses");
 
                     b.Navigation("LockoutOverrides");
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Reference.RaidBuffDefinition", b =>
+                {
+                    b.Navigation("Sources");
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Reference.Spell", b =>

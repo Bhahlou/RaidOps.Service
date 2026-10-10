@@ -39,6 +39,7 @@ internal static class PersistenceRegistry
         services.AddScoped<IRaidCompositionRepository, RaidCompositionRepository>();
         services.AddScoped<IRaidSignupRepository, RaidSignupRepository>();
         services.AddScoped<ISpellRepository, SpellRepository>();
+        services.AddScoped<IRaidBuffDefinitionsRepository, RaidBuffDefinitionsRepository>();
         services.AddScoped<IGuildAttributionDefinitionsRepository, GuildAttributionDefinitionsRepository>();
         services.AddScoped<IRaidEventAttributionsRepository, RaidEventAttributionsRepository>();
         services.AddScoped<IRaidCompositionPreviewsRepository, RaidCompositionPreviewsRepository>();

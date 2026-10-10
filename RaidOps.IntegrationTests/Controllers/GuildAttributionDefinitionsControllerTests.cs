@@ -2,10 +2,8 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
 using RaidOps.Application.Contracts.Raids.Bosses.Responses;
-using RaidOps.Application.Contracts.Raids.Spells.Responses;
 using RaidOps.Domain.Enums;
 using RaidOps.Domain.Models.Raids.Attributions;
-using RaidOps.Domain.Models.Reference;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
@@ -78,13 +76,6 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
     public async Task ReorderDefinitions_WithoutToken_Returns401()
     {
         var response = await Client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/reorder", new { orderedIds = SingleOrderedId });
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task SearchSpells_WithoutToken_Returns401()
-    {
-        var response = await Client.GetAsync("/api/v1/guilds/982000000000000001/branches/1/spells/search?searchTerm=inn&locale=en");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -502,32 +493,6 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         json.GetProperty("error").GetString().Should().Be("AttributionDefinitionNotFound");
     }
 
-    // ── SearchSpells ─────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task SearchSpells_WhenOfficer_ReturnsMatchingSpellLocalizedToRequesterLocale()
-    {
-        const string id = "982000000000000011";
-        const string guildId = "982000000000000011";
-        await SeedAsync(db =>
-        {
-            db.Users.Add(TestDataBuilder.CreateUser(id));
-            db.Guilds.Add(TestDataBuilder.CreateGuild(guildId, isRegistered: true));
-            db.UserGuilds.Add(TestDataBuilder.CreateUserGuild(id, guildId, isAdmin: true));
-            db.Spells.Add(new Spell { Id = 9980001 });
-            db.SpellAvailabilities.Add(new SpellAvailability { SpellId = 9980001, ExpansionId = 2, NameEn = "Innervate", NameFr = "Vigueur naturelle", NameDe = "Winterschlaf", IconUrl = "https://cdn/innervate.jpg" });
-            return Task.CompletedTask;
-        });
-        var branchId = await SeedBranchAsync(guildId);
-        var client = CreateAuthenticatedClient(discordId: id);
-
-        var response = await client.GetAsync($"/api/v1/guilds/{guildId}/branches/{branchId}/spells/search?searchTerm=vigueur&locale=fr");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var spells = await response.Content.ReadFromJsonAsync<List<SpellResponse>>();
-        spells.Should().ContainSingle(s => s.Id == 9980001 && s.Name == "Vigueur naturelle");
-    }
-
     // ── Token without a sub claim (every remaining action) ───────────────────
 
     [Fact]
@@ -576,16 +541,6 @@ public class GuildAttributionDefinitionsControllerTests(RaidOpsWebApplicationFac
         var client = CreateClientWithoutSubClaim();
 
         var response = await client.PostAsJsonAsync("/api/v1/guilds/982000000000000001/branches/1/attribution-definitions/sections/icon", new { section = "Interrupts", iconSource = "RaidMarker", raidMarker = "Skull" });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task SearchSpells_TokenWithoutSubClaim_Returns401()
-    {
-        var client = CreateClientWithoutSubClaim();
-
-        var response = await client.GetAsync("/api/v1/guilds/982000000000000001/branches/1/spells/search?searchTerm=inn&locale=en");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

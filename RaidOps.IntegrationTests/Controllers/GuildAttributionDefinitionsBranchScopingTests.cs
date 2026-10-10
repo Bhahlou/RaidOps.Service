@@ -1,7 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
-using RaidOps.Application.Contracts.Raids.Spells.Responses;
 using RaidOps.Domain.Models.Reference;
 using RaidOps.IntegrationTests.Infrastructure;
 using System.Net;
@@ -12,8 +11,8 @@ namespace RaidOps.IntegrationTests.Controllers;
 
 /// <summary>
 /// End-to-end tests (HTTP → handlers → real Postgres) proving that a guild running two branches gets two
-/// independent attribution templates, and that the spell catalogue is resolved per branch expansion.
-/// One guild runs Classic Anniversary (branch 4, expansion 2 = TBC) and Forever (branch 5, expansion 12).
+/// independent attribution templates, and that a spell only available on one branch's expansion is
+/// rejected on the other. One guild runs Classic Anniversary (branch 4, expansion 2 = TBC) and Forever (branch 5, expansion 12).
 /// All guild/user IDs are in the 988… range; spell IDs are 9880001+.
 /// </summary>
 [Collection("Integration")]
@@ -205,23 +204,8 @@ public class GuildAttributionDefinitionsBranchScopingTests(RaidOpsWebApplication
         (await ReadErrorAsync(response)).Should().Be("AttributionDefinitionNotFound");
     }
 
-    // ── Spells per expansion ─────────────────────────────────────────────────
-
-    [Fact]
-    public async Task SearchSpells_ReturnsTheNameAndIconOfTheBranchsOwnExpansion()
-    {
-        var s = await SeedScenarioAsync("988000000000000008", withSpells: true);
-
-        var onAnniversary = await s.Officer.GetFromJsonAsync<List<SpellResponse>>($"/api/v1/guilds/{s.GuildId}/branches/{s.AnniversaryBranch}/spells/search?searchTerm=zqxbranch&locale=en");
-        var onForever = await s.Officer.GetFromJsonAsync<List<SpellResponse>>($"/api/v1/guilds/{s.GuildId}/branches/{s.ForeverBranch}/spells/search?searchTerm=zqxbranch&locale=en");
-        var onForeverFr = await s.Officer.GetFromJsonAsync<List<SpellResponse>>($"/api/v1/guilds/{s.GuildId}/branches/{s.ForeverBranch}/spells/search?searchTerm=zqxbranch&locale=fr");
-
-        onAnniversary.Should().ContainSingle().Which.Should().BeEquivalentTo(new SpellResponse { Id = SharedSpellId, Name = "Zqxbranch Tbc Name", IconUrl = "https://cdn/shared-tbc.jpg" });
-        onForever!.Select(x => (x.Id, x.Name, x.IconUrl)).Should().Equal(
-            (SharedSpellId, "Zqxbranch Forever Name", "https://cdn/shared-forever.jpg"),
-            (ForeverOnlySpellId, "Zqxbranch Forever Only", "https://cdn/forever-only.jpg"));
-        onForeverFr!.Select(x => x.Name).Should().Equal("Zqxbranch Forever Seul", "Zqxbranch Nom Forever");
-    }
+    // ── Spells per expansion (the spell catalogue itself is covered by SpellsControllerTests;
+    // these are about the attribution template rejecting a spell unavailable on its own branch) ──
 
     [Fact]
     public async Task CreateDefinition_SpellThatOnlyExistsOnForever_IsRejectedOnAnniversaryAndAcceptedOnForever()
