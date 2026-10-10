@@ -18,6 +18,13 @@ public class SpellRepository(RaidOpsDbContext context) : ISpellRepository
             .FirstOrDefaultAsync(a => a.SpellId == spellId && a.ExpansionId == expansionId, cancellationToken);
 
     /// <inheritdoc/>
+    public async Task<List<SpellAvailability>> GetAvailabilitiesAsync(int expansionId, IReadOnlyCollection<int> spellIds, CancellationToken cancellationToken = default)
+        => await context.SpellAvailabilities
+            .Where(a => a.ExpansionId == expansionId && spellIds.Contains(a.SpellId))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+    /// <inheritdoc/>
     public async Task<List<SpellAvailability>> SearchAsync(int expansionId, string searchTerm, string locale, int limit, CancellationToken cancellationToken = default)
     {
         var query = context.SpellAvailabilities.Where(a => a.ExpansionId == expansionId);

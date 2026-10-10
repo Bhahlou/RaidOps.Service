@@ -79,6 +79,12 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="SpellAvailability"/> join table (which expansions a spell has been observed on).</summary>
     public DbSet<SpellAvailability> SpellAvailabilities => Set<SpellAvailability>();
 
+    /// <summary>Gets the <see cref="RaidBuffDefinition"/> table (curated raid/group/individual buffs and debuffs, per expansion).</summary>
+    public DbSet<RaidBuffDefinition> RaidBuffDefinitions => Set<RaidBuffDefinition>();
+
+    /// <summary>Gets the <see cref="RaidBuffSource"/> table (which classes/specs can provide each buff or debuff).</summary>
+    public DbSet<RaidBuffSource> RaidBuffSources => Set<RaidBuffSource>();
+
     // ── Runtime data ──────────────────────────────────────────────────────
 
     /// <summary>Gets the <see cref="Realm"/> table (on-demand BNet realm cache).</summary>
@@ -769,6 +775,45 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
 
         modelBuilder.Entity<SpellAvailability>()
             .HasIndex(a => a.ExpansionId);
+
+        // RaidBuffDefinition — surrogate PK, one row per (expansion, spell). Every reference is Restrict:
+        // expansions, spells, classes and specs are reference data that must never be deleted from under
+        // a curated definition. The Spell FK is a real one, so a definition can only be saved once its
+        // spell has been synced from wago.tools.
+        modelBuilder.Entity<RaidBuffDefinition>()
+            .HasOne(d => d.Expansion)
+            .WithMany()
+            .HasForeignKey(d => d.ExpansionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidBuffDefinition>()
+            .HasOne(d => d.Spell)
+            .WithMany()
+            .HasForeignKey(d => d.SpellId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidBuffDefinition>()
+            .HasIndex(d => new { d.ExpansionId, d.SpellId })
+            .IsUnique();
+
+        // RaidBuffSource — children of a definition, cascaded with it; a null SpecId means "any spec of the class".
+        modelBuilder.Entity<RaidBuffSource>()
+            .HasOne(s => s.RaidBuffDefinition)
+            .WithMany(d => d.Sources)
+            .HasForeignKey(s => s.RaidBuffDefinitionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RaidBuffSource>()
+            .HasOne(s => s.Class)
+            .WithMany()
+            .HasForeignKey(s => s.ClassId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RaidBuffSource>()
+            .HasOne(s => s.Spec)
+            .WithMany()
+            .HasForeignKey(s => s.SpecId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     // ── Static seed data ──────────────────────────────────────────────────

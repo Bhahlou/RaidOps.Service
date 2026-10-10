@@ -9,8 +9,6 @@ using RaidOps.Application.Contracts.Raids.Attributions.Queries;
 using RaidOps.Application.Contracts.Raids.Attributions.Responses;
 using RaidOps.Application.Contracts.Raids.Bosses.Queries;
 using RaidOps.Application.Contracts.Raids.Bosses.Responses;
-using RaidOps.Application.Contracts.Raids.Spells.Queries;
-using RaidOps.Application.Contracts.Raids.Spells.Responses;
 using RaidOps.Domain.Enums;
 
 namespace RaidOps.UnitTests.Controllers;
@@ -299,40 +297,6 @@ public class GuildAttributionDefinitionsControllerTests
         var command = new SetAttributionSectionIconCommand { Section = "Interrupts", IconSource = AttributionIconSource.RaidMarker, RaidMarker = RaidMarkerIcon.Skull };
 
         var result = await MakeSut().SetSectionIcon("guild-1", 5, command, default);
-
-        result.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    // ── SearchSpells ─────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task SearchSpells_NoDiscordId_ReturnsUnauthorized()
-    {
-        var result = await MakeSut(null).SearchSpells("guild-1", 5, "frappe", "fr", default);
-
-        result.Should().BeOfType<UnauthorizedResult>();
-    }
-
-    [Fact]
-    public async Task SearchSpells_QuerySucceeds_ReturnsOk()
-    {
-        var response = new List<SpellResponse>();
-        _queries.Setup(q => q.DispatchAsync<SearchSpellsQuery, List<SpellResponse>>(
-                It.Is<SearchSpellsQuery>(qr => qr.GuildId == "guild-1" && qr.RequesterDiscordId == "user-1" && qr.GuildBranchId == 5 && qr.SearchTerm == "frappe" && qr.Locale == "fr"), default))
-            .ReturnsAsync(Result<List<SpellResponse>>.Ok(response));
-
-        var result = await MakeSut().SearchSpells("guild-1", 5, "frappe", "fr", default);
-
-        result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeSameAs(response);
-    }
-
-    [Fact]
-    public async Task SearchSpells_QueryFails_ReturnsBadRequest()
-    {
-        _queries.Setup(q => q.DispatchAsync<SearchSpellsQuery, List<SpellResponse>>(It.IsAny<SearchSpellsQuery>(), default))
-            .ReturnsAsync(Result<List<SpellResponse>>.Fail(ResponseDetail.Forbidden));
-
-        var result = await MakeSut().SearchSpells("guild-1", 5, "frappe", "fr", default);
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }

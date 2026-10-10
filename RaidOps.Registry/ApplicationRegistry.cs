@@ -5,6 +5,7 @@ using RaidOps.Application.Implementations.Characters.Services;
 using RaidOps.Application.Implementations.Guilds.Access;
 using RaidOps.Application.Implementations.Guilds.Notifications;
 using RaidOps.Application.Implementations.Notifications.Services;
+using RaidOps.Application.Implementations.Raids.Buffs.Services;
 using RaidOps.Application.Implementations.Raids.Services;
 using RaidOps.Application.Implementations.Services;
 
@@ -42,6 +43,7 @@ internal static class ApplicationRegistry
         services.AddScoped<IRaidSlotUnassignmentService, RaidSlotUnassignmentService>();
         services.AddScoped<IRaidSignupChangeNotifier, RaidSignupChangeNotifier>();
         services.AddScoped<IRaidBoardEnrichmentDataLoader, RaidBoardEnrichmentDataLoader>();
+        services.AddScoped<IRaidBuffDefinitionValidationService, RaidBuffDefinitionValidationService>();
         return services;
     }
 }

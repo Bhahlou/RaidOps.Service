@@ -27,7 +27,10 @@ public class SpellSyncBackgroundService(
             {
                 await SyncAsync(stoppingToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // Only a cancellation caused by shutdown may escape: an HttpClient timeout also surfaces as a
+            // TaskCanceledException (an OperationCanceledException), and letting it escape would make
+            // the host stop (BackgroundServiceExceptionBehavior.StopHost) and restart-loop the container.
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Spell sync poll failed.");
             }
