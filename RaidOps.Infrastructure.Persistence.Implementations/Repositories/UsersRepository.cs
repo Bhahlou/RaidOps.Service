@@ -28,8 +28,7 @@ public class UsersRepository(RaidOpsDbContext dbContext) : BaseRepository<User>(
     public async Task<User?> GetByDiscordIdWithGuildsAsync(string discordId, CancellationToken cancellationToken = default)
         => await _dbContext.Users
             .Include(u => u.UserGuilds)
-            .ThenInclude(ug => ug.Guild)
-            .ThenInclude(g => g.Branches)
+            .ThenInclude(ug => ug.Guild.Branches)
             .ThenInclude(gb => gb.Branch)
             .FirstOrDefaultAsync(u => u.DiscordId == discordId, cancellationToken);
 }

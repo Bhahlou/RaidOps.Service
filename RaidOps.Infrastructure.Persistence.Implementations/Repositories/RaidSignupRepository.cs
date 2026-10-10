@@ -38,7 +38,7 @@ public class RaidSignupRepository(RaidOpsDbContext context) : IRaidSignupReposit
     public async Task<List<RaidSignup>> GetForEventAsync(int raidEventId, CancellationToken cancellationToken = default)
         => await context.RaidSignups
             .Where(s => s.RaidEventId == raidEventId)
-            .Include(s => s.Character).ThenInclude(c => c!.Class)
+            .Include(s => s.Character!.Class)
             .Include(s => s.Spec)
             .AsNoTracking()
             .ToListAsync(cancellationToken);

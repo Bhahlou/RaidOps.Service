@@ -16,7 +16,7 @@ public class RaidSeriesRepository(RaidOpsDbContext context) : IRaidSeriesReposit
         => await context.RaidSeries
             .Where(s => s.Id == id && s.GuildBranchId == guildBranchId)
             .Include(s => s.DefaultZones).ThenInclude(z => z.RaidZone)
-            .Include(s => s.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(s => s.GuildBranch.Branch)
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -25,7 +25,7 @@ public class RaidSeriesRepository(RaidOpsDbContext context) : IRaidSeriesReposit
         => await context.RaidSeries
             .Where(s => s.GuildBranchId == guildBranchId)
             .Include(s => s.DefaultZones).ThenInclude(z => z.RaidZone)
-            .Include(s => s.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(s => s.GuildBranch.Branch)
             .AsNoTracking()
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(cancellationToken);
