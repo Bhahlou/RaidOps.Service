@@ -117,6 +117,24 @@ public class SpellSyncBackgroundServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_HttpTimeoutCancellation_LogsErrorAndKeepsRunningInsteadOfStoppingTheHost()
+    {
+        // An HttpClient timeout surfaces as a TaskCanceledException while the stopping token is NOT
+        // cancelled — it must not escape, or the host stops and the container restart-loops.
+        SetupDispatch((_, _) => throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout"));
+        var sut = new SpellSyncBackgroundService(_scopeFactory, _logger);
+
+        await sut.StartAsync(CancellationToken.None);
+        await _firstDispatch.Task.WaitAsync(Timeout);
+        await WaitUntilAsync(() => _logger.Entries.Count > 0);
+
+        sut.ExecuteTask!.IsCompleted.Should().BeFalse("a timed-out poll must not end the hosted service");
+        _logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Error && e.Exception is TaskCanceledException);
+
+        await sut.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_FailedResult_LogsAWarningWithTheError()
     {
         SetupDispatch((_, _) => Task.FromResult(Result<CommandResponse>.Fail("boom")));
