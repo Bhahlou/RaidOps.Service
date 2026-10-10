@@ -29,19 +29,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         if (activeOnly)
             query = query.Where(c => c.IsActiveInRaidOps);
 
-        return await query
-            .Include(c => c.Branch)
-            .Include(c => c.Realm)
-            .Include(c => c.Class)
-            .Include(c => c.Race)
-            .Include(c => c.ExpansionStates)
-                .ThenInclude(s => s.Specs)
-                    .ThenInclude(cs => cs.Spec)
-            .Include(c => c.RaidSpecs)
-                .ThenInclude(rs => rs.Spec)
-            .Include(c => c.GuildMemberships)
-                .ThenInclude(m => m.Guild)
-            .AsSplitQuery()
+        return await WithFullDetails(query)
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
     }
@@ -69,21 +57,9 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         string realmSlug,
         string name,
         CancellationToken cancellationToken = default)
-        => await context.Characters
-            .AsNoTracking()
-            .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && EF.Functions.ILike(c.Name, name))
-            .Include(c => c.Branch)
-            .Include(c => c.Realm)
-            .Include(c => c.Class)
-            .Include(c => c.Race)
-            .Include(c => c.ExpansionStates)
-                .ThenInclude(s => s.Specs)
-                    .ThenInclude(cs => cs.Spec)
-            .Include(c => c.RaidSpecs)
-                .ThenInclude(rs => rs.Spec)
-            .Include(c => c.GuildMemberships)
-                .ThenInclude(m => m.Guild)
-            .AsSplitQuery()
+        => await WithFullDetails(context.Characters
+                .AsNoTracking()
+                .Where(c => c.BranchId == branchId && c.Realm.Slug == realmSlug && EF.Functions.ILike(c.Name, name)))
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc/>
@@ -259,4 +235,23 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <summary>
+    /// Loads everything the character detail views need. Split into several SQL queries because
+    /// several collections are included at once, which would otherwise multiply the returned rows.
+    /// </summary>
+    private static IQueryable<Character> WithFullDetails(IQueryable<Character> characters)
+        => characters
+            .Include(c => c.Branch)
+            .Include(c => c.Realm)
+            .Include(c => c.Class)
+            .Include(c => c.Race)
+            .Include(c => c.ExpansionStates)
+                .ThenInclude(s => s.Specs)
+                    .ThenInclude(cs => cs.Spec)
+            .Include(c => c.RaidSpecs)
+                .ThenInclude(rs => rs.Spec)
+            .Include(c => c.GuildMemberships)
+                .ThenInclude(m => m.Guild)
+            .AsSplitQuery();
 }
