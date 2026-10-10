@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - master
+      # dev is analysed on every merge too, so Sonar re-scans its whole code with the
+      # latest rules instead of only seeing PR diffs. Must be a long-lived branch in Sonar.
+      - dev
     # A PR release merge changes only those files (0 code) → no re-run on master
     paths-ignore:
       - 'CHANGELOG.md'
