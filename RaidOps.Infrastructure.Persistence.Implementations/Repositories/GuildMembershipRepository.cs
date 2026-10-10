@@ -35,12 +35,13 @@ public class GuildMembershipRepository(RaidOpsDbContext context) : IGuildMembers
     /// </summary>
     public async Task<List<GuildMembership>> GetByGuildBranchIdAsync(int guildBranchId, CancellationToken cancellationToken = default)
         => await context.GuildMemberships
-            .Include(m => m.Character).ThenInclude(c => c.Class)
-            .Include(m => m.Character).ThenInclude(c => c.Branch)
-            .Include(m => m.Character).ThenInclude(c => c.Realm)
-            .Include(m => m.Character).ThenInclude(c => c.RaidSpecs).ThenInclude(rs => rs.Spec)
-            .Include(m => m.Character).ThenInclude(c => c.ExpansionStates)
+            .Include(m => m.Character.Class)
+            .Include(m => m.Character.Branch)
+            .Include(m => m.Character.Realm)
+            .Include(m => m.Character.RaidSpecs).ThenInclude(rs => rs.Spec)
+            .Include(m => m.Character.ExpansionStates)
             .Where(m => m.GuildBranchId == guildBranchId && m.Character.IsActiveInRaidOps)
+            .AsSplitQuery()
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

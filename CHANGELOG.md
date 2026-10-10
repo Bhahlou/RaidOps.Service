@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.2.0...v2.2.1) (2026-10-10)
+
+
+### 🐛 Bug Fixes
+
+* Split multi-collection EF queries and merge chained Includes to clear the Sonar reliability gate, and analyse dev on every merge ([#97](https://github.com/Bhahlou/RaidOps.Service/issues/97)) ([e8ad505](https://github.com/Bhahlou/RaidOps.Service/commit/e8ad505a937e515875fa38fa0b50277f7e4599fb))
+
 ## [2.2.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.1.1...v2.2.0) (2026-10-10)
 
 

@@ -28,7 +28,7 @@ namespace RaidOps.IntegrationTests.Infrastructure;
 /// </summary>
 public class RaidOpsWebApplicationFactory : WebApplicationFactory<ProgramEntryPoint>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17")
         .WithDatabase("raidops_integration")
         .WithUsername("postgres")
         .WithPassword("postgres")
