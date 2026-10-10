@@ -17,9 +17,9 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
         => await context.RaidEvents
             .Where(e => e.Id == id && e.GuildBranchId == guildBranchId)
             .Include(e => e.TargetZones).ThenInclude(z => z.RaidZone)
-            .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
+            .Include(e => e.Assignments).ThenInclude(a => a.Character.Class)
             .Include(e => e.Assignments).ThenInclude(a => a.Spec)
-            .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(e => e.GuildBranch.Branch)
             .Include(e => e.ExtendsRaidEvent)
             .AsSplitQuery()
             .AsNoTracking()
@@ -30,9 +30,9 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
         => await context.RaidEvents
             .Where(e => e.GuildBranchId == guildBranchId && e.StartsAtUtc >= rangeStartUtc && e.StartsAtUtc <= rangeEndUtc)
             .Include(e => e.TargetZones).ThenInclude(z => z.RaidZone)
-            .Include(e => e.Assignments).ThenInclude(a => a.Character).ThenInclude(c => c.Class)
+            .Include(e => e.Assignments).ThenInclude(a => a.Character.Class)
             .Include(e => e.Assignments).ThenInclude(a => a.Spec)
-            .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(e => e.GuildBranch.Branch)
             .Include(e => e.ExtendsRaidEvent)
             .AsSplitQuery()
             .AsNoTracking()
@@ -173,7 +173,7 @@ public class RaidEventRepository(RaidOpsDbContext context) : IRaidEventRepositor
     public async Task<List<RaidEvent>> GetUpcomingPublishedForGuildAsync(string guildId, DateTime fromUtc, int limit, CancellationToken cancellationToken = default)
         => await context.RaidEvents
             .Where(e => e.GuildId == guildId && e.PublicationStatus == RaidPublicationStatus.Published && e.StartsAtUtc >= fromUtc)
-            .Include(e => e.GuildBranch).ThenInclude(gb => gb.Branch)
+            .Include(e => e.GuildBranch.Branch)
             .AsNoTracking()
             .OrderBy(e => e.StartsAtUtc)
             .Take(limit)

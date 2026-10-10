@@ -89,7 +89,7 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
     public async Task<List<RaidSlotAssignment>> GetAssignmentsForEventAsync(int raidEventId, CancellationToken cancellationToken = default)
         => await context.RaidSlotAssignments
             .Where(a => a.RaidEventId == raidEventId)
-            .Include(a => a.Character).ThenInclude(c => c.Class)
+            .Include(a => a.Character.Class)
             .Include(a => a.Spec)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -99,7 +99,7 @@ public class RaidCompositionRepository(RaidOpsDbContext context) : IRaidComposit
         => await context.RaidSlotAssignments
             .Where(a => a.CharacterId == characterId
                 && a.RaidEvent.GuildBranchId == guildBranchId)
-            .Include(a => a.RaidEvent).ThenInclude(e => e.TargetZones)
+            .Include(a => a.RaidEvent.TargetZones)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

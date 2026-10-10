@@ -41,6 +41,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
                 .ThenInclude(rs => rs.Spec)
             .Include(c => c.GuildMemberships)
                 .ThenInclude(m => m.Guild)
+            .AsSplitQuery()
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
     }
@@ -82,6 +83,7 @@ public class CharacterRepository(RaidOpsDbContext context) : ICharacterRepositor
                 .ThenInclude(rs => rs.Spec)
             .Include(c => c.GuildMemberships)
                 .ThenInclude(m => m.Guild)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc/>
