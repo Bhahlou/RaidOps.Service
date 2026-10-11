@@ -427,4 +427,26 @@ public class GetGuildAuditLogQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value?.Entries[0].Variables.Should().BeNull();
     }
+
+    public static IEnumerable<object[]> AllAuditActions() =>
+        Enum.GetValues<GuildAuditAction>().Select(action => new object[] { action });
+
+    /// <summary>Guards against a new <see cref="GuildAuditAction"/> shipping without a category — the whole audit-log page would 500 for any guild holding such an entry.</summary>
+    [Theory]
+    [MemberData(nameof(AllAuditActions))]
+    public async Task HandleAsync_EveryAuditAction_HasACategory(GuildAuditAction action)
+    {
+        SetupAdmin();
+        _auditLog.Setup(r => r.GetPagedByGuildIdAsync(GuildId, 0, 3, null, default))
+            .ReturnsAsync([
+                new GuildAuditLog { Id = 1, GuildId = GuildId, ActorDiscordId = RequesterId, ActionType = action, OccurredAt = DateTime.UtcNow },
+            ]);
+        _users.Setup(u => u.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<User, bool>>>(), default))
+            .ReturnsAsync([]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value?.Entries.Should().HaveCount(1);
+    }
 }
