@@ -574,6 +574,22 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                     b.ToTable("SeenChangelogEntries");
                 });
 
+            modelBuilder.Entity("RaidOps.Domain.Models.Discord.SeenTour", b =>
+                {
+                    b.Property<string>("UserDiscordId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TourId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("SeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserDiscordId", "TourId");
+
+                    b.ToTable("SeenTours");
+                });
+
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.User", b =>
                 {
                     b.Property<string>("DiscordId")
@@ -3050,6 +3066,15 @@ namespace RaidOps.Infrastructure.Persistence.Implementations.Migrations
                 });
 
             modelBuilder.Entity("RaidOps.Domain.Models.Discord.SeenChangelogEntry", b =>
+                {
+                    b.HasOne("RaidOps.Domain.Models.Discord.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserDiscordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RaidOps.Domain.Models.Discord.SeenTour", b =>
                 {
                     b.HasOne("RaidOps.Domain.Models.Discord.User", null)
                         .WithMany()

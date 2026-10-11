@@ -40,4 +40,9 @@ public class UserResponse
     /// Gets or sets the ids of the front-end changelog entries the user has acknowledged.
     /// </summary>
     public List<string> SeenChangelogEntryIds { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the ids of the front-end guided tours the user has finished or skipped.
+    /// </summary>
+    public List<string> SeenTourIds { get; set; } = [];
 }

@@ -60,4 +60,21 @@ public class UserController(
         var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
         return ToActionResult(result);
     }
+
+    /// <summary>
+    /// Records that the current user has finished or skipped a guided tour, so it isn't replayed
+    /// on their other devices.
+    /// </summary>
+    [HttpPost("tour-seen")]
+    public async Task<IActionResult> MarkTourSeen([FromBody] MarkTourSeenCommand command, CancellationToken cancellationToken)
+    {
+        var discordId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (discordId == null)
+            return Unauthorized();
+
+        command.RequesterDiscordId = discordId;
+
+        var result = await CommandDispatcher.DispatchAsync(command, cancellationToken);
+        return ToActionResult(result);
+    }
 }

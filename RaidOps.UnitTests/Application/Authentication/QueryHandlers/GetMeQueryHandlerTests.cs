@@ -19,6 +19,7 @@ public class GetMeQueryHandlerTests
     private readonly Mock<IUserNotificationService>      _userNotifications   = new();
     private readonly Mock<IActiveRosterBranchResolver>   _activeRosterBranches = new();
     private readonly Mock<ISeenChangelogEntryRepository> _seenChangelog       = new();
+    private readonly Mock<ISeenTourRepository> _seenTours                     = new();
     private readonly GetMeQueryHandler                   _sut;
 
     private const string DiscordId = "user-1";
@@ -40,7 +41,10 @@ public class GetMeQueryHandlerTests
         // No seen changelog entries by default — individual tests opt in.
         _seenChangelog.Setup(r => r.GetSeenEntryIdsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object, _activeRosterBranches.Object, _seenChangelog.Object);
+        // No seen tours by default — individual tests opt in.
+        _seenTours.Setup(r => r.GetSeenTourIdsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _sut = new GetMeQueryHandler(_users.Object, _access.Object, _userNotifications.Object, _activeRosterBranches.Object, _seenChangelog.Object, _seenTours.Object);
     }
 
     // ── Guard clause ─────────────────────────────────────────────────────────
@@ -102,6 +106,30 @@ public class GetMeQueryHandlerTests
         var result = await _sut.HandleAsync(Query, default);
 
         result.Value!.SeenChangelogEntryIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_UserHasSeenTours_MapsThemIntoResponse()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([]));
+        _seenTours.Setup(r => r.GetSeenTourIdsAsync(DiscordId, default))
+            .ReturnsAsync(["general"]);
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.SeenTourIds.Should().ContainSingle().Which.Should().Be("general");
+    }
+
+    [Fact]
+    public async Task HandleAsync_UserHasNoSeenTours_ReturnsEmptyList()
+    {
+        _users.Setup(r => r.GetByDiscordIdWithGuildsAsync(DiscordId, default))
+            .ReturnsAsync(MakeUser([]));
+
+        var result = await _sut.HandleAsync(Query, default);
+
+        result.Value!.SeenTourIds.Should().BeEmpty();
     }
 
     // ── Guild filtering ───────────────────────────────────────────────────────
