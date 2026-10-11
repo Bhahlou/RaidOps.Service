@@ -59,6 +59,9 @@ public class GetGuildAuditLogQueryHandler(
         [GuildAuditAction.SlotsSwapped] = GuildAuditCategory.Raids,
         [GuildAuditAction.SlotAssignmentSpecChanged] = GuildAuditCategory.Raids,
         [GuildAuditAction.BranchSignupModeUpdated] = GuildAuditCategory.Branches,
+        [GuildAuditAction.AttributionTemplateUpdated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidEventAttributionUpdated] = GuildAuditCategory.Raids,
+        [GuildAuditAction.RaidCompositionPreviewUpdated] = GuildAuditCategory.Raids,
     };
 
     /// <inheritdoc/>

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.2.1...v2.3.0) (2026-10-11)
+
+
+### 🚀 Features
+
+* Track which guided tours a user has seen (SeenTours ledger, tour-seen endpoint, seenTourIds on the current-user response) and map three unmapped audit actions so the audit log stops failing with a 500 ([#104](https://github.com/Bhahlou/RaidOps.Service/issues/104)) ([beb9252](https://github.com/Bhahlou/RaidOps.Service/commit/beb92524025685924dbb85cfef6f671284af7f9b))
+
 ## [2.2.1](https://github.com/Bhahlou/RaidOps.Service/compare/v2.2.0...v2.2.1) (2026-10-10)
 
 

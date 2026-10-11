@@ -42,6 +42,9 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
     /// <summary>Gets the <see cref="SeenChangelogEntry"/> table tracking acknowledged "what's new" entries.</summary>
     public DbSet<SeenChangelogEntry> SeenChangelogEntries => Set<SeenChangelogEntry>();
 
+    /// <summary>Gets the <see cref="SeenTour"/> table tracking finished or skipped guided tours.</summary>
+    public DbSet<SeenTour> SeenTours => Set<SeenTour>();
+
     /// <summary>Gets the <see cref="GuildNotificationSetting"/> table (per-event Discord notification preferences).</summary>
     public DbSet<GuildNotificationSetting> GuildNotificationSettings => Set<GuildNotificationSetting>();
 
@@ -330,6 +333,15 @@ public class RaidOpsDbContext(DbContextOptions<RaidOpsDbContext> options) : DbCo
             .HasKey(s => new { s.UserDiscordId, s.EntryId });
 
         modelBuilder.Entity<SeenChangelogEntry>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(s => s.UserDiscordId);
+
+        // SeenTour — composite PK (UserDiscordId, TourId)
+        modelBuilder.Entity<SeenTour>()
+            .HasKey(s => new { s.UserDiscordId, s.TourId });
+
+        modelBuilder.Entity<SeenTour>()
             .HasOne<User>()
             .WithMany()
             .HasForeignKey(s => s.UserDiscordId);
