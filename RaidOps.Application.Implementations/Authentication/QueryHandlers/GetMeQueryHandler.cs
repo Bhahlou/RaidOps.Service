@@ -17,7 +17,8 @@ public class GetMeQueryHandler(
     IGuildAccessService guildAccessService,
     IUserNotificationService userNotificationService,
     IActiveRosterBranchResolver activeRosterBranchResolver,
-    ISeenChangelogEntryRepository seenChangelogEntryRepository) : IQueryHandlerAsync<GetMeQuery, UserResponse>
+    ISeenChangelogEntryRepository seenChangelogEntryRepository,
+    ISeenTourRepository seenTourRepository) : IQueryHandlerAsync<GetMeQuery, UserResponse>
 {
     /// <summary>
     /// Retrieves the user identified by <see cref="GetMeQuery.DiscordId"/> and maps them
@@ -79,6 +80,7 @@ public class GetMeQueryHandler(
             Guilds = guilds,
             Notifications = await userNotificationService.GetActiveNotificationsAsync(query.DiscordId, eligibleGuilds, cancellationToken),
             SeenChangelogEntryIds = [.. await seenChangelogEntryRepository.GetSeenEntryIdsAsync(query.DiscordId, cancellationToken)],
+            SeenTourIds = [.. await seenTourRepository.GetSeenTourIdsAsync(query.DiscordId, cancellationToken)],
         });
     }
 }

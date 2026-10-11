@@ -96,4 +96,41 @@ public class UserControllerTests
 
         result.Should().BeOfType<BadRequestObjectResult>();
     }
+
+    [Fact]
+    public async Task MarkTourSeen_SubClaimMissing_ReturnsUnauthorized()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeAnonymousContext();
+
+        var result = await _sut.MarkTourSeen(new MarkTourSeenCommand { TourId = "general" }, default);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_CommandSucceeds_ReturnsOkAndStampsRequester()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeContext("user-1");
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<MarkTourSeenCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Ok(new CommandResponse("Tour acknowledged.")));
+
+        var result = await _sut.MarkTourSeen(new MarkTourSeenCommand { TourId = "general" }, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        _commands.Verify(c => c.DispatchAsync(
+            It.Is<MarkTourSeenCommand>(x => x.RequesterDiscordId == "user-1" && x.TourId == "general"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkTourSeen_CommandFails_ReturnsBadRequest()
+    {
+        _sut.ControllerContext = ControllerTestHelpers.MakeContext("user-1");
+        _commands.Setup(c => c.DispatchAsync(It.IsAny<MarkTourSeenCommand>(), default))
+            .ReturnsAsync(Result<CommandResponse>.Fail(ResponseDetail.UserNotFound));
+
+        var result = await _sut.MarkTourSeen(new MarkTourSeenCommand { TourId = "general" }, default);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
 }
