@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.0.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.3.0...v1.0.0) (2026-10-11)
+
+
+### 🚀 Features
+
+* add per-guild Officer access threshold and in-app notification … ([#32](https://github.com/Bhahlou/RaidOps.Service/issues/32)) ([432d0ef](https://github.com/Bhahlou/RaidOps.Service/commit/432d0ef13a3de3805b5fd90a1388c9625b4b6857))
+* Deploy release pipeline ([#13](https://github.com/Bhahlou/RaidOps.Service/issues/13)) ([4f9ec33](https://github.com/Bhahlou/RaidOps.Service/commit/4f9ec33ee4c7202dd50be561a79969bb5a13a267))
+* Enhance discord notification on new release ([#16](https://github.com/Bhahlou/RaidOps.Service/issues/16)) ([2f3120d](https://github.com/Bhahlou/RaidOps.Service/commit/2f3120dfa5bd6d2a2470c4d6fe3f06757b6d095d))
+* Expose bulk eligible guilds ([#30](https://github.com/Bhahlou/RaidOps.Service/issues/30)) ([bf8c5c2](https://github.com/Bhahlou/RaidOps.Service/commit/bf8c5c2480afdb168dc197be5e7cf2faad4ac164))
+* Implement character viable specs selection ([#26](https://github.com/Bhahlou/RaidOps.Service/issues/26)) ([4852b1d](https://github.com/Bhahlou/RaidOps.Service/commit/4852b1d41084be8cc42c347f841d7e0bd4f4ed83))
+* implement get started ([#28](https://github.com/Bhahlou/RaidOps.Service/issues/28)) ([f5e5e39](https://github.com/Bhahlou/RaidOps.Service/commit/f5e5e396c5f1a7d23b2892c7750bf7dd1b2aad96))
+* implement guild action log and guild membership ([#25](https://github.com/Bhahlou/RaidOps.Service/issues/25)) ([1f2f642](https://github.com/Bhahlou/RaidOps.Service/commit/1f2f64236ceef1d3b4fa1bd06bf4c36bfe89d63f))
+* Implement guild audit log viewer ([8218402](https://github.com/Bhahlou/RaidOps.Service/commit/8218402bee10c7d7bd294496b5baa1c4855fd9b5))
+* implement guild onboarding ([#23](https://github.com/Bhahlou/RaidOps.Service/issues/23)) ([edf5fac](https://github.com/Bhahlou/RaidOps.Service/commit/edf5fac42bbe1a8026c860696841b3397b3522e2))
+* implement roster list ([#31](https://github.com/Bhahlou/RaidOps.Service/issues/31)) ([5c89262](https://github.com/Bhahlou/RaidOps.Service/commit/5c89262cf5bd3eff018201fae78c91b6c44ce921))
+
+
+### 🐛 Bug Fixes
+
+* Exclude migrations from CI sonar cloud analysis and fix code smell ([#11](https://github.com/Bhahlou/RaidOps.Service/issues/11)) ([f4c6dd7](https://github.com/Bhahlou/RaidOps.Service/commit/f4c6dd79f7fa2dd52e485b1542be79dbf4a73d6f))
+* Fix again again repo name in discord url ([#19](https://github.com/Bhahlou/RaidOps.Service/issues/19)) ([b4ea838](https://github.com/Bhahlou/RaidOps.Service/commit/b4ea838ca6c53903b1af1feb1e95f08bb160f38e))
+* Fix incorrect repo url on discord notification ([#17](https://github.com/Bhahlou/RaidOps.Service/issues/17)) ([dd6482a](https://github.com/Bhahlou/RaidOps.Service/commit/dd6482a510c13cf3d8cdb0cffe00cc64ad9f9187))
+* Fix incorrect url again ... ([#18](https://github.com/Bhahlou/RaidOps.Service/issues/18)) ([58f0f8f](https://github.com/Bhahlou/RaidOps.Service/commit/58f0f8f13fc2bdcdbf98d8e38961f17eeff2876f))
+* Indicate ongoing roll out to host ([#20](https://github.com/Bhahlou/RaidOps.Service/issues/20)) ([43e3d6b](https://github.com/Bhahlou/RaidOps.Service/commit/43e3d6bd79d57c2a48a9678e5b8a3bf6df240e40))
+* repair spec icons ([#29](https://github.com/Bhahlou/RaidOps.Service/issues/29)) ([1519bf9](https://github.com/Bhahlou/RaidOps.Service/commit/1519bf98df5c9aaa1601fe1fd7db351220db4900))
+
+
+### 🧹 Chores
+
+* mark next release as 1.0.0 ([#34](https://github.com/Bhahlou/RaidOps.Service/issues/34)) ([2b0f07a](https://github.com/Bhahlou/RaidOps.Service/commit/2b0f07a3d70282a5cd5bd47472019b281754d04a))
+
 ## [2.3.0](https://github.com/Bhahlou/RaidOps.Service/compare/v2.2.1...v2.3.0) (2026-10-11)
 
 
