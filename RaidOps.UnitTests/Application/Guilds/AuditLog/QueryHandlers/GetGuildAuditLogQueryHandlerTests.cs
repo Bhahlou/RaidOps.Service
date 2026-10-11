@@ -428,8 +428,7 @@ public class GetGuildAuditLogQueryHandlerTests
         result.Value?.Entries[0].Variables.Should().BeNull();
     }
 
-    public static IEnumerable<object[]> AllAuditActions() =>
-        Enum.GetValues<GuildAuditAction>().Select(action => new object[] { action });
+    public static TheoryData<GuildAuditAction> AllAuditActions() => new(Enum.GetValues<GuildAuditAction>());
 
     /// <summary>Guards against a new <see cref="GuildAuditAction"/> shipping without a category — the whole audit-log page would 500 for any guild holding such an entry.</summary>
     [Theory]
